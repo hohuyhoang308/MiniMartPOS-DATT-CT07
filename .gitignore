@@ -1,0 +1,27 @@
+# ===== Build outputs =====
+backend/target/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# ===== Secrets / môi trường =====
+.env
+*.local
+
+# ===== IDE / Editor =====
+.idea/
+.vscode/
+.settings/
+*.iml
+.project
+.classpath
+
+# ===== Công cụ Claude / skill (không thuộc mã nguồn đồ án) =====
+.claude/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
