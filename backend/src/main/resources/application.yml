@@ -1,0 +1,52 @@
+# =====================================================================
+#  Cấu hình Backend POS Cửa hàng tiện lợi
+#  Giá trị nhạy cảm (mật khẩu DB, JWT secret, token tích hợp) nên đặt
+#  qua BIẾN MÔI TRƯỜNG / file .env — KHÔNG commit giá trị thật vào Git.
+# =====================================================================
+server:
+  port: 8080
+
+spring:
+  application:
+    name: pos-convenience-store
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/pos_convenience_store?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # none: CSDL đã tạo sẵn bằng sql/schema.sql (gồm cả VIEW) — không để JPA đụng vào.
+      # Có thể đổi sang 'validate' nếu muốn JPA kiểm tra entity khớp bảng (lưu ý: validate
+      # đôi khi khó tính với kiểu cột của VIEW như SUM()→DECIMAL/BIGINT).
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    show-sql: false
+
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+    default-property-inclusion: non_null
+
+# -------- Cấu hình ứng dụng (đọc qua @ConfigurationProperties / @Value) --------
+app:
+  jwt:
+    secret: ${JWT_SECRET:doi-secret-nay-trong-production-toi-thieu-256-bit-de-an-pos-convenience-store-2026}
+    expiration-ms: 86400000        # 24 giờ
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+
+  # Tích hợp — mặc định đọc từ bảng store_config; biến môi trường để override khi deploy
+  web2m:
+    poll-interval-ms: ${WEB2M_POLL_MS:30000}     # chu kỳ job đối soát WEB2M
+    enabled: ${WEB2M_ENABLED:false}              # bật/tắt job nền đối soát
+
+logging:
+  level:
+    com.pos: INFO
+    org.springframework.security: WARN
