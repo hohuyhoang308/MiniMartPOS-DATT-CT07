@@ -39,6 +39,7 @@ public class CustomerController {
 
     /** Cashier được phép thêm khách mới ngay tại POS. */
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<CustomerResponse> create(@Valid @RequestBody CustomerRequest req) {
         return ApiResponse.ok("Thêm khách hàng thành công", service.create(req));
     }

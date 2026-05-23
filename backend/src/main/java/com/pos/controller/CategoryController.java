@@ -33,6 +33,7 @@ public class CategoryController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CategoryRequest req) {
         return ApiResponse.ok("Tạo danh mục thành công", service.create(req));
     }

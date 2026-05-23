@@ -33,6 +33,7 @@ public class GoodsReceiptController {
     }
 
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<GoodsReceiptResponse> create(@Valid @RequestBody GoodsReceiptRequest req) {
         return ApiResponse.ok("Lập phiếu nhập thành công, tồn kho đã tăng", service.create(req));
     }

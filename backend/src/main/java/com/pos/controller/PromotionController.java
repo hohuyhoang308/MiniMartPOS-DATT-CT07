@@ -35,6 +35,7 @@ public class PromotionController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<PromotionResponse> create(@Valid @RequestBody PromotionRequest req) {
         return ApiResponse.ok("Tạo khuyến mãi thành công", service.create(req));
     }

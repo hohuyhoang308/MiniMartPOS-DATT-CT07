@@ -36,6 +36,7 @@ public class InvoiceController {
 
     /** Tạo hóa đơn (UC10) — transaction: trừ tồn FIFO, tích điểm, tăng lượt KM. */
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<InvoiceResponse> create(@Valid @RequestBody CreateInvoiceRequest req) {
         return ApiResponse.ok("Tạo hóa đơn thành công", saleService.createInvoice(req));
     }

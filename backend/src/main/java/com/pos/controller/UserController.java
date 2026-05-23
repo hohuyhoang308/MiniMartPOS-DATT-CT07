@@ -30,6 +30,7 @@ public class UserController {
     }
 
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest req) {
         return ApiResponse.ok("Tạo tài khoản thành công", service.create(req));
     }

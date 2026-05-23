@@ -39,6 +39,7 @@ public class IntegrationsController {
     }
 
     @PostMapping("/telegram/recipients")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<TelegramRecipientResponse> addRecipient(@Valid @RequestBody TelegramRecipientRequest req) {
         return ApiResponse.ok("Thêm người nhận thành công", recipientService.add(req));
     }

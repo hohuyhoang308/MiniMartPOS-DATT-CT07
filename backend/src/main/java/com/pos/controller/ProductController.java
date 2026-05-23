@@ -41,6 +41,7 @@ public class ProductController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<ProductResponse> create(@Valid @RequestBody ProductRequest req) {
         return ApiResponse.ok("Tạo sản phẩm thành công", service.create(req));
     }

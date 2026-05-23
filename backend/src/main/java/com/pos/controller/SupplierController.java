@@ -33,6 +33,7 @@ public class SupplierController {
     }
 
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<SupplierResponse> create(@Valid @RequestBody SupplierRequest req) {
         return ApiResponse.ok("Tạo nhà cung cấp thành công", service.create(req));
     }

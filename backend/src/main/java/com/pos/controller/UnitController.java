@@ -28,6 +28,7 @@ public class UnitController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<UnitResponse> create(@Valid @RequestBody UnitRequest req) {
         return ApiResponse.ok("Tạo đơn vị tính thành công", service.create(req));
     }
