@@ -4,6 +4,7 @@ import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
@@ -12,4 +13,10 @@ public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
     Optional<WorkShift> findFirstByUserIdAndStatusOrderByOpenedAtDesc(Long userId, ShiftStatus status);
 
     boolean existsByUserIdAndStatus(Long userId, ShiftStatus status);
+
+    /** 200 ca gần nhất (mới nhất trước) — màn Quản lý ca; giới hạn ở DB để không tải vô hạn. */
+    List<WorkShift> findTop200ByOrderByOpenedAtDesc();
+
+    /** Ca đã đóng gần nhất — để gợi ý tiền đầu ca (= tiền cuối ca trước, két chuyển tiếp). */
+    Optional<WorkShift> findFirstByStatusOrderByClosedAtDesc(ShiftStatus status);
 }

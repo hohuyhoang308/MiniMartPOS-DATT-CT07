@@ -7,15 +7,18 @@ import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
+import com.pos.repository.InvoiceRepository;
 import com.pos.repository.UserRepository;
 import com.pos.repository.WorkShiftRepository;
 import com.pos.repository.view.ShiftSummaryViewRepository;
+import com.pos.security.CustomUserDetails;
 import com.pos.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Ca làm việc (FR4.1 - UC08). */
 @Service
@@ -25,13 +28,16 @@ public class ShiftService {
     private final WorkShiftRepository shiftRepository;
     private final UserRepository userRepository;
     private final ShiftSummaryViewRepository summaryRepository;
+    private final InvoiceRepository invoiceRepository;
 
     public ShiftService(WorkShiftRepository shiftRepository,
                         UserRepository userRepository,
-                        ShiftSummaryViewRepository summaryRepository) {
+                        ShiftSummaryViewRepository summaryRepository,
+                        InvoiceRepository invoiceRepository) {
         this.shiftRepository = shiftRepository;
         this.userRepository = userRepository;
         this.summaryRepository = summaryRepository;
+        this.invoiceRepository = invoiceRepository;
     }
 
     /** Mở ca cho thu ngân đang đăng nhập (nếu chưa có ca OPEN). */
@@ -50,12 +56,30 @@ public class ShiftService {
         return toResponse(shiftRepository.save(shift));
     }
 
-    /** Đóng ca: chỉ chủ ca mới đóng được ca của mình. */
+    /** 200 ca gần nhất (mới nhất trước) — màn Quản lý ca. */
+    public List<ShiftResponse> listAll() {
+        return shiftRepository.findTop200ByOrderByOpenedAtDesc().stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * Gợi ý tiền đầu ca cho ca sắp mở = tiền cuối ca của ca đóng gần nhất (két chuyển tiếp).
+     * Chưa có ca nào đóng → 0 (thu ngân tự nhập lần đầu).
+     */
+    public BigDecimal suggestedOpeningCash() {
+        return shiftRepository.findFirstByStatusOrderByClosedAtDesc(ShiftStatus.CLOSED)
+                .map(WorkShift::getClosingCash)
+                .filter(java.util.Objects::nonNull)
+                .orElse(BigDecimal.ZERO);
+    }
+
+    /** Đóng ca: chủ ca tự đóng, HOẶC quản lý/chủ cửa hàng đóng hộ ca bất kỳ. */
     @Transactional
     public ShiftResponse close(Long shiftId, BigDecimal closingCash) {
         WorkShift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> NotFoundException.of("ca làm việc", shiftId));
-        if (!shift.getUser().getId().equals(SecurityUtils.currentUserId())) {
+        CustomUserDetails me = SecurityUtils.currentUser();
+        boolean isManager = "ADMIN".equals(me.getRole()) || "MANAGER".equals(me.getRole());
+        if (!isManager && !shift.getUser().getId().equals(me.getId())) {
             throw new BadRequestException("Bạn chỉ có thể đóng ca của chính mình");
         }
         if (shift.getStatus() == ShiftStatus.CLOSED) {
@@ -82,9 +106,11 @@ public class ShiftService {
 
     private ShiftResponse toResponse(WorkShift shift) {
         var summary = summaryRepository.findByShiftId(shift.getId());
+        BigDecimal cashSales = invoiceRepository.sumCashSalesByShift(shift.getId());
         return ShiftResponse.from(
                 shift, shift.getUser().getFullName(),
                 summary.map(s -> s.getTotalSales()).orElse(BigDecimal.ZERO),
-                summary.map(s -> s.getInvoiceCount()).orElse(0L));
+                summary.map(s -> s.getInvoiceCount()).orElse(0L),
+                cashSales);
     }
 }
