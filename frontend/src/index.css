@@ -171,7 +171,7 @@ a { text-decoration: none; }
 .topbar .page-trail { font-family: var(--font-display); font-weight: 700; color: var(--ink-900); }
 .topbar .page-trail small { font-family: var(--font-body); font-weight: 400; color: var(--muted); }
 
-.content { padding: 26px; flex: 1; max-width: 1440px; width: 100%; }
+.content { padding: 26px; flex: 1; width: 100%; }
 
 /* =====================================================================
    PAGE HEADER
@@ -399,6 +399,21 @@ a { text-decoration: none; }
 
 .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
 .empty-state i { font-size: 2.6rem; opacity: .5; }
+
+/* Dải hướng dẫn */
+.info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 16px;
+  margin-bottom: 18px;
+  border-radius: var(--r);
+  background: linear-gradient(100deg, var(--brand-50), #f0f9ff);
+  border: 1px solid var(--brand-100);
+  color: #334256;
+}
+.info-banner .ib-icon { color: var(--brand-600); font-size: 1.2rem; margin-top: 1px; }
+.info-banner .btn-close { font-size: .65rem; opacity: .5; }
 
 .skeleton {
   background: linear-gradient(100deg, #eef2f7 30%, #f6f9fc 50%, #eef2f7 70%);
