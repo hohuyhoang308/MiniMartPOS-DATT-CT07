@@ -173,6 +173,7 @@ CREATE TABLE invoices (
     customer_paid   DECIMAL(14,2),                         -- tiền khách đưa (tiền mặt)
     change_amount   DECIMAL(14,2),                         -- tiền thừa
     points_earned   INT NOT NULL DEFAULT 0,                -- điểm tích cho khách ở HĐ này
+    points_used     INT NOT NULL DEFAULT 0,                -- điểm khách dùng để giảm trừ ở HĐ này
     status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_invoice_shift     FOREIGN KEY (shift_id)     REFERENCES work_shifts(id),
@@ -184,6 +185,7 @@ CREATE TABLE invoices (
 CREATE INDEX idx_invoice_shift    ON invoices(shift_id);
 CREATE INDEX idx_invoice_customer ON invoices(customer_id);
 CREATE INDEX idx_invoice_created  ON invoices(created_at);
+CREATE INDEX idx_invoice_status   ON invoices(status, created_at);
 
 CREATE TABLE invoice_items (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,

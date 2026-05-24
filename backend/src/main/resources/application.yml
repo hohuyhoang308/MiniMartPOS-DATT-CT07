@@ -29,6 +29,14 @@ spring:
         format_sql: true
     show-sql: false
 
+  # Tự dựng CẤU TRÚC + VIEW khi khởi động (idempotent, không mất dữ liệu).
+  # Nhờ vậy drop database rồi chạy lại là tự tạo bảng/view; dữ liệu nền do *DataInitializer seed.
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      continue-on-error: false
+
   jackson:
     time-zone: Asia/Ho_Chi_Minh
     default-property-inclusion: non_null
@@ -39,7 +47,8 @@ app:
     secret: ${JWT_SECRET:doi-secret-nay-trong-production-toi-thieu-256-bit-de-an-pos-convenience-store-2026}
     expiration-ms: 86400000        # 24 giờ
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+    # allowedOriginPatterns: chấp nhận localhost, 127.0.0.1 và mọi IP LAN cổng 5173 (dev)
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://192.168.*:5173}
 
   # Tích hợp — mặc định đọc từ bảng store_config; biến môi trường để override khi deploy
   web2m:
