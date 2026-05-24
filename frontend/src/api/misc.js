@@ -23,6 +23,7 @@ export const inventoryApi = {
   stock: () => client.get('/inventory/stock').then(unwrap),
   lowStock: () => client.get('/inventory/low-stock').then(unwrap),
   expiring: () => client.get('/inventory/expiring').then(unwrap),
+  suggestions: () => client.get('/inventory/suggestions').then(unwrap),
 }
 
 export const dashboardApi = {
@@ -30,9 +31,11 @@ export const dashboardApi = {
 }
 
 export const reportApi = {
-  revenue: (from, to) => client.get('/reports/revenue', { params: { from, to } }).then(unwrap),
+  revenue: (from, to, groupBy = 'DAY') =>
+    client.get('/reports/revenue', { params: { from, to, groupBy } }).then(unwrap),
   shifts: () => client.get('/reports/shifts').then(unwrap),
-  exportUrl: (from, to) => `/api/reports/export?type=excel&from=${from}&to=${to}`,
+  exportUrl: (from, to, groupBy = 'DAY') =>
+    `/api/reports/export?type=excel&from=${from}&to=${to}&groupBy=${groupBy}`,
 }
 
 /** Tài khoản & cấu hình (UC02, UC20, UC24). */

@@ -1,6 +1,7 @@
 package com.pos.controller;
 
 import com.pos.common.ApiResponse;
+import com.pos.dto.report.ReportPeriod;
 import com.pos.dto.report.RevenueReportResponse;
 import com.pos.dto.report.ShiftReportResponse;
 import com.pos.service.ReportService;
@@ -29,8 +30,9 @@ public class ReportController {
     @GetMapping("/revenue")
     public ApiResponse<RevenueReportResponse> revenue(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.ok(service.revenue(from, to));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(name = "groupBy", defaultValue = "DAY") String groupBy) {
+        return ApiResponse.ok(service.revenue(from, to, ReportPeriod.parse(groupBy)));
     }
 
     @GetMapping("/shifts")
@@ -43,8 +45,9 @@ public class ReportController {
     public ResponseEntity<byte[]> export(
             @RequestParam(defaultValue = "excel") String type,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        byte[] data = service.exportRevenueExcel(from, to);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(name = "groupBy", defaultValue = "DAY") String groupBy) {
+        byte[] data = service.exportRevenueExcel(from, to, ReportPeriod.parse(groupBy));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=revenue-" + from + "_" + to + ".xlsx")
