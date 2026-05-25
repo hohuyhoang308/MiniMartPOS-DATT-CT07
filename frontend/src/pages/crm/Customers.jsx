@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
 import ConfirmModal from '../../components/ui/ConfirmModal'
@@ -53,6 +54,12 @@ export default function Customers() {
       <PageHeader title="Khách hàng thân thiết" subtitle="Tích điểm & theo dõi lịch sử mua hàng">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-person-plus me-1"></i>Thêm khách</Button>
       </PageHeader>
+
+      <InfoBanner id="customers" title="Khách hàng thân thiết">
+        Mỗi khách định danh bằng <b>số điện thoại</b> (duy nhất). Khi bán hàng, thu ngân gắn khách để
+        <b> tự động tích điểm</b> theo giá trị mua (1 điểm / 10.000đ). Bấm <i className="bi bi-clock-history"></i>
+        để xem <b>lịch sử mua & tổng chi tiêu</b> của khách.
+      </InfoBanner>
 
       <div className="mb-3" style={{ maxWidth: 340 }}>
         <div className="input-group">

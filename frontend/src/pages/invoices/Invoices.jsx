@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
@@ -56,6 +57,12 @@ export default function Invoices() {
   return (
     <div>
       <PageHeader title="Hóa đơn" subtitle="Tra cứu, in lại & hủy hóa đơn" />
+
+      <InfoBanner id="invoices" title="Quản lý hóa đơn">
+        Lọc theo <b>ngày</b> và <b>trạng thái</b>. Bấm mã HĐ hoặc <i className="bi bi-eye"></i> để xem chi tiết,
+        <i className="bi bi-printer"></i> để in PDF. <b>Hủy hóa đơn</b> (Quản lý/Chủ cửa hàng) sẽ
+        <b> tự động hoàn trả tồn kho</b> và trừ lại điểm đã tích — dùng khi khách trả hàng hoặc lập sai.
+      </InfoBanner>
 
       <Row className="g-2 mb-3">
         <Col md={3}>
