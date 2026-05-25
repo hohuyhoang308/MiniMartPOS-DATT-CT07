@@ -73,6 +73,10 @@ public class Invoice {
     @Column(name = "points_earned", nullable = false)
     private Integer pointsEarned = 0;
 
+    /** Số điểm khách đã DÙNG để giảm trừ ở hóa đơn này (đối ứng với phần giảm trong discount_amount). */
+    @Column(name = "points_used", nullable = false)
+    private Integer pointsUsed = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private InvoiceStatus status = InvoiceStatus.COMPLETED;

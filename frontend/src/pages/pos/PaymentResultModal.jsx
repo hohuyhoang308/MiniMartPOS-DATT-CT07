@@ -64,9 +64,14 @@ export default function PaymentResultModal({ invoice, onClose }) {
           </>
         )}
 
+        {invoice.pointsUsed > 0 && (
+          <div className="d-flex justify-content-between mb-1">
+            <span>Điểm đã dùng</span><span className="text-danger">−{invoice.pointsUsed}</span>
+          </div>
+        )}
         {invoice.pointsEarned > 0 && (
           <div className="d-flex justify-content-between mb-1">
-            <span>Điểm tích lũy</span><span>+{invoice.pointsEarned}</span>
+            <span>Điểm tích lũy</span><span className="text-success">+{invoice.pointsEarned}</span>
           </div>
         )}
 

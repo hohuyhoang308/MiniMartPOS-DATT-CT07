@@ -35,7 +35,8 @@ import java.util.*;
 public class SaleService {
 
     private static final String CODE_PREFIX = "HD";
-    private static final BigDecimal POINT_RATE = BigDecimal.valueOf(10000); // 1 điểm / 10.000đ
+    private static final BigDecimal POINT_RATE = BigDecimal.valueOf(10000);  // tích: 1 điểm / 10.000đ chi tiêu
+    private static final BigDecimal POINT_VALUE = BigDecimal.valueOf(1000);  // đổi: 1 điểm = 1.000đ giảm trừ
     private static final int QR_EXPIRE_MINUTES = 15;
 
     private final InvoiceRepository invoiceRepository;
@@ -100,18 +101,40 @@ public class SaleService {
         invoice.setSubtotal(subtotal);
 
         // 3) Khuyến mãi (tùy chọn)
-        BigDecimal discount = BigDecimal.ZERO;
+        BigDecimal promoDiscount = BigDecimal.ZERO;
         Promotion promotion = null;
         if (req.promotionCode() != null && !req.promotionCode().isBlank()) {
             PromotionService.ApplyResult applied = promotionService.validateForSale(req.promotionCode().trim(), subtotal);
             promotion = applied.promotion();
-            discount = applied.discountAmount();
+            promoDiscount = applied.discountAmount();
             invoice.setPromotion(promotion);
         }
-        invoice.setDiscountAmount(discount);
-        BigDecimal total = subtotal.subtract(discount);
 
-        // 4) Thanh toán
+        // 4) Khách thân thiết + DÙNG ĐIỂM (tùy chọn). Phải tính trước khi kiểm tiền mặt vì
+        //    đổi điểm làm giảm số tiền phải trả. 1 điểm = POINT_VALUE đồng.
+        Customer customer = null;
+        int pointsUsed = 0;
+        BigDecimal redeemValue = BigDecimal.ZERO;
+        if (req.customerId() != null) {
+            customer = customerRepository.findById(req.customerId())
+                    .orElseThrow(() -> NotFoundException.of("khách hàng", req.customerId()));
+            invoice.setCustomer(customer);
+
+            int wantRedeem = req.pointsToRedeem() != null ? Math.max(0, req.pointsToRedeem()) : 0;
+            if (wantRedeem > 0) {
+                BigDecimal afterPromo = subtotal.subtract(promoDiscount);
+                int maxByMoney = afterPromo.divide(POINT_VALUE, 0, RoundingMode.FLOOR).intValue();
+                // không vượt số dư điểm, cũng không vượt số tiền còn phải trả
+                pointsUsed = Math.min(wantRedeem, Math.min(customer.getLoyaltyPoints(), maxByMoney));
+                redeemValue = POINT_VALUE.multiply(BigDecimal.valueOf(pointsUsed));
+            }
+        }
+
+        BigDecimal totalDiscount = promoDiscount.add(redeemValue);
+        invoice.setDiscountAmount(totalDiscount);
+        BigDecimal total = subtotal.subtract(totalDiscount);
+
+        // 5) Thanh toán (kiểm theo số tiền cuối cùng sau giảm + đổi điểm)
         if (req.paymentMethod() == PaymentMethod.CASH) {
             if (req.customerPaid() == null) {
                 throw new BadRequestException("Phải nhập số tiền khách đưa khi thanh toán tiền mặt");
@@ -123,33 +146,30 @@ public class SaleService {
             invoice.setChangeAmount(req.customerPaid().subtract(total));
         }
 
-        // 5) Khách thân thiết + tích điểm (tùy chọn)
-        Customer customer = null;
-        int pointsEarned = total.divide(POINT_RATE, 0, RoundingMode.FLOOR).intValue();
-        if (req.customerId() != null) {
-            customer = customerRepository.findById(req.customerId())
-                    .orElseThrow(() -> NotFoundException.of("khách hàng", req.customerId()));
-            invoice.setCustomer(customer);
-            customer.setLoyaltyPoints(customer.getLoyaltyPoints() + pointsEarned);
-        } else {
-            pointsEarned = 0; // không có khách → không tích điểm
+        // 6) Tích điểm trên số tiền THỰC TRẢ + cập nhật số dư (trừ điểm đã dùng, cộng điểm tích)
+        int pointsEarned = 0;
+        if (customer != null) {
+            pointsEarned = total.divide(POINT_RATE, 0, RoundingMode.FLOOR).intValue();
+            int newBalance = customer.getLoyaltyPoints() - pointsUsed + pointsEarned;
+            customer.setLoyaltyPoints(Math.max(0, newBalance));
         }
+        invoice.setPointsUsed(pointsUsed);
         invoice.setPointsEarned(pointsEarned);
         invoice.setCode(generateCode());
 
-        // 6) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô
+        // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô
         allocateStockFifo(invoice, neededByProduct);
 
-        // 7) Tăng lượt dùng KM
+        // 8) Tăng lượt dùng KM
         if (promotion != null) {
             promotion.setUsedCount(promotion.getUsedCount() + 1);
             promotionRepository.save(promotion);
         }
 
-        // 8) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
+        // 9) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
 
-        // 9) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M
+        // 10) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M
         PaymentTransaction pt = null;
         String qrUrl = null;
         if (req.paymentMethod() == PaymentMethod.QR) {

@@ -15,5 +15,6 @@ public record CreateInvoiceRequest(
         Long customerId,            // tùy chọn — khách thân thiết
         String promotionCode,       // tùy chọn — mã giảm giá
         @NotNull(message = "Phải chọn hình thức thanh toán") PaymentMethod paymentMethod,
-        BigDecimal customerPaid     // bắt buộc khi thanh toán tiền mặt
+        BigDecimal customerPaid,    // bắt buộc khi thanh toán tiền mặt
+        Integer pointsToRedeem      // tùy chọn — số điểm khách muốn dùng để giảm trừ (cần có khách)
 ) {}

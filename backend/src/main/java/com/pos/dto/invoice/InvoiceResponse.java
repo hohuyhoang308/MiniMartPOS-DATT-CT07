@@ -25,6 +25,7 @@ public record InvoiceResponse(
         BigDecimal customerPaid,
         BigDecimal changeAmount,
         Integer pointsEarned,
+        Integer pointsUsed,
         InvoiceStatus status,
         LocalDateTime createdAt,
         List<Item> items,
@@ -51,7 +52,7 @@ public record InvoiceResponse(
                 inv.getPromotion() != null ? inv.getPromotion().getCode() : null,
                 inv.getSubtotal(), inv.getDiscountAmount(), inv.getTotalAmount(),
                 inv.getPaymentMethod(), inv.getCustomerPaid(), inv.getChangeAmount(),
-                inv.getPointsEarned(), inv.getStatus(), inv.getCreatedAt(),
+                inv.getPointsEarned(), inv.getPointsUsed(), inv.getStatus(), inv.getCreatedAt(),
                 items, payment);
     }
 
