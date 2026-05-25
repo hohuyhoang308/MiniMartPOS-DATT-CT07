@@ -8,14 +8,14 @@ import Dashboard from './pages/dashboard/Dashboard'
 import Pos from './pages/pos/Pos'
 import Invoices from './pages/invoices/Invoices'
 import Products from './pages/catalog/Products'
-import Categories from './pages/catalog/Categories'
-import Units from './pages/catalog/Units'
+import Catalog from './pages/catalog/Catalog'
 import Suppliers from './pages/catalog/Suppliers'
 import GoodsReceipts from './pages/inventory/GoodsReceipts'
 import Inventory from './pages/inventory/Inventory'
 import Customers from './pages/crm/Customers'
 import Promotions from './pages/crm/Promotions'
 import Reports from './pages/reports/Reports'
+import Shifts from './pages/shifts/Shifts'
 import Users from './pages/admin/Users'
 import Settings from './pages/admin/Settings'
 
@@ -43,13 +43,13 @@ export default function App() {
           <Route element={<PrivateRoute roles={['ADMIN', 'MANAGER']} />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="products" element={<Products />} />
-            <Route path="categories" element={<Categories />} />
-            <Route path="units" element={<Units />} />
+            <Route path="catalog" element={<Catalog />} />
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="receipts" element={<GoodsReceipts />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="shifts" element={<Shifts />} />
           </Route>
 
           {/* Admin */}
