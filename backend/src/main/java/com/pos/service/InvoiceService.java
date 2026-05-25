@@ -12,6 +12,7 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.repository.StoreConfigRepository;
+import org.springframework.data.domain.PageRequest;
 import com.pos.security.CustomUserDetails;
 import com.pos.security.SecurityUtils;
 import com.pos.util.VietQrUtil;
@@ -39,12 +40,16 @@ public class InvoiceService {
         this.storeConfigRepository = storeConfigRepository;
     }
 
-    /** Lọc HĐ. Cashier chỉ thấy hóa đơn thuộc ca của chính mình. */
+    /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
+    private static final int MAX_INVOICES = 500;
+
+    /** Lọc HĐ (tối đa {@value MAX_INVOICES} mới nhất). Cashier chỉ thấy hóa đơn thuộc ca của chính mình. */
     public List<InvoiceResponse> search(LocalDate date, Long customerId, InvoiceStatus status) {
         LocalDateTime from = date != null ? date.atStartOfDay() : null;
         LocalDateTime to = date != null ? date.plusDays(1).atStartOfDay() : null;
 
-        List<Invoice> list = invoiceRepository.search(from, to, customerId, status, null);
+        List<Invoice> list = invoiceRepository.search(from, to, customerId, status, null,
+                PageRequest.of(0, MAX_INVOICES));
 
         CustomUserDetails me = SecurityUtils.currentUser();
         if ("CASHIER".equals(me.getRole())) {
@@ -78,10 +83,12 @@ public class InvoiceService {
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
 
-        // Hoàn điểm tích lũy cho khách (không để âm)
+        // Hoàn điểm cho khách: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng (không để âm)
         Customer customer = inv.getCustomer();
-        if (customer != null && inv.getPointsEarned() != null && inv.getPointsEarned() > 0) {
-            int restored = Math.max(0, customer.getLoyaltyPoints() - inv.getPointsEarned());
+        if (customer != null) {
+            int earned = inv.getPointsEarned() != null ? inv.getPointsEarned() : 0;
+            int used = inv.getPointsUsed() != null ? inv.getPointsUsed() : 0;
+            int restored = Math.max(0, customer.getLoyaltyPoints() - earned + used);
             customer.setLoyaltyPoints(restored);
         }
 

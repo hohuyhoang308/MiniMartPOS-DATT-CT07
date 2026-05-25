@@ -58,6 +58,12 @@ public class PaymentService {
                 pt.getTransferContent(), qrUrl, pt.getStatus().name());
     }
 
+    /** Dọn định kỳ: chuyển giao dịch QR PENDING đã quá hạn → EXPIRED. Trả số dòng cập nhật. */
+    @Transactional
+    public int expireStalePending() {
+        return paymentRepository.expireStalePending(LocalDateTime.now());
+    }
+
     /** Trạng thái thanh toán mới nhất của hóa đơn (FE poll). */
     public PaymentInfoResponse getStatus(Long invoiceId) {
         Invoice inv = invoiceRepository.findById(invoiceId)

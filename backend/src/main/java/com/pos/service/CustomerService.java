@@ -10,6 +10,8 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.CustomerRepository;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.view.CustomerSpendingViewRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,9 +38,12 @@ public class CustomerService {
         this.spendingRepository = spendingRepository;
     }
 
+    /** Tối đa số khách trả về khi không lọc (giới hạn payload khi dữ liệu lớn). */
+    private static final int MAX_CUSTOMERS = 500;
+
     public List<CustomerResponse> search(String keyword) {
         List<Customer> list = (keyword == null || keyword.isBlank())
-                ? repository.findAll()
+                ? repository.findAll(PageRequest.of(0, MAX_CUSTOMERS, Sort.by("fullName"))).getContent()
                 : repository.findByPhoneContainingOrFullNameContainingIgnoreCase(keyword.trim(), keyword.trim());
         return list.stream().map(CustomerResponse::from).toList();
     }

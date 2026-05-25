@@ -8,6 +8,7 @@ import com.pos.service.InvoicePdfService;
 import com.pos.service.InvoiceService;
 import com.pos.service.SaleService;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -38,7 +39,23 @@ public class InvoiceController {
     @PostMapping
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<InvoiceResponse> create(@Valid @RequestBody CreateInvoiceRequest req) {
-        return ApiResponse.ok("Tạo hóa đơn thành công", saleService.createInvoice(req));
+        return ApiResponse.ok("Tạo hóa đơn thành công", createWithRetry(req));
+    }
+
+    /**
+     * Tạo hóa đơn có RETRY: nếu 2 thu ngân bán đồng thời sinh trùng mã HĐ (khóa UNIQUE chặn),
+     * mỗi lần gọi {@code createInvoice} là một transaction mới → sinh lại mã mới. Thử tối đa 3 lần.
+     */
+    private InvoiceResponse createWithRetry(CreateInvoiceRequest req) {
+        DataIntegrityViolationException last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return saleService.createInvoice(req);
+            } catch (DataIntegrityViolationException e) {
+                last = e; // nhiều khả năng do trùng mã HĐ — thử lại với mã mới
+            }
+        }
+        throw last;
     }
 
     @GetMapping
