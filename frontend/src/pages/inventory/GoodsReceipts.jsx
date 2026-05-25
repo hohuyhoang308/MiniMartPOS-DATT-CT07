@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
 import { receiptApi, supplierApi, productApi } from '../../api/catalog'
@@ -62,6 +63,12 @@ export default function GoodsReceipts() {
       <PageHeader title="Nhập kho" subtitle="Lập phiếu nhập theo lô — tự động cộng tồn & ghi HSD">
         <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
       </PageHeader>
+
+      <InfoBanner id="receipts" title="Nhập kho hoạt động ra sao?">
+        Mỗi phiếu nhập tạo các <b>lô hàng</b> với <b>giá nhập</b> và <b>hạn sử dụng</b> riêng; lưu phiếu là
+        <b> tồn kho tự động tăng</b>. Bật “Cập nhật giá vốn” để lấy giá nhập mới làm giá vốn của sản phẩm
+        (dùng tính lợi nhuận). Bấm vào một dòng để xem chi tiết phiếu.
+      </InfoBanner>
 
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">

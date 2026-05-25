@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
@@ -87,6 +88,12 @@ export default function Products() {
       <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán & mức tồn cảnh báo">
         <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
       </PageHeader>
+
+      <InfoBanner id="products" title="Quản lý sản phẩm thế nào?">
+        Mỗi mặt hàng cần <b>mã vạch</b> (để quét nhanh ở POS), thuộc một <b>danh mục</b> và <b>đơn vị tính</b>.
+        Đặt <b>mức tồn tối thiểu</b> để hệ thống tự cảnh báo khi sắp hết. Cột <b>Tồn kho</b> được tính tự động
+        từ các phiếu nhập — muốn tăng tồn, hãy vào mục <b>Nhập kho</b>.
+      </InfoBanner>
 
       <Row className="g-2 mb-3">
         <Col md={5}>

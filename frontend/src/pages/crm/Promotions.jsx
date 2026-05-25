@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
@@ -71,6 +72,12 @@ export default function Promotions() {
       <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá áp dụng tại quầy POS">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
       </PageHeader>
+
+      <InfoBanner id="promotions" title="Tạo mã giảm giá">
+        Chọn <b>loại giảm</b>: theo phần trăm (%) hoặc số tiền cố định. Đặt <b>đơn tối thiểu</b> để áp mã,
+        <b> thời gian hiệu lực</b> và <b>giới hạn lượt dùng</b> (để trống = không giới hạn). Thu ngân nhập mã
+        này ở màn hình POS để giảm giá. Cột <b>Hiệu lực</b> cho biết mã đang áp dụng / hết hạn / hết lượt.
+      </InfoBanner>
 
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">

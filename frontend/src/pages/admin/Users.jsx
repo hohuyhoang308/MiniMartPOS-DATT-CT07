@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Form, Modal, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import { SkeletonRows } from '../../components/ui/Loading'
 import ConfirmModal from '../../components/ui/ConfirmModal'
@@ -56,6 +57,12 @@ export default function Users() {
           <i className="bi bi-person-plus me-1"></i>Thêm tài khoản
         </Button>
       </PageHeader>
+
+      <InfoBanner id="users" title="Phân quyền tài khoản">
+        <b>Chủ cửa hàng</b> toàn quyền · <b>Quản lý</b> lo sản phẩm/kho/báo cáo · <b>Thu ngân</b> chỉ bán hàng.
+        Dùng <i className="bi bi-key"></i> để đặt lại mật khẩu, <i className="bi bi-lock"></i> để khóa tài khoản
+        (không thể tự khóa chính mình). Tài khoản bị khóa sẽ không đăng nhập được.
+      </InfoBanner>
 
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">

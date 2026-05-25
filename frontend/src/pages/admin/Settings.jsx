@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
+import InfoBanner from '../../components/ui/InfoBanner'
 import Loading from '../../components/ui/Loading'
 import { storeConfigApi, integrationApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
@@ -75,6 +76,12 @@ export default function Settings() {
       <PageHeader title="Cấu hình cửa hàng" subtitle="Thông tin in hóa đơn, ngân hàng VietQR & tích hợp">
         <Button onClick={save} disabled={saving}>{saving ? <Spinner size="sm" /> : <><i className="bi bi-check-lg me-1"></i>Lưu cấu hình</>}</Button>
       </PageHeader>
+
+      <InfoBanner id="settings" title="Cấu hình hệ thống">
+        <b>Thông tin cửa hàng</b> hiện trên hóa đơn in. <b>Ngân hàng/VietQR</b> dùng để sinh mã QR cho khách quét.
+        <b>WEB2M</b> tự động đối soát tiền chuyển khoản (xác nhận QR đã thanh toán). <b>Telegram</b> gửi thông báo
+        (nhận tiền, tồn thấp…). Nhập token rồi bấm <b>Lưu cấu hình</b>; có nút kiểm tra kết nối & gửi thử.
+      </InfoBanner>
 
       <Row>
         <Col lg={6}>
