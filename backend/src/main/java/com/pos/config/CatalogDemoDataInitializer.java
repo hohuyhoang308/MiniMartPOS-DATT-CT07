@@ -77,10 +77,11 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         List<Spec> specs = specs();
         List<GoodsReceiptItem> newBatches = new ArrayList<>();
         int created = 0;
-        long barcodeSeq = nextBarcodeSeq();
+        int idx = 0;
 
         for (Spec s : specs) {
-            String barcode = String.format("8930%09d", barcodeSeq++);
+            // Mã vạch ỔN ĐỊNH theo vị trí trong danh sách → chạy lại luôn khớp, KHÔNG tạo trùng.
+            String barcode = String.format("8930%09d", ++idx);
             if (productRepository.existsByBarcode(barcode)) {
                 continue; // đã seed ở lần chạy trước
             }
@@ -184,15 +185,6 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                     s.setStatus(CommonStatus.ACTIVE);
                     return supplierRepository.save(s);
                 });
-    }
-
-    /** Mã vạch demo dùng dải 8930xxxxxxxxx; dò số kế tiếp còn trống để tránh trùng. */
-    private long nextBarcodeSeq() {
-        long n = 1;
-        while (productRepository.existsByBarcode(String.format("8930%09d", n))) {
-            n++;
-        }
-        return n;
     }
 
     private String nextReceiptCode() {
