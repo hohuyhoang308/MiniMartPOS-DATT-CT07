@@ -98,6 +98,7 @@ function PosBoard({ shift, onShiftClosed }) {
   const [selectedCat, setSelectedCat] = useState('')
   const [showCalc, setShowCalc] = useState(false)
   const [shiftInfo, setShiftInfo] = useState(shift)
+  const [related, setRelated] = useState([]) // gợi ý "mua kèm"
 
   async function loadProducts() {
     try { setProducts(await productApi.list()) } catch (e) { toast.error(errMsg(e)) }
@@ -107,6 +108,8 @@ function PosBoard({ shift, onShiftClosed }) {
     categoryApi.list().then(setCategories).catch(() => {})
     searchRef.current?.focus()
   }, [])
+  // Giỏ trống → xóa gợi ý mua kèm
+  useEffect(() => { if (cart.items.length === 0) setRelated([]) }, [cart.items.length])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -119,6 +122,10 @@ function PosBoard({ shift, onShiftClosed }) {
   function add(p) {
     if (p.currentStock <= 0) { toast.warning(`"${p.name}" đã hết hàng`); return }
     cart.addProduct(p)
+    refreshRelated(p.id)
+  }
+  async function refreshRelated(productId) {
+    try { setRelated(await productApi.related(productId)) } catch { /* bỏ qua gợi ý */ }
   }
 
   async function onSearchEnter(e) {
@@ -149,6 +156,8 @@ function PosBoard({ shift, onShiftClosed }) {
 
   const change = paymentMethod === 'CASH' ? Math.max(0, Number(customerPaid || 0) - cart.total) : 0
   const cashShort = paymentMethod === 'CASH' && Number(customerPaid || 0) < cart.total
+  // Gợi ý mua kèm: bỏ món đã có trong giỏ, chỉ còn hàng
+  const relatedShow = related.filter((r) => r.currentStock > 0 && !cart.items.some((i) => i.productId === r.id)).slice(0, 4)
 
   async function checkout() {
     if (cart.items.length === 0) return
@@ -257,6 +266,22 @@ function PosBoard({ shift, onShiftClosed }) {
                   </div>
                 ))}
               </div>
+
+              {relatedShow.length > 0 && (
+                <div className="mb-2">
+                  <div className="small text-muted2 mb-1"><i className="bi bi-magic me-1"></i>Thường mua kèm</div>
+                  <div className="d-flex flex-wrap gap-1">
+                    {relatedShow.map((r) => (
+                      <button key={r.id} type="button" className="btn btn-sm btn-soft d-flex align-items-center gap-1"
+                        style={{ fontSize: '.78rem' }} onClick={() => add(r)} title={`Thêm ${r.name}`}>
+                        <i className="bi bi-plus-circle"></i>
+                        <span className="text-truncate" style={{ maxWidth: 120 }}>{r.name}</span>
+                        <span className="text-muted2">{formatMoney(r.salePrice)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <InputGroup size="sm" className="mb-2">
                 <InputGroup.Text><i className="bi bi-person"></i></InputGroup.Text>

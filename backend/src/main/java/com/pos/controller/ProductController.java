@@ -39,6 +39,12 @@ public class ProductController {
         return ApiResponse.ok(service.findByBarcode(code));
     }
 
+    /** Gợi ý "mua kèm" cho POS: sản phẩm hay mua chung + bù cùng danh mục. */
+    @GetMapping("/{id}/related")
+    public ApiResponse<List<ProductResponse>> related(@PathVariable Long id) {
+        return ApiResponse.ok(service.relatedProducts(id, 5));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)

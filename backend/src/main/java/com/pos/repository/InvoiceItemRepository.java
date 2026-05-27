@@ -2,6 +2,7 @@ package com.pos.repository;
 
 import com.pos.entity.InvoiceItem;
 import com.pos.repository.projection.CategorySalesRow;
+import com.pos.repository.projection.ProductCountRow;
 import com.pos.repository.projection.ProductSalesRow;
 import com.pos.repository.projection.TopProductRow;
 import org.springframework.data.domain.Pageable;
@@ -68,4 +69,20 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             GROUP BY ii.product.id
             """)
     List<ProductSalesRow> soldQuantitySince(@Param("from") LocalDateTime from);
+
+    /**
+     * Gợi ý "mua kèm" (market-basket): các sản phẩm hay xuất hiện CHUNG hóa đơn với sản phẩm cho trước,
+     * xếp theo số lần đồng xuất hiện giảm dần (chỉ tính HĐ COMPLETED).
+     */
+    @Query("""
+            SELECT ii2.product.id AS productId, COUNT(ii2.id) AS cnt
+            FROM InvoiceItem ii1, InvoiceItem ii2
+            WHERE ii1.invoice.id = ii2.invoice.id
+              AND ii1.product.id = :productId
+              AND ii2.product.id <> :productId
+              AND ii1.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+            GROUP BY ii2.product.id
+            ORDER BY COUNT(ii2.id) DESC
+            """)
+    List<ProductCountRow> boughtTogether(@Param("productId") Long productId, Pageable pageable);
 }

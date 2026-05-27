@@ -5,6 +5,7 @@ export const productApi = {
   list: (params) => client.get('/products', { params }).then(unwrap),
   get: (id) => client.get(`/products/${id}`).then(unwrap),
   byBarcode: (code) => client.get(`/products/barcode/${code}`).then(unwrap),
+  related: (id) => client.get(`/products/${id}/related`).then(unwrap),
   create: (body) => client.post('/products', body).then(unwrap),
   update: (id, body) => client.put(`/products/${id}`, body).then(unwrap),
   remove: (id) => client.delete(`/products/${id}`),

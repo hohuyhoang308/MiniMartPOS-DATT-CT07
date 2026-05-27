@@ -9,15 +9,17 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.CategoryRepository;
+import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.UnitRepository;
 import com.pos.repository.view.ProductStockViewRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** Quản lý sản phẩm (FR2.3, FR2.4 - UC05) + tra cứu mã vạch cho POS. */
@@ -29,15 +31,48 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final UnitRepository unitRepository;
     private final ProductStockViewRepository stockRepository;
+    private final InvoiceItemRepository invoiceItemRepository;
 
     public ProductService(ProductRepository productRepository,
                           CategoryRepository categoryRepository,
                           UnitRepository unitRepository,
-                          ProductStockViewRepository stockRepository) {
+                          ProductStockViewRepository stockRepository,
+                          InvoiceItemRepository invoiceItemRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.stockRepository = stockRepository;
+        this.invoiceItemRepository = invoiceItemRepository;
+    }
+
+    /**
+     * Gợi ý "mua kèm" (tiny-AI): ưu tiên sản phẩm hay được mua CHUNG hóa đơn (từ lịch sử bán);
+     * nếu chưa đủ thì bù bằng sản phẩm CÙNG DANH MỤC (heuristic if/else). Chỉ trả hàng còn tồn.
+     */
+    public List<ProductResponse> relatedProducts(Long productId, int limit) {
+        Product base = getOrThrow(productId);
+        Map<Long, Long> stock = stockRepository.findAll().stream()
+                .collect(Collectors.toMap(v -> v.getProductId(), v -> v.getCurrentStock(), (a, b) -> a));
+
+        LinkedHashMap<Long, Product> picked = new LinkedHashMap<>();
+        // 1) Từ lịch sử: sản phẩm hay mua chung hóa đơn
+        for (var row : invoiceItemRepository.boughtTogether(productId, PageRequest.of(0, limit * 3))) {
+            if (picked.size() >= limit) break;
+            productRepository.findById(row.getProductId())
+                    .filter(p -> p.getStatus() == CommonStatus.ACTIVE && stock.getOrDefault(p.getId(), 0L) > 0)
+                    .ifPresent(p -> picked.putIfAbsent(p.getId(), p));
+        }
+        // 2) Fallback: bù bằng sản phẩm cùng danh mục còn hàng
+        if (picked.size() < limit) {
+            for (Product p : productRepository.search(null, base.getCategory().getId())) {
+                if (picked.size() >= limit) break;
+                if (p.getId().equals(productId) || p.getStatus() != CommonStatus.ACTIVE) continue;
+                if (stock.getOrDefault(p.getId(), 0L) > 0) picked.putIfAbsent(p.getId(), p);
+            }
+        }
+        return picked.values().stream()
+                .map(p -> ProductResponse.from(p, stock.getOrDefault(p.getId(), 0L)))
+                .toList();
     }
 
     /** Tìm/lọc sản phẩm; đính kèm tồn kho hiện tại từ view (1 truy vấn gom). */
