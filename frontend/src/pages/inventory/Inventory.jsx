@@ -97,8 +97,10 @@ export default function Inventory() {
                 <Nav.Item><Nav.Link eventKey="expiring">Cận HSD ({expiring.length})</Nav.Link></Nav.Item>
               </Nav>
               {tab === 'suggest' && suggestions.length > 0 && (
-                <Button size="sm" onClick={() => navigate('/receipts')}>
-                  <i className="bi bi-box-arrow-in-down me-1"></i>Lập phiếu nhập
+                <Button size="sm" onClick={() => navigate('/receipts', {
+                  state: { prefill: suggestions.map((s) => ({ productId: s.productId, quantity: s.suggestedQty })) },
+                })}>
+                  <i className="bi bi-box-arrow-in-down me-1"></i>Lập phiếu nhập ({suggestions.length} mặt hàng)
                 </Button>
               )}
             </Card.Body>

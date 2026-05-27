@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -13,6 +14,9 @@ const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDat
 
 export default function GoodsReceipts() {
   const toast = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const prefilledRef = useRef(false)
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState([])
@@ -31,6 +35,20 @@ export default function GoodsReceipts() {
     supplierApi.list().then(setSuppliers).catch(() => {})
     productApi.list().then(setProducts).catch(() => {})
   }, [])
+
+  // Mở sẵn phiếu nhập từ trang "Đề xuất nhập hàng": điền sẵn mặt hàng + số lượng đề xuất.
+  useEffect(() => {
+    const prefill = location.state?.prefill
+    if (!prefill || prefilledRef.current || products.length === 0) return
+    prefilledRef.current = true
+    const items = prefill.map((pf) => {
+      const p = products.find((x) => x.id === pf.productId)
+      return { productId: String(pf.productId), quantity: pf.quantity || 1, importPrice: p?.costPrice ?? 0, expiryDate: '' }
+    })
+    setForm({ supplierId: '', note: 'Nhập theo đề xuất tồn kho', updateCostPrice: true, items: items.length ? items : [emptyLine()] })
+    setCreating(true)
+    navigate(location.pathname, { replace: true, state: null }) // tránh lặp khi back/refresh
+  }, [products, location.state, location.pathname, navigate])
 
   function openCreate() {
     setForm({ supplierId: '', note: '', updateCostPrice: true, items: [emptyLine()] })
