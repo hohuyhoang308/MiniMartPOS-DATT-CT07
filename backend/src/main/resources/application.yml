@@ -11,7 +11,8 @@ spring:
     name: pos-convenience-store
 
   datasource:
-    url: jdbc:mysql://localhost:3306/pos_convenience_store?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh
+    # createDatabaseIfNotExist=true: tự tạo cả "vỏ" database nếu chưa có → drop DB rồi khởi động lại là tự dựng hết
+    url: jdbc:mysql://localhost:3306/pos_convenience_store?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh&createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
