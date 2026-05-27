@@ -225,6 +225,23 @@ CREATE INDEX idx_iib_item  ON invoice_item_batches(invoice_item_id);
 CREATE INDEX idx_iib_batch ON invoice_item_batches(batch_id);
 
 -- ---------------------------------------------------------------------
+-- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên kệ).
+--     Tồn kệ của lô = đã lên kệ − đã bán; Tồn kho của lô = đã nhập − đã lên kệ.
+-- ---------------------------------------------------------------------
+CREATE TABLE shelf_transfers (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id
+    quantity    INT NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_st_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_st_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_st_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_st_batch ON shelf_transfers(batch_id);
+
+-- ---------------------------------------------------------------------
 -- 9. GIAO DỊCH THANH TOÁN ĐIỆN TỬ — VietQR + WEB2M (FR-A1, FR-A4)
 --    Chỉ dùng cho thanh toán QR/chuyển khoản cần ĐỐI SOÁT TỰ ĐỘNG qua WEB2M.
 --    Tiền mặt KHÔNG tạo dòng ở đây (đã thu tại quầy).
@@ -303,28 +320,32 @@ CREATE TABLE telegram_recipients (
 
 -- Tồn còn lại của từng LÔ = số nhập - tổng đã bán (chỉ HĐ COMPLETED).
 -- Hủy HĐ (CANCELLED) => phân bổ không được tính => tồn tự hoàn.
+-- Tồn từng LÔ tách KHO/KỆ: on_shelf (kệ, POS bán) + in_warehouse (kho)
 CREATE OR REPLACE VIEW v_batch_stock AS
-SELECT  gri.id          AS batch_id,
-        gri.product_id,
-        gri.expiry_date,
-        gri.quantity    AS quantity_in,
-        gri.quantity - COALESCE((
-            SELECT SUM(iib.quantity)
-            FROM invoice_item_batches iib
-            JOIN invoice_items ii ON ii.id = iib.invoice_item_id
-            JOIN invoices      i  ON i.id  = ii.invoice_id
-            WHERE iib.batch_id = gri.id
-              AND i.status = 'COMPLETED'
-        ), 0) AS quantity_remaining
-FROM goods_receipt_items gri;
+SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in,
+        (b.quantity_in  - b.sold)        AS quantity_remaining,
+        (b.transferred  - b.sold)        AS on_shelf,
+        (b.quantity_in  - b.transferred) AS in_warehouse
+FROM (
+    SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
+            COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
+                JOIN invoice_items ii ON ii.id = iib.invoice_item_id
+                JOIN invoices      i  ON i.id  = ii.invoice_id
+                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
+            COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
+                WHERE st.batch_id = gri.id), 0) AS transferred
+    FROM goods_receipt_items gri
+) b;
 
--- Tồn kho hiện tại từng sản phẩm = tổng tồn các lô
+-- Tồn hiện tại từng sản phẩm = tổng tồn các lô (kèm tách kho/kệ)
 CREATE OR REPLACE VIEW v_product_stock AS
 SELECT  p.id AS product_id,
         p.barcode,
         p.name,
         p.min_stock,
-        COALESCE(SUM(bs.quantity_remaining), 0) AS current_stock
+        COALESCE(SUM(bs.quantity_remaining), 0) AS current_stock,
+        COALESCE(SUM(bs.on_shelf), 0)           AS shelf_stock,
+        COALESCE(SUM(bs.in_warehouse), 0)       AS warehouse_stock
 FROM products p
 LEFT JOIN v_batch_stock bs ON bs.product_id = p.id
 GROUP BY p.id, p.barcode, p.name, p.min_stock;
@@ -450,6 +471,10 @@ INSERT INTO goods_receipts (code, supplier_id, created_by, total_amount, note) V
 INSERT INTO goods_receipt_items (receipt_id, product_id, quantity, import_price, expiry_date) VALUES
 (2, 3, 60, 3000, '2026-09-30'),   -- batch id 4: Mì Hảo Hảo
 (2, 4, 40, 4000, '2026-08-15');   -- batch id 5: Snack Oishi
+
+-- Đưa toàn bộ các lô mẫu LÊN KỆ để bán được ngay (kho → kệ)
+INSERT INTO shelf_transfers (batch_id, quantity, created_by)
+SELECT id, quantity, 2 FROM goods_receipt_items;
 
 INSERT INTO customers (full_name, phone, email, loyalty_points) VALUES
 ('Nguyễn Văn An', '0987654321', 'an.nguyen@email.com', 50),

@@ -195,7 +195,7 @@ public class SaleService {
         for (Long productId : neededByProduct.keySet()) {
             Deque<long[]> deque = new ArrayDeque<>();
             for (BatchStockView b : batchStockRepository.findAvailableBatchesFifo(productId)) {
-                deque.addLast(new long[]{b.getBatchId(), b.getQuantityRemaining()});
+                deque.addLast(new long[]{b.getBatchId(), b.getOnShelf()}); // chỉ bán hàng TRÊN KỆ
             }
             batchesByProduct.put(productId, deque);
         }
@@ -224,7 +224,7 @@ public class SaleService {
 
             if (need > 0) {
                 throw new ConflictException("Sản phẩm \"" + item.getProduct().getName()
-                        + "\" không đủ tồn kho để bán (thiếu " + need + ")");
+                        + "\" không đủ hàng TRÊN KỆ để bán (thiếu " + need + ") — cần lên hàng từ kho");
             }
         }
     }

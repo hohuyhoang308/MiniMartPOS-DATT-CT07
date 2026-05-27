@@ -186,6 +186,20 @@ CREATE TABLE IF NOT EXISTS invoice_item_batches (
     CONSTRAINT chk_iib_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
+-- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ được đưa lên kệ) --
+--     Tồn kệ của lô = đã chuyển lên kệ − đã bán; Tồn kho = đã nhập − đã chuyển lên kệ.
+CREATE TABLE IF NOT EXISTS shelf_transfers (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id (lô)
+    quantity    INT NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_st_batch (batch_id),
+    CONSTRAINT fk_st_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_st_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_st_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
 -- 9. Giao dịch thanh toán QR -----------------------------------------
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -252,27 +266,34 @@ DEALLOCATE PREPARE stmt_apu;
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)
 -- =====================================================================
+-- Tồn từng LÔ tách KHO/KỆ:
+--   quantity_remaining = nhập − đã bán (tổng còn)
+--   on_shelf  (tồn kệ)  = đã chuyển lên kệ − đã bán   (POS bán từ đây)
+--   in_warehouse (tồn kho) = đã nhập − đã chuyển lên kệ
 CREATE OR REPLACE VIEW v_batch_stock AS
-SELECT  gri.id          AS batch_id,
-        gri.product_id,
-        gri.expiry_date,
-        gri.quantity    AS quantity_in,
-        gri.quantity - COALESCE((
-            SELECT SUM(iib.quantity)
-            FROM invoice_item_batches iib
-            JOIN invoice_items ii ON ii.id = iib.invoice_item_id
-            JOIN invoices      i  ON i.id  = ii.invoice_id
-            WHERE iib.batch_id = gri.id
-              AND i.status = 'COMPLETED'
-        ), 0) AS quantity_remaining
-FROM goods_receipt_items gri;
+SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in,
+        (b.quantity_in  - b.sold)        AS quantity_remaining,
+        (b.transferred  - b.sold)        AS on_shelf,
+        (b.quantity_in  - b.transferred) AS in_warehouse
+FROM (
+    SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
+            COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
+                JOIN invoice_items ii ON ii.id = iib.invoice_item_id
+                JOIN invoices      i  ON i.id  = ii.invoice_id
+                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
+            COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
+                WHERE st.batch_id = gri.id), 0) AS transferred
+    FROM goods_receipt_items gri
+) b;
 
 CREATE OR REPLACE VIEW v_product_stock AS
 SELECT  p.id AS product_id,
         p.barcode,
         p.name,
         p.min_stock,
-        COALESCE(SUM(bs.quantity_remaining), 0) AS current_stock
+        COALESCE(SUM(bs.quantity_remaining), 0) AS current_stock,
+        COALESCE(SUM(bs.on_shelf), 0)           AS shelf_stock,
+        COALESCE(SUM(bs.in_warehouse), 0)       AS warehouse_stock
 FROM products p
 LEFT JOIN v_batch_stock bs ON bs.product_id = p.id
 GROUP BY p.id, p.barcode, p.name, p.min_stock;

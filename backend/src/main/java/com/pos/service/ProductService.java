@@ -6,6 +6,7 @@ import com.pos.entity.Category;
 import com.pos.entity.Product;
 import com.pos.entity.Unit;
 import com.pos.entity.enums.CommonStatus;
+import com.pos.entity.view.ProductStockView;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.CategoryRepository;
@@ -51,35 +52,39 @@ public class ProductService {
      */
     public List<ProductResponse> relatedProducts(Long productId, int limit) {
         Product base = getOrThrow(productId);
-        Map<Long, Long> stock = stockRepository.findAll().stream()
-                .collect(Collectors.toMap(v -> v.getProductId(), v -> v.getCurrentStock(), (a, b) -> a));
+        Map<Long, ProductStockView> stock = stockRepository.findAll().stream()
+                .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
 
         LinkedHashMap<Long, Product> picked = new LinkedHashMap<>();
-        // 1) Từ lịch sử: sản phẩm hay mua chung hóa đơn
+        // 1) Từ lịch sử: sản phẩm hay mua chung hóa đơn (chỉ gợi ý món còn hàng TRÊN KỆ)
         for (var row : invoiceItemRepository.boughtTogether(productId, PageRequest.of(0, limit * 3))) {
             if (picked.size() >= limit) break;
             productRepository.findById(row.getProductId())
-                    .filter(p -> p.getStatus() == CommonStatus.ACTIVE && stock.getOrDefault(p.getId(), 0L) > 0)
+                    .filter(p -> p.getStatus() == CommonStatus.ACTIVE && shelfOf(stock.get(p.getId())) > 0)
                     .ifPresent(p -> picked.putIfAbsent(p.getId(), p));
         }
-        // 2) Fallback: bù bằng sản phẩm cùng danh mục còn hàng
+        // 2) Fallback: bù bằng sản phẩm cùng danh mục còn hàng trên kệ
         if (picked.size() < limit) {
             for (Product p : productRepository.search(null, base.getCategory().getId())) {
                 if (picked.size() >= limit) break;
                 if (p.getId().equals(productId) || p.getStatus() != CommonStatus.ACTIVE) continue;
-                if (stock.getOrDefault(p.getId(), 0L) > 0) picked.putIfAbsent(p.getId(), p);
+                if (shelfOf(stock.get(p.getId())) > 0) picked.putIfAbsent(p.getId(), p);
             }
         }
         return picked.values().stream()
-                .map(p -> ProductResponse.from(p, stock.getOrDefault(p.getId(), 0L)))
+                .map(p -> ProductResponse.from(p, stock.get(p.getId())))
                 .toList();
     }
 
-    /** Tìm/lọc sản phẩm; đính kèm tồn kho hiện tại từ view (1 truy vấn gom). */
+    private static long shelfOf(ProductStockView v) {
+        return v != null && v.getShelfStock() != null ? v.getShelfStock() : 0L;
+    }
+
+    /** Tìm/lọc sản phẩm; đính kèm tồn kho (tổng + kệ + kho) từ view (1 truy vấn gom). */
     public List<ProductResponse> search(String keyword, Long categoryId) {
         List<Product> products = productRepository.search(emptyToNull(keyword), categoryId);
-        Map<Long, Long> stockMap = stockRepository.findAll().stream()
-                .collect(Collectors.toMap(v -> v.getProductId(), v -> v.getCurrentStock(), (a, b) -> a));
+        Map<Long, ProductStockView> stockMap = stockRepository.findAll().stream()
+                .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
         return products.stream()
                 .map(p -> ProductResponse.from(p, stockMap.get(p.getId())))
                 .toList();
@@ -87,14 +92,14 @@ public class ProductService {
 
     public ProductResponse findById(Long id) {
         Product p = getOrThrow(id);
-        return ProductResponse.from(p, currentStock(id));
+        return ProductResponse.from(p, stockView(id));
     }
 
     /** Tra cứu nhanh theo mã vạch (POS, NFR1 < 1s). */
     public ProductResponse findByBarcode(String barcode) {
         Product p = productRepository.findByBarcode(barcode)
                 .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại (mã vạch: " + barcode + ")"));
-        return ProductResponse.from(p, currentStock(p.getId()));
+        return ProductResponse.from(p, stockView(p.getId()));
     }
 
     @Transactional
@@ -105,7 +110,7 @@ public class ProductService {
         Product p = new Product();
         apply(p, req);
         p.setStatus(req.status() != null ? req.status() : CommonStatus.ACTIVE);
-        return ProductResponse.from(productRepository.save(p), 0L);
+        return ProductResponse.from(productRepository.save(p), 0L, 0L, 0L);
     }
 
     @Transactional
@@ -116,7 +121,7 @@ public class ProductService {
         }
         apply(p, req);
         if (req.status() != null) p.setStatus(req.status());
-        return ProductResponse.from(productRepository.save(p), currentStock(id));
+        return ProductResponse.from(productRepository.save(p), stockView(id));
     }
 
     @Transactional
@@ -141,9 +146,8 @@ public class ProductService {
         p.setMinStock(req.minStock());
     }
 
-    private Long currentStock(Long productId) {
-        return stockRepository.findByProductId(productId)
-                .map(v -> v.getCurrentStock()).orElse(0L);
+    private ProductStockView stockView(Long productId) {
+        return stockRepository.findByProductId(productId).orElse(null);
     }
 
     private Product getOrThrow(Long id) {

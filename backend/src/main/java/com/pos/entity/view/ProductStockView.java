@@ -23,4 +23,12 @@ public class ProductStockView {
 
     @Column(name = "current_stock")
     private Long currentStock;
+
+    /** Tồn trên KỆ (bán được tại POS). */
+    @Column(name = "shelf_stock")
+    private Long shelfStock;
+
+    /** Tồn trong KHO (chưa lên kệ). */
+    @Column(name = "warehouse_stock")
+    private Long warehouseStock;
 }

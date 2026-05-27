@@ -2,13 +2,24 @@ package com.pos.dto.inventory;
 
 import com.pos.entity.view.ProductStockView;
 
+/**
+ * Tồn kho 1 sản phẩm, tách KHO/KỆ.
+ * @param shelfLow tồn kệ thấp (≤ ngưỡng) nhưng KHO còn hàng → cần "lên kệ".
+ */
 public record StockResponse(Long productId, String barcode, String name,
-                            Integer minStock, Long currentStock, boolean lowStock) {
+                            Integer minStock, Long currentStock, Long shelfStock, Long warehouseStock,
+                            boolean lowStock, boolean shelfLow) {
 
     public static StockResponse from(ProductStockView v) {
-        boolean low = v.getCurrentStock() != null && v.getMinStock() != null
-                && v.getCurrentStock() <= v.getMinStock();
+        long total = nz(v.getCurrentStock()), shelf = nz(v.getShelfStock()), wh = nz(v.getWarehouseStock());
+        int min = v.getMinStock() != null ? v.getMinStock() : 0;
+        boolean low = total <= min;
+        boolean shelfLow = shelf <= min && wh > 0;
         return new StockResponse(v.getProductId(), v.getBarcode(), v.getName(),
-                v.getMinStock(), v.getCurrentStock(), low);
+                v.getMinStock(), total, shelf, wh, low, shelfLow);
+    }
+
+    private static long nz(Long v) {
+        return v != null ? v : 0L;
     }
 }

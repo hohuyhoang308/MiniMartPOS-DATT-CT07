@@ -41,19 +41,22 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     private final ProductRepository productRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final UserRepository userRepository;
+    private final ShelfTransferRepository shelfTransferRepository;
 
     public CatalogDemoDataInitializer(CategoryRepository categoryRepository,
                                       UnitRepository unitRepository,
                                       SupplierRepository supplierRepository,
                                       ProductRepository productRepository,
                                       GoodsReceiptRepository goodsReceiptRepository,
-                                      UserRepository userRepository) {
+                                      UserRepository userRepository,
+                                      ShelfTransferRepository shelfTransferRepository) {
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.supplierRepository = supplierRepository;
         this.productRepository = productRepository;
         this.goodsReceiptRepository = goodsReceiptRepository;
         this.userRepository = userRepository;
+        this.shelfTransferRepository = shelfTransferRepository;
     }
 
     /** Đặc tả 1 mặt hàng demo. shelfLifeDays = 0 → không có HSD; stockQty = 0 → hết hàng. */
@@ -125,10 +128,20 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                 total = total.add(it.getImportPrice().multiply(BigDecimal.valueOf(it.getQuantity())));
             }
             receipt.setTotalAmount(total);
-            goodsReceiptRepository.save(receipt);
+            goodsReceiptRepository.save(receipt); // cascade lưu lô → lô có id
+
+            // Đưa sẵn ~60% mỗi lô LÊN KỆ (phần còn lại nằm trong KHO) để POS bán được + minh hoạ 2 tầng.
+            for (GoodsReceiptItem it : newBatches) {
+                int shelfQty = Math.min(it.getQuantity(), Math.max(1, (int) Math.round(it.getQuantity() * 0.6)));
+                ShelfTransfer st = new ShelfTransfer();
+                st.setBatch(it);
+                st.setQuantity(shelfQty);
+                st.setCreatedBy(createdBy);
+                shelfTransferRepository.save(st);
+            }
         }
 
-        log.info("Đã seed {} sản phẩm demo + {} lô nhập tồn kho.", created, newBatches.size());
+        log.info("Đã seed {} sản phẩm demo + {} lô nhập tồn kho (đã lên kệ ~60%).", created, newBatches.size());
     }
 
     // ---- helpers --------------------------------------------------------

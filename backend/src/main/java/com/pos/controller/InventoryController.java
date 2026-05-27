@@ -3,8 +3,11 @@ package com.pos.controller;
 import com.pos.common.ApiResponse;
 import com.pos.dto.inventory.ExpiringBatchResponse;
 import com.pos.dto.inventory.ReorderSuggestionResponse;
+import com.pos.dto.inventory.ShelfTransferRequest;
 import com.pos.dto.inventory.StockResponse;
 import com.pos.service.InventoryService;
+import com.pos.service.ShelfService;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,9 +20,11 @@ import java.util.List;
 public class InventoryController {
 
     private final InventoryService service;
+    private final ShelfService shelfService;
 
-    public InventoryController(InventoryService service) {
+    public InventoryController(InventoryService service, ShelfService shelfService) {
         this.service = service;
+        this.shelfService = shelfService;
     }
 
     @GetMapping("/stock")
@@ -41,5 +46,12 @@ public class InventoryController {
     @GetMapping("/suggestions")
     public ApiResponse<List<ReorderSuggestionResponse>> suggestions() {
         return ApiResponse.ok(service.reorderSuggestions());
+    }
+
+    /** Đưa hàng từ KHO lên KỆ (chọn lô theo FIFO/HSD). */
+    @PostMapping("/shelf-transfer")
+    public ApiResponse<Integer> shelfTransfer(@Valid @RequestBody ShelfTransferRequest req) {
+        int moved = shelfService.replenishShelf(req.productId(), req.quantity());
+        return ApiResponse.ok("Đã đưa " + moved + " sản phẩm lên kệ", moved);
     }
 }

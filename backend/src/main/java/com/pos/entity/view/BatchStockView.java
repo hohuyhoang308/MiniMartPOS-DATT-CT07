@@ -29,4 +29,12 @@ public class BatchStockView {
 
     @Column(name = "quantity_remaining")
     private Long quantityRemaining;
+
+    /** Tồn trên KỆ của lô (đã chuyển lên kệ − đã bán) — POS bán từ đây. */
+    @Column(name = "on_shelf")
+    private Long onShelf;
+
+    /** Tồn trong KHO của lô (đã nhập − đã chuyển lên kệ). */
+    @Column(name = "in_warehouse")
+    private Long inWarehouse;
 }
