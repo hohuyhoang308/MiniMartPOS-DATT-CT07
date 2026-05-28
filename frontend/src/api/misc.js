@@ -25,7 +25,16 @@ export const inventoryApi = {
   expiring: () => client.get('/inventory/expiring').then(unwrap),
   suggestions: () => client.get('/inventory/suggestions').then(unwrap),
   batches: (productId) => client.get(`/inventory/batches/${productId}`).then(unwrap),
-  shelfTransfer: (productId, quantity) => client.post('/inventory/shelf-transfer', { productId, quantity }).then(unwrap),
+}
+
+/** Kệ vật lý (FR8): xem/lên kệ (mọi vai trò) + CRUD kệ (quản lý). */
+export const shelfApi = {
+  list: () => client.get('/shelves').then(unwrap),
+  inventory: (id) => client.get(`/shelves/${id}/inventory`).then(unwrap),
+  transfer: (productId, shelfId, quantity) => client.post('/shelves/transfer', { productId, shelfId, quantity }).then(unwrap),
+  create: (body) => client.post('/shelves', body).then(unwrap),
+  update: (id, body) => client.put(`/shelves/${id}`, body).then(unwrap),
+  remove: (id) => client.delete(`/shelves/${id}`),
 }
 
 export const dashboardApi = {

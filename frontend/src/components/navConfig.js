@@ -5,6 +5,7 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/dashboard', icon: 'bi-grid-1x2-fill', label: 'Tổng quan', roles: ['ADMIN', 'MANAGER'] },
       { to: '/pos', icon: 'bi-bag-check-fill', label: 'Bán hàng (POS)', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
+      { to: '/shelf', icon: 'bi-arrow-up-square-fill', label: 'Lên kệ', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
       { to: '/invoices', icon: 'bi-receipt', label: 'Hóa đơn', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
       { to: '/shifts', icon: 'bi-clock-history', label: 'Quản lý ca', roles: ['ADMIN', 'MANAGER'] },
     ],
@@ -17,6 +18,7 @@ export const NAV_SECTIONS = [
       { to: '/suppliers', icon: 'bi-truck', label: 'Nhà cung cấp', roles: ['ADMIN', 'MANAGER'] },
       { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['ADMIN', 'MANAGER'] },
       { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & cảnh báo', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/shelves', icon: 'bi-grid-3x3-gap-fill', label: 'Quản lý kệ', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

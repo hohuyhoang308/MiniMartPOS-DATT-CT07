@@ -12,6 +12,8 @@ import Catalog from './pages/catalog/Catalog'
 import Suppliers from './pages/catalog/Suppliers'
 import GoodsReceipts from './pages/inventory/GoodsReceipts'
 import Inventory from './pages/inventory/Inventory'
+import Shelf from './pages/inventory/Shelf'
+import ShelfManage from './pages/inventory/ShelfManage'
 import Customers from './pages/crm/Customers'
 import Promotions from './pages/crm/Promotions'
 import Reports from './pages/reports/Reports'
@@ -36,6 +38,7 @@ export default function App() {
 
           {/* Mọi vai trò bán hàng */}
           <Route path="pos" element={<Pos />} />
+          <Route path="shelf" element={<Shelf />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="customers" element={<Customers />} />
 
@@ -47,6 +50,7 @@ export default function App() {
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="receipts" element={<GoodsReceipts />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="shelves" element={<ShelfManage />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="reports" element={<Reports />} />
             <Route path="shifts" element={<Shifts />} />
