@@ -339,6 +339,42 @@ và không hề dư thừa** (mỗi bảng đều được ít nhất 1 bảng k
 > trỏ tới hóa đơn `CANCELLED` không còn được cộng dồn — không cần cập nhật tồn thủ công).
 > Ràng buộc nghiệp vụ: `SUM(quantity theo invoice_item) = invoice_items.quantity`.
 
+### `shelves` — Kệ trưng bày vật lý (FR8 mở rộng)
+| Cột | Kiểu | Ràng buộc | Mô tả |
+|-----|------|-----------|-------|
+| id | BIGINT | PK, AI | |
+| code | VARCHAR(30) | UNIQUE, NOT NULL | Mã kệ (K01, A1…) |
+| name | VARCHAR(100) | | Khu vực / tên kệ |
+| capacity | INT | ≥ 0, DEFAULT 0 | **Sức chứa** (0 = không giới hạn) |
+| status | ENUM | DEFAULT `ACTIVE` | `ACTIVE` / `INACTIVE` |
+| created_at | DATETIME | DEFAULT now | |
+
+### `shelf_transfers` — Lên kệ: chuyển một LÔ từ kho lên một KỆ (FR8)
+| Cột | Kiểu | Ràng buộc | Mô tả |
+|-----|------|-----------|-------|
+| id | BIGINT | PK, AI | |
+| batch_id | BIGINT | FK→goods_receipt_items (CASCADE), NOT NULL | Lô được đưa lên kệ |
+| shelf_id | BIGINT | FK→shelves, NOT NULL | Kệ đích |
+| quantity | INT | > 0 | Số lượng đưa lên |
+| created_by | BIGINT | FK→users | Người thực hiện |
+| created_at | DATETIME | DEFAULT now | |
+
+> **Quy ước "1 lô / 1 kệ":** mọi lần lên kệ của cùng một lô vào **cùng một kệ** ⇒ `shelf_id` của lô trong
+> `v_batch_stock` lấy kệ của bản ghi lên kệ đầu tiên.
+
+### `shelf_returns` — Lấy hàng từ KỆ về lại KHO (đối ứng lên kệ, FR8)
+| Cột | Kiểu | Ràng buộc | Mô tả |
+|-----|------|-----------|-------|
+| id | BIGINT | PK, AI | |
+| batch_id | BIGINT | FK→goods_receipt_items (CASCADE), NOT NULL | Lô lấy từ kệ xuống |
+| shelf_id | BIGINT | FK→shelves, NOT NULL | Kệ nguồn |
+| quantity | INT | > 0 | Số lượng trả về kho |
+| created_by | BIGINT | FK→users | Người thực hiện |
+| created_at | DATETIME | DEFAULT now | |
+
+> **"Đặt lên thì có đặt xuống":** tồn kệ của lô = `Σ shelf_transfers − Σ shelf_returns − đã bán`;
+> tồn kho của lô = `nhập − (Σ shelf_transfers − Σ shelf_returns)`. Bảo toàn: tồn kệ + tồn kho = tồn còn lại.
+
 ### `customers` — Khách hàng thân thiết (FR6)
 | Cột | Kiểu | Ràng buộc | Mô tả |
 |-----|------|-----------|-------|
@@ -492,8 +528,8 @@ và không hề dư thừa** (mỗi bảng đều được ít nhất 1 bảng k
 
 | View | Phục vụ | Nội dung |
 |------|---------|----------|
-| `v_batch_stock` | FR8 | Tồn còn lại **từng lô** = `quantity − tổng đã bán (HĐ COMPLETED)` |
-| `v_product_stock` | FR8.1 | Tồn kho hiện tại từng sản phẩm (tổng tồn các lô) |
+| `v_batch_stock` | FR8 | Tồn **từng lô**, tách **kho/kệ**: `on_shelf` = (lên kệ − trả về kho) − đã bán; `in_warehouse` = nhập − (lên kệ − trả về kho); kèm `shelf_id` của lô |
+| `v_product_stock` | FR8.1 | Tồn từng sản phẩm: tổng tồn các lô, tách `shelf_stock` / `warehouse_stock` |
 | `v_low_stock` | FR8.2 | Sản phẩm tồn ≤ mức tối thiểu |
 | `v_expiring_batches` | FR8.2 | Lô còn hàng & HSD trong 30 ngày tới |
 | `v_customer_spending` | FR6.2 | Tổng chi tiêu + số HĐ của khách |
