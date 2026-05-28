@@ -35,6 +35,7 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('all')
   const [shelfTarget, setShelfTarget] = useState(null) // sản phẩm đang "lên kệ"
+  const [batchTarget, setBatchTarget] = useState(null) // sản phẩm đang xem chi tiết lô
 
   function load(first) {
     if (first) setLoading(true)
@@ -190,7 +191,10 @@ export default function Inventory() {
                   <tbody>
                     {rows.map((s) => (
                       <tr key={s.productId}>
-                        <td className="fw-semibold">{s.name}<div className="text-muted2 small">{s.barcode}</div></td>
+                        <td className="fw-semibold cursor-pointer" onClick={() => setBatchTarget(s)} title="Xem các lô & HSD">
+                          {s.name} <i className="bi bi-card-list text-muted2"></i>
+                          <div className="text-muted2 small">{s.barcode}</div>
+                        </td>
                         <td className="text-center num"><ShelfCell s={s} /></td>
                         <td className="text-center num">{s.warehouseStock ?? 0}</td>
                         <td className="text-center num">{s.currentStock} / {s.minStock}</td>
@@ -218,25 +222,88 @@ export default function Inventory() {
 
       <ShelfTransferModal product={shelfTarget} onHide={() => setShelfTarget(null)}
         onDone={() => { setShelfTarget(null); load(false) }} />
+      <BatchDetailModal product={batchTarget} onHide={() => setBatchTarget(null)} />
     </div>
   )
 }
 
-/** Modal đưa hàng từ KHO lên KỆ (chọn lô FIFO/HSD ở backend). */
+/** Pill HSD theo số ngày còn lại. */
+function ExpiryPill({ days, date }) {
+  if (date == null) return <span className="text-muted2">Không HSD</span>
+  const cls = days < 0 ? 'pill-danger' : days <= 7 ? 'pill-warning' : days <= 30 ? 'pill-info' : 'pill-muted'
+  return <span className={`pill ${cls}`}>{date} · {days < 0 ? `quá ${-days}n` : `${days}n`}</span>
+}
+
+/** Modal xem CHI TIẾT CÁC LÔ của 1 sản phẩm: lô nào, HSD, tồn kho/kệ. */
+function BatchDetailModal({ product, onHide }) {
+  const toast = useToast()
+  const [batches, setBatches] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!product) return
+    setLoading(true)
+    inventoryApi.batches(product.productId)
+      .then(setBatches).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
+  }, [product])
+
+  if (!product) return null
+
+  return (
+    <Modal show={!!product} onHide={onHide} centered>
+      <Modal.Header closeButton><Modal.Title>Lô hàng · {product.name}</Modal.Title></Modal.Header>
+      <Modal.Body>
+        <div className="small text-muted2 mb-2">Bán theo <b>FIFO</b> — lô cận hạn (trên cùng) xuất trước.</div>
+        {loading ? <Loading /> : (
+          <Table size="sm" hover className="mb-0">
+            <thead><tr><th>HSD</th><th className="text-center">Nhập</th><th className="text-center">Kho</th><th className="text-center">Kệ</th><th className="text-center">Còn</th></tr></thead>
+            <tbody>
+              {batches.map((b) => (
+                <tr key={b.batchId}>
+                  <td><ExpiryPill days={b.daysLeft} date={b.expiryDate} /></td>
+                  <td className="text-center num text-muted2">{b.quantityIn}</td>
+                  <td className="text-center num">{b.inWarehouse}</td>
+                  <td className="text-center num text-success fw-semibold">{b.onShelf}</td>
+                  <td className="text-center num fw-semibold">{b.quantityRemaining}</td>
+                </tr>
+              ))}
+              {batches.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-box" title="Sản phẩm không còn lô tồn" /></td></tr>}
+            </tbody>
+          </Table>
+        )}
+      </Modal.Body>
+    </Modal>
+  )
+}
+
+/** Modal đưa hàng từ KHO lên KỆ — hiển thị các lô trong kho + XEM TRƯỚC lô nào sẽ lấy (FIFO/HSD). */
 function ShelfTransferModal({ product, onHide, onDone }) {
   const toast = useToast()
   const [qty, setQty] = useState(0)
+  const [batches, setBatches] = useState([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!product) return
     const wh = product.warehouseStock ?? 0
-    const fill = Math.max(1, (product.minStock || 0) * 2 - (product.shelfStock ?? 0)) // bù cho đủ ~2× ngưỡng
+    const fill = Math.max(1, (product.minStock || 0) * 2 - (product.shelfStock ?? 0))
     setQty(Math.min(wh, fill))
+    inventoryApi.batches(product.productId)
+      .then((bs) => setBatches(bs.filter((b) => b.inWarehouse > 0)))
+      .catch(() => setBatches([]))
   }, [product])
 
   if (!product) return null
   const wh = product.warehouseStock ?? 0
+
+  // Xem trước phân bổ FIFO: lấy từ lô cận hạn trước cho tới đủ qty.
+  let need = Number(qty) || 0
+  const plan = []
+  for (const b of batches) {
+    if (need <= 0) break
+    const take = Math.min(b.inWarehouse, need)
+    plan.push({ ...b, take }); need -= take
+  }
 
   async function submit(e) {
     e.preventDefault(); setLoading(true)
@@ -248,18 +315,33 @@ function ShelfTransferModal({ product, onHide, onDone }) {
   }
 
   return (
-    <Modal show={!!product} onHide={onHide} centered size="sm">
+    <Modal show={!!product} onHide={onHide} centered>
       <Form onSubmit={submit}>
         <Modal.Header closeButton><Modal.Title>Lên kệ · {product.name}</Modal.Title></Modal.Header>
         <Modal.Body>
           <div className="soft-card p-3 mb-3 d-flex justify-content-around text-center">
-            <div><div className="text-muted2 small">Đang trên kệ</div><div className="num fw-bold fs-5">{product.shelfStock ?? 0}</div></div>
+            <div><div className="text-muted2 small">Đang trên kệ</div><div className="num fw-bold fs-5 text-success">{product.shelfStock ?? 0}</div></div>
             <div><div className="text-muted2 small">Trong kho</div><div className="num fw-bold fs-5 text-primary">{wh}</div></div>
           </div>
           <Form.Label>Số lượng đưa lên kệ (tối đa {wh})</Form.Label>
           <Form.Control type="number" min={1} max={wh} value={qty} autoFocus
             onChange={(e) => setQty(Math.max(1, Math.min(Number(e.target.value) || 0, wh)))} />
-          <div className="small text-muted2 mt-2">Hệ thống tự chọn lô theo <b>FIFO/HSD</b> (lô cận hạn lên trước).</div>
+
+          <div className="small text-muted2 mt-3 mb-1">Sẽ lấy từ lô (cận hạn trước):</div>
+          {plan.length === 0 ? <div className="small text-muted2">—</div> : (
+            <Table size="sm" className="mb-0">
+              <thead><tr><th>HSD</th><th className="text-center">Kho</th><th className="text-end">Lấy lên kệ</th></tr></thead>
+              <tbody>
+                {plan.map((b) => (
+                  <tr key={b.batchId}>
+                    <td><ExpiryPill days={b.daysLeft} date={b.expiryDate} /></td>
+                    <td className="text-center num text-muted2">{b.inWarehouse}</td>
+                    <td className="text-end num fw-bold text-primary">+{b.take}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={onHide}>Hủy</Button>

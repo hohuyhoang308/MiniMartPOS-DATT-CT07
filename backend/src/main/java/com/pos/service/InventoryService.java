@@ -1,11 +1,13 @@
 package com.pos.service;
 
+import com.pos.dto.inventory.BatchDetailResponse;
 import com.pos.dto.inventory.ExpiringBatchResponse;
 import com.pos.dto.inventory.ReorderSuggestionResponse;
 import com.pos.dto.inventory.StockResponse;
 import com.pos.entity.Product;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ExpiringBatchViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
 import org.springframework.stereotype.Service;
@@ -40,15 +42,24 @@ public class InventoryService {
     private final ExpiringBatchViewRepository expiringRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final ProductRepository productRepository;
+    private final BatchStockViewRepository batchStockRepository;
 
     public InventoryService(ProductStockViewRepository stockRepository,
                             ExpiringBatchViewRepository expiringRepository,
                             InvoiceItemRepository invoiceItemRepository,
-                            ProductRepository productRepository) {
+                            ProductRepository productRepository,
+                            BatchStockViewRepository batchStockRepository) {
         this.stockRepository = stockRepository;
         this.expiringRepository = expiringRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.productRepository = productRepository;
+        this.batchStockRepository = batchStockRepository;
+    }
+
+    /** Chi tiết các LÔ còn hàng của 1 sản phẩm (HSD + tồn kho/kệ theo lô). */
+    public List<BatchDetailResponse> productBatches(Long productId) {
+        return batchStockRepository.findProductBatches(productId).stream()
+                .map(BatchDetailResponse::from).toList();
     }
 
     public List<StockResponse> currentStock() {

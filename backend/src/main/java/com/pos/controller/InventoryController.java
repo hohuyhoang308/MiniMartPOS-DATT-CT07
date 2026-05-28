@@ -1,6 +1,7 @@
 package com.pos.controller;
 
 import com.pos.common.ApiResponse;
+import com.pos.dto.inventory.BatchDetailResponse;
 import com.pos.dto.inventory.ExpiringBatchResponse;
 import com.pos.dto.inventory.ReorderSuggestionResponse;
 import com.pos.dto.inventory.ShelfTransferRequest;
@@ -46,6 +47,12 @@ public class InventoryController {
     @GetMapping("/suggestions")
     public ApiResponse<List<ReorderSuggestionResponse>> suggestions() {
         return ApiResponse.ok(service.reorderSuggestions());
+    }
+
+    /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). */
+    @GetMapping("/batches/{productId}")
+    public ApiResponse<List<BatchDetailResponse>> batches(@PathVariable Long productId) {
+        return ApiResponse.ok(service.productBatches(productId));
     }
 
     /** Đưa hàng từ KHO lên KỆ (chọn lô theo FIFO/HSD). */
