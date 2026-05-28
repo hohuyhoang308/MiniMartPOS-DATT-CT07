@@ -120,8 +120,8 @@ function PosBoard({ shift, onShiftClosed }) {
   }, [products, search, selectedCat])
 
   function add(p) {
-    if (p.currentStock <= 0) { toast.warning(`"${p.name}" đã hết hàng`); return }
-    cart.addProduct(p)
+    if ((p.shelfStock ?? 0) <= 0) { toast.warning(`"${p.name}" hết hàng trên kệ (cần lên hàng từ kho)`); return }
+    cart.addProduct({ ...p, currentStock: p.shelfStock }) // POS chỉ bán phần trên kệ
     refreshRelated(p.id)
   }
   async function refreshRelated(productId) {
@@ -157,7 +157,7 @@ function PosBoard({ shift, onShiftClosed }) {
   const change = paymentMethod === 'CASH' ? Math.max(0, Number(customerPaid || 0) - cart.total) : 0
   const cashShort = paymentMethod === 'CASH' && Number(customerPaid || 0) < cart.total
   // Gợi ý mua kèm: bỏ món đã có trong giỏ, chỉ còn hàng
-  const relatedShow = related.filter((r) => r.currentStock > 0 && !cart.items.some((i) => i.productId === r.id)).slice(0, 4)
+  const relatedShow = related.filter((r) => (r.shelfStock ?? 0) > 0 && !cart.items.some((i) => i.productId === r.id)).slice(0, 4)
 
   async function checkout() {
     if (cart.items.length === 0) return
@@ -223,13 +223,14 @@ function PosBoard({ shift, onShiftClosed }) {
           ) : (
             <div className="pos-products">
               {filtered.map((p) => (
-                <div key={p.id} className={`product-tile ${p.currentStock <= 0 ? 'disabled' : ''}`} onClick={() => add(p)}>
+                <div key={p.id} className={`product-tile ${(p.shelfStock ?? 0) <= 0 ? 'disabled' : ''}`} onClick={() => add(p)}>
                   <div className="pt-thumb">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box"></i>}</div>
                   <div className="pt-name">{p.name}</div>
                   <div className="d-flex justify-content-between align-items-center">
                     <span className="pt-price">{formatMoney(p.salePrice)}</span>
-                    <span className={`pill ${p.currentStock <= 0 ? 'pill-danger' : p.currentStock <= p.minStock ? 'pill-warning' : 'pill-muted'}`} style={{ fontSize: '.66rem' }}>
-                      {p.currentStock <= 0 ? 'Hết' : p.currentStock}
+                    <span className={`pill ${(p.shelfStock ?? 0) <= 0 ? 'pill-danger' : (p.shelfStock ?? 0) <= p.minStock ? 'pill-warning' : 'pill-muted'}`}
+                      style={{ fontSize: '.66rem' }} title={`Kệ ${p.shelfStock ?? 0} · Kho ${p.warehouseStock ?? 0}`}>
+                      {(p.shelfStock ?? 0) <= 0 ? 'Hết kệ' : `Kệ ${p.shelfStock}`}
                     </span>
                   </div>
                 </div>

@@ -24,6 +24,7 @@ export const inventoryApi = {
   lowStock: () => client.get('/inventory/low-stock').then(unwrap),
   expiring: () => client.get('/inventory/expiring').then(unwrap),
   suggestions: () => client.get('/inventory/suggestions').then(unwrap),
+  shelfTransfer: (productId, quantity) => client.post('/inventory/shelf-transfer', { productId, quantity }).then(unwrap),
 }
 
 export const dashboardApi = {
