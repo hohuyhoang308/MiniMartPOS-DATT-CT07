@@ -21,6 +21,10 @@ public class BatchStockView {
     @Column(name = "product_id")
     private Long productId;
 
+    /** Kệ mà lô này đang nằm (NULL nếu chưa lên kệ). */
+    @Column(name = "shelf_id")
+    private Long shelfId;
+
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 

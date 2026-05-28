@@ -186,16 +186,31 @@ CREATE TABLE IF NOT EXISTS invoice_item_batches (
     CONSTRAINT chk_iib_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
--- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ được đưa lên kệ) --
---     Tồn kệ của lô = đã chuyển lên kệ − đã bán; Tồn kho = đã nhập − đã chuyển lên kệ.
+-- 8a. KỆ VẬT LÝ (Display Shelves): các kệ trưng bày trong cửa hàng (Kệ A1, Kệ 1...).
+CREATE TABLE IF NOT EXISTS shelves (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code       VARCHAR(30)  NOT NULL UNIQUE,           -- mã kệ: A1, B2, K01...
+    name       VARCHAR(100),                           -- tên/khu vực: "Nước giải khát"
+    capacity   INT NOT NULL DEFAULT 0,                 -- sức chứa tối đa (số SP); 0 = không giới hạn
+    status     ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_shelf_cap CHECK (capacity >= 0)
+) ENGINE=InnoDB;
+
+-- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên 1 KỆ cụ thể).
+--     Quy ước: một LÔ chỉ nằm trên MỘT kệ (mọi lần lên kệ của lô đó vào cùng kệ).
+--     Tồn kệ của lô = đã lên kệ − đã bán; Tồn kho của lô = đã nhập − đã lên kệ.
 CREATE TABLE IF NOT EXISTS shelf_transfers (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id (lô)
+    shelf_id    BIGINT NOT NULL,                       -- kệ đích
     quantity    INT NOT NULL,
     created_by  BIGINT,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_st_batch (batch_id),
+    KEY idx_st_shelf (shelf_id),
     CONSTRAINT fk_st_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_st_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
     CONSTRAINT fk_st_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_st_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
@@ -271,12 +286,13 @@ DEALLOCATE PREPARE stmt_apu;
 --   on_shelf  (tồn kệ)  = đã chuyển lên kệ − đã bán   (POS bán từ đây)
 --   in_warehouse (tồn kho) = đã nhập − đã chuyển lên kệ
 CREATE OR REPLACE VIEW v_batch_stock AS
-SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in,
+SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
         (b.quantity_in  - b.sold)        AS quantity_remaining,
         (b.transferred  - b.sold)        AS on_shelf,
         (b.quantity_in  - b.transferred) AS in_warehouse
 FROM (
     SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
+            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id LIMIT 1) AS shelf_id,
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id

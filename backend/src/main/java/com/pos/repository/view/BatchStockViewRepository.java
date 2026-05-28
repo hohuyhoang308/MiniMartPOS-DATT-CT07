@@ -32,4 +32,12 @@ public interface BatchStockViewRepository extends JpaRepository<BatchStockView, 
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
     List<BatchStockView> findProductBatches(@Param("productId") Long productId);
+
+    /** Các lô đang nằm TRÊN một KỆ (còn tồn kệ) — xem kệ chứa gì, lô/HSD nào. */
+    @Query("""
+            SELECT v FROM BatchStockView v
+            WHERE v.shelfId = :shelfId AND v.onShelf > 0
+            ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
+            """)
+    List<BatchStockView> findByShelf(@Param("shelfId") Long shelfId);
 }

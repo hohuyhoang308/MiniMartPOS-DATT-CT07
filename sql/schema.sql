@@ -225,21 +225,38 @@ CREATE INDEX idx_iib_item  ON invoice_item_batches(invoice_item_id);
 CREATE INDEX idx_iib_batch ON invoice_item_batches(batch_id);
 
 -- ---------------------------------------------------------------------
--- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên kệ).
+-- 8a. KỆ VẬT LÝ (Display Shelves): các kệ trưng bày (Kệ A1, K01...).
+-- ---------------------------------------------------------------------
+CREATE TABLE shelves (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code       VARCHAR(30)  NOT NULL UNIQUE,             -- mã kệ: K01, A1...
+    name       VARCHAR(100),                             -- khu vực: "Nước giải khát"
+    capacity   INT NOT NULL DEFAULT 0,                   -- sức chứa tối đa (số SP); 0 = không giới hạn
+    status     ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_shelf_cap CHECK (capacity >= 0)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
+-- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên 1 KỆ).
+--     Quy ước: một LÔ chỉ nằm trên MỘT kệ.
 --     Tồn kệ của lô = đã lên kệ − đã bán; Tồn kho của lô = đã nhập − đã lên kệ.
 -- ---------------------------------------------------------------------
 CREATE TABLE shelf_transfers (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id
+    shelf_id    BIGINT NOT NULL,                       -- kệ đích
     quantity    INT NOT NULL,
     created_by  BIGINT,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_st_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_st_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
     CONSTRAINT fk_st_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_st_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_st_batch ON shelf_transfers(batch_id);
+CREATE INDEX idx_st_shelf ON shelf_transfers(shelf_id);
 
 -- ---------------------------------------------------------------------
 -- 9. GIAO DỊCH THANH TOÁN ĐIỆN TỬ — VietQR + WEB2M (FR-A1, FR-A4)
@@ -322,12 +339,13 @@ CREATE TABLE telegram_recipients (
 -- Hủy HĐ (CANCELLED) => phân bổ không được tính => tồn tự hoàn.
 -- Tồn từng LÔ tách KHO/KỆ: on_shelf (kệ, POS bán) + in_warehouse (kho)
 CREATE OR REPLACE VIEW v_batch_stock AS
-SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in,
+SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
         (b.quantity_in  - b.sold)        AS quantity_remaining,
         (b.transferred  - b.sold)        AS on_shelf,
         (b.quantity_in  - b.transferred) AS in_warehouse
 FROM (
     SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
+            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id LIMIT 1) AS shelf_id,
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id
@@ -472,9 +490,18 @@ INSERT INTO goods_receipt_items (receipt_id, product_id, quantity, import_price,
 (2, 3, 60, 3000, '2026-09-30'),   -- batch id 4: Mì Hảo Hảo
 (2, 4, 40, 4000, '2026-08-15');   -- batch id 5: Snack Oishi
 
--- Đưa toàn bộ các lô mẫu LÊN KỆ để bán được ngay (kho → kệ)
-INSERT INTO shelf_transfers (batch_id, quantity, created_by)
-SELECT id, quantity, 2 FROM goods_receipt_items;
+-- Kệ vật lý: mỗi danh mục một kệ (kèm sức chứa)
+INSERT INTO shelves (code, name, capacity) VALUES
+('K01', 'Nước giải khát', 500), ('K02', 'Đồ ăn nhanh', 500),
+('K03', 'Hàng tiêu dùng', 500), ('K04', 'Đồ đông lạnh', 300);
+
+-- Đưa toàn bộ lô mẫu LÊN KỆ của danh mục tương ứng (kho → kệ) để bán được ngay
+INSERT INTO shelf_transfers (batch_id, shelf_id, quantity, created_by)
+SELECT gri.id, sh.id, gri.quantity, 2
+FROM goods_receipt_items gri
+JOIN products   p  ON p.id  = gri.product_id
+JOIN categories c  ON c.id  = p.category_id
+JOIN shelves    sh ON sh.name = c.name;
 
 INSERT INTO customers (full_name, phone, email, loyalty_points) VALUES
 ('Nguyễn Văn An', '0987654321', 'an.nguyen@email.com', 50),

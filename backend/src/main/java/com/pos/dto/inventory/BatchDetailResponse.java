@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 /** Chi tiết một LÔ của sản phẩm: HSD, tồn kho/kệ — để thấy rõ "lô nào, HSD bao nhiêu". */
 public record BatchDetailResponse(
         Long batchId,
+        Long shelfId,            // kệ mà lô đang nằm (null nếu chưa lên kệ)
         LocalDate expiryDate,
         Integer daysLeft,        // số ngày còn tới HSD (âm = đã quá hạn; null = không HSD)
         Integer quantityIn,      // số lượng nhập của lô
@@ -18,7 +19,7 @@ public record BatchDetailResponse(
     public static BatchDetailResponse from(BatchStockView v) {
         Integer days = v.getExpiryDate() != null
                 ? (int) ChronoUnit.DAYS.between(LocalDate.now(), v.getExpiryDate()) : null;
-        return new BatchDetailResponse(v.getBatchId(), v.getExpiryDate(), days,
+        return new BatchDetailResponse(v.getBatchId(), v.getShelfId(), v.getExpiryDate(), days,
                 v.getQuantityIn(), v.getQuantityRemaining(), v.getOnShelf(), v.getInWarehouse());
     }
 }

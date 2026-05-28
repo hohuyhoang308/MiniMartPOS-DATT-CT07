@@ -4,11 +4,8 @@ import com.pos.common.ApiResponse;
 import com.pos.dto.inventory.BatchDetailResponse;
 import com.pos.dto.inventory.ExpiringBatchResponse;
 import com.pos.dto.inventory.ReorderSuggestionResponse;
-import com.pos.dto.inventory.ShelfTransferRequest;
 import com.pos.dto.inventory.StockResponse;
 import com.pos.service.InventoryService;
-import com.pos.service.ShelfService;
-import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,11 +18,9 @@ import java.util.List;
 public class InventoryController {
 
     private final InventoryService service;
-    private final ShelfService shelfService;
 
-    public InventoryController(InventoryService service, ShelfService shelfService) {
+    public InventoryController(InventoryService service) {
         this.service = service;
-        this.shelfService = shelfService;
     }
 
     @GetMapping("/stock")
@@ -49,16 +44,11 @@ public class InventoryController {
         return ApiResponse.ok(service.reorderSuggestions());
     }
 
-    /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). */
+    /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). Cả thu ngân (để lên kệ). */
     @GetMapping("/batches/{productId}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
     public ApiResponse<List<BatchDetailResponse>> batches(@PathVariable Long productId) {
         return ApiResponse.ok(service.productBatches(productId));
     }
 
-    /** Đưa hàng từ KHO lên KỆ (chọn lô theo FIFO/HSD). */
-    @PostMapping("/shelf-transfer")
-    public ApiResponse<Integer> shelfTransfer(@Valid @RequestBody ShelfTransferRequest req) {
-        int moved = shelfService.replenishShelf(req.productId(), req.quantity());
-        return ApiResponse.ok("Đã đưa " + moved + " sản phẩm lên kệ", moved);
-    }
 }

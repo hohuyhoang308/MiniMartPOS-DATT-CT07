@@ -42,6 +42,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final UserRepository userRepository;
     private final ShelfTransferRepository shelfTransferRepository;
+    private final ShelfRepository shelfRepository;
 
     public CatalogDemoDataInitializer(CategoryRepository categoryRepository,
                                       UnitRepository unitRepository,
@@ -49,7 +50,8 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                                       ProductRepository productRepository,
                                       GoodsReceiptRepository goodsReceiptRepository,
                                       UserRepository userRepository,
-                                      ShelfTransferRepository shelfTransferRepository) {
+                                      ShelfTransferRepository shelfTransferRepository,
+                                      ShelfRepository shelfRepository) {
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.supplierRepository = supplierRepository;
@@ -57,6 +59,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         this.goodsReceiptRepository = goodsReceiptRepository;
         this.userRepository = userRepository;
         this.shelfTransferRepository = shelfTransferRepository;
+        this.shelfRepository = shelfRepository;
     }
 
     /** Đặc tả 1 mặt hàng demo. shelfLifeDays = 0 → không có HSD; stockQty = 0 → hết hàng. */
@@ -68,6 +71,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     public void run(String... args) {
         Map<String, Category> categories = ensureCategories();
         Map<String, Unit> units = ensureUnits();
+        Map<String, Shelf> shelves = ensureShelves();
         Supplier supplier = ensureDemoSupplier();
         User createdBy = userRepository.findByUsername("manager")
                 .or(() -> userRepository.findByUsername("admin"))
@@ -79,6 +83,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
 
         List<Spec> specs = specs();
         List<GoodsReceiptItem> newBatches = new ArrayList<>();
+        List<String> batchCategories = new ArrayList<>(); // danh mục của từng lô (để chọn kệ)
         int created = 0;
         int idx = 0;
 
@@ -108,6 +113,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                 item.setExpiryDate(s.shelfLifeDays() > 0
                         ? LocalDate.now().plusDays(s.shelfLifeDays()) : null);
                 newBatches.add(item);
+                batchCategories.add(s.category());
             }
         }
 
@@ -130,21 +136,49 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
             receipt.setTotalAmount(total);
             goodsReceiptRepository.save(receipt); // cascade lưu lô → lô có id
 
-            // Đưa sẵn ~60% mỗi lô LÊN KỆ (phần còn lại nằm trong KHO) để POS bán được + minh hoạ 2 tầng.
-            for (GoodsReceiptItem it : newBatches) {
+            // Đưa sẵn ~60% mỗi lô LÊN KỆ của danh mục (phần còn lại nằm trong KHO) — POS bán được + minh hoạ kho/kệ.
+            for (int i = 0; i < newBatches.size(); i++) {
+                GoodsReceiptItem it = newBatches.get(i);
+                Shelf shelf = shelves.get(batchCategories.get(i));
+                if (shelf == null) continue;
                 int shelfQty = Math.min(it.getQuantity(), Math.max(1, (int) Math.round(it.getQuantity() * 0.6)));
                 ShelfTransfer st = new ShelfTransfer();
                 st.setBatch(it);
+                st.setShelf(shelf);
                 st.setQuantity(shelfQty);
                 st.setCreatedBy(createdBy);
                 shelfTransferRepository.save(st);
             }
         }
 
-        log.info("Đã seed {} sản phẩm demo + {} lô nhập tồn kho (đã lên kệ ~60%).", created, newBatches.size());
+        log.info("Đã seed {} sản phẩm demo + {} lô nhập tồn kho, đã lên kệ ~60% vào {} kệ.",
+                created, newBatches.size(), shelves.size());
     }
 
     // ---- helpers --------------------------------------------------------
+
+    /** Mỗi danh mục một KỆ (K01..K10), idempotent theo mã kệ → trả map danh mục → kệ. */
+    private Map<String, Shelf> ensureShelves() {
+        String[] cats = {
+                "Nước giải khát", "Đồ ăn nhanh", "Hàng tiêu dùng", "Đồ đông lạnh",
+                "Sữa & chế phẩm", "Bánh kẹo", "Mì & ăn liền", "Gia vị & đồ khô",
+                "Chăm sóc cá nhân", "Văn phòng phẩm"};
+        Map<String, Shelf> map = new LinkedHashMap<>();
+        for (int i = 0; i < cats.length; i++) {
+            String code = String.format("K%02d", i + 1);
+            String catName = cats[i];
+            Shelf shelf = shelfRepository.findByCodeIgnoreCase(code).orElseGet(() -> {
+                Shelf s = new Shelf();
+                s.setCode(code);
+                s.setName(catName);
+                s.setCapacity(500); // sức chứa mặc định mỗi kệ
+                s.setStatus(CommonStatus.ACTIVE);
+                return shelfRepository.save(s);
+            });
+            map.put(catName, shelf);
+        }
+        return map;
+    }
 
     private Map<String, Category> ensureCategories() {
         // tên hiển thị (giữ nguyên các danh mục có sẵn trong schema.sql)

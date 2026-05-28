@@ -26,6 +26,11 @@ public class ShelfTransfer {
     @JoinColumn(name = "batch_id", nullable = false)
     private GoodsReceiptItem batch;
 
+    /** Kệ đích (một lô chỉ nằm trên một kệ). */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "shelf_id", nullable = false)
+    private Shelf shelf;
+
     @Column(nullable = false)
     private Integer quantity;
 
