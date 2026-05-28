@@ -32,6 +32,7 @@ export const shelfApi = {
   list: () => client.get('/shelves').then(unwrap),
   inventory: (id) => client.get(`/shelves/${id}/inventory`).then(unwrap),
   transfer: (productId, shelfId, quantity) => client.post('/shelves/transfer', { productId, shelfId, quantity }).then(unwrap),
+  returnToWarehouse: (batchId, quantity) => client.post('/shelves/return', { batchId, quantity }).then(unwrap),
   create: (body) => client.post('/shelves', body).then(unwrap),
   update: (id, body) => client.put(`/shelves/${id}`, body).then(unwrap),
   remove: (id) => client.delete(`/shelves/${id}`),

@@ -215,6 +215,23 @@ CREATE TABLE IF NOT EXISTS shelf_transfers (
     CONSTRAINT chk_st_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
+-- 8c. LẤY HÀNG TỪ KỆ VỀ KHO (đối ứng với lên kệ — "đặt lên thì có đặt xuống").
+--     Mỗi dòng = số lượng của 1 LÔ trả từ kệ về kho. Tồn kệ của lô = lên kệ − trả về − bán.
+CREATE TABLE IF NOT EXISTS shelf_returns (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id (lô)
+    shelf_id    BIGINT NOT NULL,                       -- kệ nguồn (lấy hàng xuống từ kệ này)
+    quantity    INT NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_sr_batch (batch_id),
+    KEY idx_sr_shelf (shelf_id),
+    CONSTRAINT fk_sr_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sr_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
+    CONSTRAINT fk_sr_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_sr_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
 -- 9. Giao dịch thanh toán QR -----------------------------------------
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -283,8 +300,9 @@ DEALLOCATE PREPARE stmt_apu;
 -- =====================================================================
 -- Tồn từng LÔ tách KHO/KỆ:
 --   quantity_remaining = nhập − đã bán (tổng còn)
---   on_shelf  (tồn kệ)  = đã chuyển lên kệ − đã bán   (POS bán từ đây)
---   in_warehouse (tồn kho) = đã nhập − đã chuyển lên kệ
+--   transferred (net)  = đã lên kệ − đã trả về kho
+--   on_shelf  (tồn kệ)  = lên kệ ròng − đã bán          (POS bán từ đây)
+--   in_warehouse (tồn kho) = đã nhập − lên kệ ròng
 CREATE OR REPLACE VIEW v_batch_stock AS
 SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
         (b.quantity_in  - b.sold)        AS quantity_remaining,
@@ -298,7 +316,9 @@ FROM (
                 JOIN invoices      i  ON i.id  = ii.invoice_id
                 WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
             COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
-                WHERE st.batch_id = gri.id), 0) AS transferred
+                WHERE st.batch_id = gri.id), 0)
+              - COALESCE((SELECT SUM(sr.quantity) FROM shelf_returns sr
+                WHERE sr.batch_id = gri.id), 0) AS transferred
     FROM goods_receipt_items gri
 ) b;
 

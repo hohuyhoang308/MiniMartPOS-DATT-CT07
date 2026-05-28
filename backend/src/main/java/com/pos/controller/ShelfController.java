@@ -1,6 +1,7 @@
 package com.pos.controller;
 
 import com.pos.common.ApiResponse;
+import com.pos.dto.inventory.ShelfReturnRequest;
 import com.pos.dto.inventory.ShelfTransferRequest;
 import com.pos.dto.shelf.ShelfItemResponse;
 import com.pos.dto.shelf.ShelfRequest;
@@ -47,6 +48,14 @@ public class ShelfController {
     public ApiResponse<Integer> transfer(@Valid @RequestBody ShelfTransferRequest req) {
         int moved = service.replenishShelf(req.productId(), req.shelfId(), req.quantity());
         return ApiResponse.ok("Đã đưa " + moved + " sản phẩm lên kệ", moved);
+    }
+
+    /** Lấy hàng của một LÔ từ kệ về lại kho (đặt xuống) — đối ứng với lên kệ. */
+    @PostMapping("/return")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    public ApiResponse<Long> returnToWarehouse(@Valid @RequestBody ShelfReturnRequest req) {
+        long qty = service.returnToWarehouse(req.batchId(), req.quantity());
+        return ApiResponse.ok("Đã lấy " + qty + " sản phẩm từ kệ về kho", qty);
     }
 
     @PostMapping

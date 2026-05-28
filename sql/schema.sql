@@ -258,6 +258,23 @@ CREATE TABLE shelf_transfers (
 CREATE INDEX idx_st_batch ON shelf_transfers(batch_id);
 CREATE INDEX idx_st_shelf ON shelf_transfers(shelf_id);
 
+-- Lay hang tu ke ve kho (doi ung voi len ke).
+CREATE TABLE IF NOT EXISTS shelf_returns (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id    BIGINT NOT NULL,
+    shelf_id    BIGINT NOT NULL,
+    quantity    INT NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sr_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sr_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
+    CONSTRAINT fk_sr_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_sr_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_sr_batch ON shelf_returns(batch_id);
+CREATE INDEX idx_sr_shelf ON shelf_returns(shelf_id);
+
 -- ---------------------------------------------------------------------
 -- 9. GIAO DỊCH THANH TOÁN ĐIỆN TỬ — VietQR + WEB2M (FR-A1, FR-A4)
 --    Chỉ dùng cho thanh toán QR/chuyển khoản cần ĐỐI SOÁT TỰ ĐỘNG qua WEB2M.
@@ -351,7 +368,9 @@ FROM (
                 JOIN invoices      i  ON i.id  = ii.invoice_id
                 WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
             COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
-                WHERE st.batch_id = gri.id), 0) AS transferred
+                WHERE st.batch_id = gri.id), 0)
+              - COALESCE((SELECT SUM(sr.quantity) FROM shelf_returns sr
+                WHERE sr.batch_id = gri.id), 0) AS transferred
     FROM goods_receipt_items gri
 ) b;
 

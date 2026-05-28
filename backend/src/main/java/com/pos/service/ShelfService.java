@@ -5,6 +5,7 @@ import com.pos.dto.shelf.ShelfRequest;
 import com.pos.dto.shelf.ShelfResponse;
 import com.pos.entity.Product;
 import com.pos.entity.Shelf;
+import com.pos.entity.ShelfReturn;
 import com.pos.entity.ShelfTransfer;
 import com.pos.entity.User;
 import com.pos.entity.enums.CommonStatus;
@@ -28,6 +29,7 @@ public class ShelfService {
     private final ShelfRepository shelfRepository;
     private final BatchStockViewRepository batchStockRepository;
     private final ShelfTransferRepository shelfTransferRepository;
+    private final ShelfReturnRepository shelfReturnRepository;
     private final GoodsReceiptItemRepository batchRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -35,12 +37,14 @@ public class ShelfService {
     public ShelfService(ShelfRepository shelfRepository,
                         BatchStockViewRepository batchStockRepository,
                         ShelfTransferRepository shelfTransferRepository,
+                        ShelfReturnRepository shelfReturnRepository,
                         GoodsReceiptItemRepository batchRepository,
                         UserRepository userRepository,
                         ProductRepository productRepository) {
         this.shelfRepository = shelfRepository;
         this.batchStockRepository = batchStockRepository;
         this.shelfTransferRepository = shelfTransferRepository;
+        this.shelfReturnRepository = shelfReturnRepository;
         this.batchRepository = batchRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
@@ -91,7 +95,11 @@ public class ShelfService {
         boolean hasStock = batchStockRepository.findByShelf(id).stream()
                 .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
         if (hasStock) {
-            throw new BadRequestException("Kệ còn hàng — không thể xoá. Hãy bán hết hàng trên kệ trước.");
+            throw new BadRequestException("Kệ còn hàng — không thể xoá. Hãy lấy hết hàng về kho hoặc bán hết trước.");
+        }
+        // Còn lịch sử lên kệ / lấy về kho tham chiếu kệ này → khoá FK, chặn bằng thông báo rõ ràng.
+        if (shelfTransferRepository.countByShelfId(id) > 0 || shelfReturnRepository.countByShelfId(id) > 0) {
+            throw new BadRequestException("Kệ đã có lịch sử lên kệ — không thể xoá. Hãy ngừng dùng (đặt trạng thái Ngừng) thay vì xoá.");
         }
         shelfRepository.delete(s);
     }
@@ -150,6 +158,34 @@ public class ShelfService {
             throw new BadRequestException("Không có lô phù hợp trong kho để lên kệ này (lô có thể đã thuộc kệ khác).");
         }
         return moved;
+    }
+
+    // ---------- Lấy hàng từ kệ về kho (đặt xuống) ----------
+
+    /**
+     * Lấy {@code quantity} sản phẩm của một LÔ từ KỆ về lại KHO (đối ứng với lên kệ).
+     * Số lượng tối đa = tồn của lô đó trên kệ. Trả về số lượng thực tế đã lấy xuống.
+     */
+    @Transactional
+    public long returnToWarehouse(Long batchId, int quantity) {
+        if (quantity <= 0) throw new BadRequestException("Số lượng lấy về kho phải lớn hơn 0");
+        BatchStockView v = batchStockRepository.findById(batchId)
+                .orElseThrow(() -> NotFoundException.of("lô", batchId));
+        long onShelf = v.getOnShelf() != null ? v.getOnShelf() : 0L;
+        if (v.getShelfId() == null || onShelf <= 0) {
+            throw new BadRequestException("Lô này không còn hàng trên kệ để lấy về kho.");
+        }
+        if (quantity > onShelf) quantity = (int) onShelf; // chỉ lấy tối đa bằng tồn kệ
+        Shelf shelf = getOrThrow(v.getShelfId());
+        User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);
+
+        ShelfReturn r = new ShelfReturn();
+        r.setBatch(batchRepository.getReferenceById(batchId));
+        r.setShelf(shelf);
+        r.setQuantity(quantity);
+        r.setCreatedBy(user);
+        shelfReturnRepository.save(r);
+        return quantity;
     }
 
     // ---------- helpers ----------
