@@ -190,6 +190,10 @@ public class SaleService {
 
     /** Phân bổ FIFO: với mỗi sản phẩm, rút tồn theo thứ tự HSD gần nhất. Thiếu tồn → Conflict (rollback). */
     private void allocateStockFifo(Invoice invoice, Map<Long, Integer> neededByProduct) {
+        // Khoá tồn theo sản phẩm (id TĂNG DẦN để tránh deadlock) TRƯỚC khi đọc tồn từ view:
+        // tuần tự hoá các giao dịch chạm cùng sản phẩm → không thể bán quá tồn kệ khi 2 quầy bán đồng thời.
+        neededByProduct.keySet().stream().sorted().forEach(productRepository::findByIdForUpdate);
+
         // Nạp danh sách lô khả dụng (FIFO) cho từng sản phẩm + bộ đếm tồn còn lại trong bộ nhớ
         Map<Long, Deque<long[]>> batchesByProduct = new HashMap<>(); // productId -> deque[ batchId, remaining ]
         for (Long productId : neededByProduct.keySet()) {

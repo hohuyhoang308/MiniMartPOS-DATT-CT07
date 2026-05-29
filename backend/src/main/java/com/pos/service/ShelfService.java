@@ -124,7 +124,8 @@ public class ShelfService {
     @Transactional
     public int replenishShelf(Long productId, Long shelfId, int quantity) {
         if (quantity <= 0) throw new BadRequestException("Số lượng lên kệ phải lớn hơn 0");
-        productRepository.findById(productId).orElseThrow(() -> NotFoundException.of("sản phẩm", productId));
+        // Khoá tồn sản phẩm TRƯỚC khi đọc tồn kho từ view → không lên kệ vượt tồn kho khi chạy đồng thời.
+        productRepository.findByIdForUpdate(productId).orElseThrow(() -> NotFoundException.of("sản phẩm", productId));
         Shelf shelf = getOrThrow(shelfId);
         User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);
 
@@ -169,6 +170,10 @@ public class ShelfService {
     @Transactional
     public long returnToWarehouse(Long batchId, int quantity) {
         if (quantity <= 0) throw new BadRequestException("Số lượng lấy về kho phải lớn hơn 0");
+        // Khoá tồn sản phẩm của lô TRƯỚC khi đọc tồn kệ → tránh đua với giao dịch bán (tồn kệ âm).
+        com.pos.entity.GoodsReceiptItem batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> NotFoundException.of("lô", batchId));
+        productRepository.findByIdForUpdate(batch.getProduct().getId());
         BatchStockView v = batchStockRepository.findById(batchId)
                 .orElseThrow(() -> NotFoundException.of("lô", batchId));
         long onShelf = v.getOnShelf() != null ? v.getOnShelf() : 0L;
