@@ -184,9 +184,13 @@ function ShelfReturnModal({ item, onHide, onDone }) {
   useEffect(() => { if (item) setQty(item.quantity) }, [item])
   if (!item) return null
   const max = item.quantity
+  const qtyNum = Number(qty) || 0
+  const qtyInvalid = qtyNum < 1 || qtyNum > max
 
   async function submit(e) {
-    e.preventDefault(); setLoading(true)
+    e.preventDefault()
+    if (qtyInvalid) { toast.warning(`Nhập số lượng từ 1 đến ${max}`); return }
+    setLoading(true)
     try {
       const n = await shelfApi.returnToWarehouse(item.batchId, Number(qty))
       toast.success(`Đã lấy ${n} sản phẩm từ kệ về kho`)
@@ -201,13 +205,17 @@ function ShelfReturnModal({ item, onHide, onDone }) {
         <Modal.Body>
           <div className="mb-2 fw-semibold">{item.productName}</div>
           <div className="small text-muted2 mb-3">Đang trên kệ: <b className="text-success">{max}</b> · lấy bớt về kho để nhường chỗ / đổi hàng cận hạn.</div>
-          <Form.Label>Số lượng lấy về kho (tối đa {max})</Form.Label>
-          <Form.Control type="number" min={1} max={max} value={qty}
-            onChange={(e) => setQty(Math.max(1, Math.min(Number(e.target.value) || 0, max)))} />
+          <Form.Label>Số lượng lấy về kho <span className="text-muted2">(tối đa {max})</span></Form.Label>
+          <div className="input-group">
+            <Form.Control type="number" min={1} max={max} value={qty} isInvalid={qtyInvalid}
+              onChange={(e) => { const v = e.target.value; setQty(v === '' ? '' : Math.min(Math.max(0, Math.floor(Number(v) || 0)), max)) }}
+              onBlur={() => setQty((q) => { const n = Number(q); return n >= 1 ? Math.min(n, max) : 1 })} />
+            <Button variant="outline-secondary" type="button" onClick={() => setQty(max)}>Tất cả</Button>
+          </div>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={onHide}>Hủy</Button>
-          <Button type="submit" disabled={loading || max <= 0}>{loading ? <Spinner size="sm" /> : 'Lấy về kho'}</Button>
+          <Button type="submit" disabled={loading || max <= 0 || qtyInvalid}>{loading ? <Spinner size="sm" /> : 'Lấy về kho'}</Button>
         </Modal.Footer>
       </Form>
     </Modal>

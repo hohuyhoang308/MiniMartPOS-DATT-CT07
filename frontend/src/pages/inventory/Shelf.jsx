@@ -129,13 +129,16 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
 
   // Lô đủ điều kiện lên kệ đang chọn: chưa gắn kệ, hoặc gắn đúng kệ chọn
   const eligible = batches.filter((b) => !b.shelfId || String(b.shelfId) === String(shelfId))
-  let need = Number(qty) || 0
+  const qtyNum = Number(qty) || 0
+  const qtyInvalid = qtyNum < 1 || qtyNum > maxQty
+  let need = qtyNum
   const plan = []
   for (const b of eligible) { if (need <= 0) break; const take = Math.min(b.inWarehouse, need); plan.push({ ...b, take }); need -= take }
 
   async function submit(e) {
     e.preventDefault()
     if (!shelfId) { toast.warning('Chọn kệ'); return }
+    if (qtyInvalid) { toast.warning(`Nhập số lượng từ 1 đến ${maxQty}`); return }
     setLoading(true)
     try {
       const moved = await shelfApi.transfer(product.id, Number(shelfId), Number(qty))
@@ -165,9 +168,18 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
               : <>Kệ không giới hạn sức chứa.</>)}
           </div>
 
-          <Form.Label>Số lượng đưa lên kệ (tối đa {maxQty})</Form.Label>
-          <Form.Control type="number" min={1} max={maxQty} value={qty}
-            onChange={(e) => setQty(Math.max(1, Math.min(Number(e.target.value) || 0, maxQty)))} />
+          <Form.Label>Số lượng đưa lên kệ <span className="text-muted2">(gợi ý {qtyNum || '—'}, tối đa {maxQty})</span></Form.Label>
+          <div className="input-group">
+            <Form.Control type="number" min={1} max={maxQty} value={qty} isInvalid={qtyInvalid}
+              onChange={(e) => { const v = e.target.value; setQty(v === '' ? '' : Math.min(Math.max(0, Math.floor(Number(v) || 0)), maxQty)) }}
+              onBlur={() => setQty((q) => { const n = Number(q); return n >= 1 ? Math.min(n, maxQty) : 1 })} />
+            <Button variant="outline-secondary" type="button" disabled={maxQty <= 0} onClick={() => setQty(maxQty)}>Tối đa</Button>
+          </div>
+          <Form.Text className={qtyInvalid ? 'text-danger' : 'text-muted2'}>
+            {maxQty <= 0 ? 'Kệ đã đầy hoặc kho hết hàng — không thể lên kệ.'
+              : qtyInvalid ? `Nhập từ 1 đến ${maxQty}.`
+              : 'Có thể sửa số lượng tuỳ ý.'}
+          </Form.Text>
 
           <div className="small text-muted2 mt-3 mb-1">Sẽ lấy từ lô (cận hạn trước):</div>
           {plan.length === 0 ? <div className="small text-muted2">—</div> : (
@@ -187,7 +199,7 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={onHide}>Hủy</Button>
-          <Button type="submit" disabled={loading || wh <= 0}>{loading ? <Spinner size="sm" /> : 'Lên kệ'}</Button>
+          <Button type="submit" disabled={loading || wh <= 0 || qtyInvalid}>{loading ? <Spinner size="sm" /> : 'Lên kệ'}</Button>
         </Modal.Footer>
       </Form>
     </Modal>
