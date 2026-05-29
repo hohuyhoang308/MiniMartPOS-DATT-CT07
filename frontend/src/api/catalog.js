@@ -34,6 +34,5 @@ export const supplierApi = {
 
 export const receiptApi = {
   list: () => client.get('/goods-receipts').then(unwrap),
-  get: (id) => client.get(`/goods-receipts/${id}`).then(unwrap),
   create: (body) => client.post('/goods-receipts', body).then(unwrap),
 }

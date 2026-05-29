@@ -18,6 +18,6 @@ export const invoiceApi = {
 }
 
 export const paymentApi = {
-  qr: (invoiceId) => client.get('/payments/qr', { params: { invoiceId } }).then(unwrap),
+  // QR đã trả kèm khi tạo hóa đơn; FE chỉ cần poll trạng thái thanh toán.
   status: (invoiceId) => client.get(`/payments/${invoiceId}/status`).then(unwrap),
 }
