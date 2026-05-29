@@ -59,9 +59,10 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             FROM invoices i
             LEFT JOIN (
                 SELECT ii.invoice_id AS invoice_id,
-                       SUM((ii.unit_price - pr.cost_price) * ii.quantity) AS profit
-                FROM invoice_items ii
-                JOIN products pr ON pr.id = ii.product_id
+                       SUM((ii.unit_price - gri.import_price) * iib.quantity) AS profit
+                FROM invoice_item_batches iib
+                JOIN invoice_items ii      ON ii.id  = iib.invoice_item_id
+                JOIN goods_receipt_items gri ON gri.id = iib.batch_id
                 GROUP BY ii.invoice_id
             ) p ON p.invoice_id = i.id
             WHERE i.status = 'COMPLETED' AND i.created_at >= :from AND i.created_at < :to
