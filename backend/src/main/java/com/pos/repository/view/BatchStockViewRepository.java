@@ -9,10 +9,15 @@ import java.util.List;
 
 public interface BatchStockViewRepository extends JpaRepository<BatchStockView, Long> {
 
-    /** Các lô còn tồn TRÊN KỆ của 1 sản phẩm, FIFO theo HSD — dùng để bán (POS chỉ bán hàng trên kệ). */
+    /**
+     * Các lô còn tồn TRÊN KỆ của 1 sản phẩm, FIFO theo HSD — dùng để bán (POS chỉ bán hàng trên kệ).
+     * KHÔNG lấy lô đã QUÁ HẠN SỬ DỤNG (expiry < hôm nay): không được bán hàng hết hạn; nhân viên phải
+     * lấy về kho & ghi nhận huỷ. Lô không có HSD vẫn bán bình thường.
+     */
     @Query("""
             SELECT v FROM BatchStockView v
             WHERE v.productId = :productId AND v.onShelf > 0
+              AND (v.expiryDate IS NULL OR v.expiryDate >= CURRENT_DATE)
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
     List<BatchStockView> findAvailableBatchesFifo(@Param("productId") Long productId);
