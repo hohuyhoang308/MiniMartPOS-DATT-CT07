@@ -1,6 +1,7 @@
 package com.pos.controller;
 
 import com.pos.common.ApiResponse;
+import com.pos.dto.invoice.CancelInvoiceRequest;
 import com.pos.dto.invoice.InvoiceResponse;
 import com.pos.dto.sale.CreateInvoiceRequest;
 import com.pos.entity.enums.InvoiceStatus;
@@ -73,8 +74,8 @@ public class InvoiceController {
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ApiResponse<InvoiceResponse> cancel(@PathVariable Long id) {
-        return ApiResponse.ok("Đã hủy hóa đơn, tồn kho được hoàn tự động", invoiceService.cancel(id));
+    public ApiResponse<InvoiceResponse> cancel(@PathVariable Long id, @Valid @RequestBody CancelInvoiceRequest req) {
+        return ApiResponse.ok("Đã hủy hóa đơn, tồn kho được hoàn tự động", invoiceService.cancel(id, req.reason()));
     }
 
     /** Xuất hóa đơn PDF khổ 80mm (UC12). */

@@ -175,6 +175,9 @@ CREATE TABLE invoices (
     points_earned   INT NOT NULL DEFAULT 0,                -- điểm tích cho khách ở HĐ này
     points_used     INT NOT NULL DEFAULT 0,                -- điểm khách dùng để giảm trừ ở HĐ này
     status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    cancelled_by    BIGINT,                                -- ai hủy (audit)
+    cancelled_at    DATETIME,                              -- khi nào hủy
+    cancel_reason   VARCHAR(255),                          -- lý do hủy (bắt buộc khi hủy)
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_invoice_shift     FOREIGN KEY (shift_id)     REFERENCES work_shifts(id),
     CONSTRAINT fk_invoice_customer  FOREIGN KEY (customer_id)  REFERENCES customers(id),
@@ -346,6 +349,21 @@ CREATE TABLE telegram_recipients (
     label     VARCHAR(100),                                -- ghi chú người nhận
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     CONSTRAINT fk_tele_config FOREIGN KEY (config_id) REFERENCES store_config(id)
+) ENGINE=InnoDB;
+
+-- Nhat ky kiem toan (audit log): ai lam gi, khi nao - cho hanh dong nhay cam.
+CREATE TABLE audit_logs (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id  BIGINT,
+    actor_username VARCHAR(50),
+    action         VARCHAR(60) NOT NULL,
+    target_type    VARCHAR(40),
+    target_id      BIGINT,
+    detail         VARCHAR(500),
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_audit_action (action),
+    KEY idx_audit_target (target_type, target_id),
+    CONSTRAINT fk_audit_user FOREIGN KEY (actor_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
 -- =====================================================================

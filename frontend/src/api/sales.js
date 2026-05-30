@@ -13,7 +13,7 @@ export const invoiceApi = {
   create: (body) => client.post('/invoices', body).then(unwrap),
   list: (params) => client.get('/invoices', { params }).then(unwrap),
   get: (id) => client.get(`/invoices/${id}`).then(unwrap),
-  cancel: (id) => client.post(`/invoices/${id}/cancel`).then(unwrap),
+  cancel: (id, reason) => client.post(`/invoices/${id}/cancel`, { reason }).then(unwrap),
   pdfUrl: (id) => `/api/invoices/${id}/pdf`,
 }
 

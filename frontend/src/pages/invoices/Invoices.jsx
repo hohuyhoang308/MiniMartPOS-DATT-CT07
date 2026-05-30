@@ -5,7 +5,6 @@ import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
-import ConfirmModal from '../../components/ui/ConfirmModal'
 import { invoiceApi } from '../../api/sales'
 import client from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -23,6 +22,7 @@ export default function Invoices() {
   const [status, setStatus] = useState('')
   const [detail, setDetail] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
 
   async function load() {
@@ -40,11 +40,12 @@ export default function Invoices() {
     try { setDetail(await invoiceApi.get(id)) } catch (e) { toast.error(errMsg(e)) }
   }
   async function doCancel() {
+    if (cancelReason.trim().length < 3) { toast.warning('Nhập lý do hủy (tối thiểu 3 ký tự)'); return }
     setCancelling(true)
     try {
-      await invoiceApi.cancel(cancelTarget.id)
+      await invoiceApi.cancel(cancelTarget.id, cancelReason.trim())
       toast.success('Đã hủy hóa đơn — tồn kho hoàn tự động')
-      setCancelTarget(null); setDetail(null); load()
+      setCancelTarget(null); setCancelReason(''); setDetail(null); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setCancelling(false) }
   }
   async function openPdf(id) {
@@ -158,9 +159,21 @@ export default function Invoices() {
         </Modal.Footer>
       </Modal>
 
-      <ConfirmModal show={!!cancelTarget} onHide={() => setCancelTarget(null)} onConfirm={doCancel} loading={cancelling}
-        title="Hủy hóa đơn" message={`Hủy hóa đơn ${cancelTarget?.code}? Tồn kho sẽ được hoàn lại tự động.`}
-        confirmText="Hủy hóa đơn" />
+      <Modal show={!!cancelTarget} onHide={() => { setCancelTarget(null); setCancelReason('') }} centered>
+        <Modal.Header closeButton><Modal.Title>Hủy hóa đơn {cancelTarget?.code}</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <p className="text-muted2 small mb-2">Tồn kho sẽ được hoàn lại tự động. Hành động này được ghi nhật ký (ai hủy, khi nào, lý do).</p>
+          <Form.Label>Lý do hủy <span className="text-danger">*</span></Form.Label>
+          <Form.Control as="textarea" rows={2} value={cancelReason} autoFocus
+            onChange={(e) => setCancelReason(e.target.value)} placeholder="vd: khách đổi ý, bấm nhầm, sai số lượng…" />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="light" onClick={() => { setCancelTarget(null); setCancelReason('') }}>Đóng</Button>
+          <Button variant="danger" onClick={doCancel} disabled={cancelling || cancelReason.trim().length < 3}>
+            {cancelling ? 'Đang hủy…' : 'Hủy hóa đơn'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }

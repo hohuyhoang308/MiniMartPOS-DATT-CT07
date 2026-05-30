@@ -34,17 +34,20 @@ public class ProductService {
     private final UnitRepository unitRepository;
     private final ProductStockViewRepository stockRepository;
     private final InvoiceItemRepository invoiceItemRepository;
+    private final AuditService auditService;
 
     public ProductService(ProductRepository productRepository,
                           CategoryRepository categoryRepository,
                           UnitRepository unitRepository,
                           ProductStockViewRepository stockRepository,
-                          InvoiceItemRepository invoiceItemRepository) {
+                          InvoiceItemRepository invoiceItemRepository,
+                          AuditService auditService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.stockRepository = stockRepository;
         this.invoiceItemRepository = invoiceItemRepository;
+        this.auditService = auditService;
     }
 
     /** Hỗ trợ tối thiểu: cần đồng xuất hiện ≥ ngần này HĐ mới coi là liên kết thật (lọc nhiễu đơn lẻ). */
@@ -134,9 +137,18 @@ public class ProductService {
         if (!p.getBarcode().equals(req.barcode()) && productRepository.existsByBarcode(req.barcode())) {
             throw new BadRequestException("Mã vạch đã tồn tại: " + req.barcode());
         }
+        java.math.BigDecimal oldCost = p.getCostPrice(), oldSale = p.getSalePrice();
         apply(p, req);
         if (req.status() != null) p.setStatus(req.status());
-        return ProductResponse.from(productRepository.save(p), stockView(id));
+        Product saved = productRepository.save(p);
+        // Audit khi đổi GIÁ (vốn/bán) — minh bạch, chống lạm dụng đổi giá.
+        if (oldCost == null || oldSale == null
+                || oldCost.compareTo(saved.getCostPrice()) != 0 || oldSale.compareTo(saved.getSalePrice()) != 0) {
+            auditService.log("CHANGE_PRICE", "PRODUCT", saved.getId(),
+                    saved.getName() + ": giá vốn " + oldCost + "→" + saved.getCostPrice()
+                            + ", giá bán " + oldSale + "→" + saved.getSalePrice());
+        }
+        return ProductResponse.from(saved, stockView(id));
     }
 
     @Transactional

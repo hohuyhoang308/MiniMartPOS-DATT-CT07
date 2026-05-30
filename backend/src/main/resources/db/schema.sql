@@ -282,6 +282,23 @@ CREATE TABLE IF NOT EXISTS telegram_recipients (
     CONSTRAINT fk_tele_config FOREIGN KEY (config_id) REFERENCES store_config(id)
 ) ENGINE=InnoDB;
 
+-- 12. NHẬT KÝ KIỂM TOÁN (audit log) — vết "ai làm gì, khi nào" cho hành động nhạy cảm
+--     (hủy hóa đơn, đổi giá, chốt quỹ ca, đổi quyền/mật khẩu, đổi cấu hình). Chỉ ghi thêm (append-only).
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id  BIGINT,                                -- ai thực hiện
+    actor_username VARCHAR(50),                           -- chốt tên đăng nhập tại thời điểm (khỏi join)
+    action         VARCHAR(60) NOT NULL,                  -- vd CANCEL_INVOICE, CHANGE_PRICE, CLOSE_SHIFT
+    target_type    VARCHAR(40),                           -- vd INVOICE, PRODUCT, SHIFT
+    target_id      BIGINT,
+    detail         VARCHAR(500),                          -- mô tả/chênh lệch (vd lý do hủy)
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_audit_action (action),
+    KEY idx_audit_target (target_type, target_id),
+    KEY idx_audit_actor (actor_user_id),
+    CONSTRAINT fk_audit_user FOREIGN KEY (actor_user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  MIGRATION nhẹ cho CSDL CŨ (idempotent): thêm cột points_used nếu thiếu.
 --  (MySQL không có ADD COLUMN IF NOT EXISTS → kiểm tra qua information_schema.)
@@ -294,6 +311,16 @@ SET @add_points_used := (SELECT IF(
 PREPARE stmt_apu FROM @add_points_used;
 EXECUTE stmt_apu;
 DEALLOCATE PREPARE stmt_apu;
+
+-- Cột HỦY hóa đơn (ai/khi nào/lý do) — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_cancelled_by := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'cancelled_by'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN cancelled_by BIGINT NULL, ADD COLUMN cancelled_at DATETIME NULL, ADD COLUMN cancel_reason VARCHAR(255) NULL'));
+PREPARE stmt_acb FROM @add_cancelled_by;
+EXECUTE stmt_acb;
+DEALLOCATE PREPARE stmt_acb;
 
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)

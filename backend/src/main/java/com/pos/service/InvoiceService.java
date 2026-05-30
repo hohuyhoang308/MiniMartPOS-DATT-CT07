@@ -31,13 +31,16 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final PaymentTransactionRepository paymentRepository;
     private final StoreConfigRepository storeConfigRepository;
+    private final AuditService auditService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           PaymentTransactionRepository paymentRepository,
-                          StoreConfigRepository storeConfigRepository) {
+                          StoreConfigRepository storeConfigRepository,
+                          AuditService auditService) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.storeConfigRepository = storeConfigRepository;
+        this.auditService = auditService;
     }
 
     /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
@@ -73,15 +76,23 @@ public class InvoiceService {
 
     /**
      * Hủy hóa đơn (UC14): đặt status=CANCELLED → tồn kho TỰ HOÀN (view v_batch_stock bỏ qua HĐ CANCELLED).
+     * BẮT BUỘC nêu LÝ DO; ghi vết ai/khi nào/lý do (audit) — chống lạm dụng void để gian lận.
      * Hoàn tay phần KHÔNG tự suy ra: trừ lại điểm tích cho khách & giảm lượt dùng KM.
      */
     @Transactional
-    public InvoiceResponse cancel(Long id) {
+    public InvoiceResponse cancel(Long id, String reason) {
+        if (reason == null || reason.trim().length() < 3) {
+            throw new BadRequestException("Phải nhập lý do hủy hóa đơn (tối thiểu 3 ký tự)");
+        }
         Invoice inv = getOrThrow(id);
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Hóa đơn này đã bị hủy trước đó");
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
+        inv.setCancelReason(reason.trim());
+        inv.setCancelledAt(LocalDateTime.now());
+        CustomUserDetails me = SecurityUtils.currentUser();
+        if (me != null) inv.setCancelledBy(me.getId());
 
         // Hoàn điểm cho khách: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng (không để âm)
         Customer customer = inv.getCustomer();
@@ -98,7 +109,10 @@ public class InvoiceService {
             promo.setUsedCount(promo.getUsedCount() - 1);
         }
 
-        return InvoiceResponse.from(invoiceRepository.save(inv));
+        Invoice saved = invoiceRepository.save(inv);
+        auditService.log("CANCEL_INVOICE", "INVOICE", saved.getId(),
+                "Hủy HĐ " + saved.getCode() + " (tổng " + saved.getTotalAmount() + "đ). Lý do: " + reason.trim());
+        return InvoiceResponse.from(saved);
     }
 
     private Invoice getOrThrow(Long id) {
