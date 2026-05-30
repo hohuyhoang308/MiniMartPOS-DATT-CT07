@@ -16,6 +16,12 @@ import PaymentResultModal from './PaymentResultModal'
 
 const QUICK_CASH = [20000, 50000, 100000, 200000, 500000]
 
+/** Sinh khóa chống trùng (UUID). Dùng crypto.randomUUID nếu có (HTTPS/localhost), không thì fallback. */
+function genIdemKey() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return 'idem-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+}
+
 export default function Pos() {
   const [shift, setShift] = useState(null)
   const [loadingShift, setLoadingShift] = useState(true)
@@ -92,6 +98,7 @@ function PosBoard({ shift, onShiftClosed }) {
   const [paymentMethod, setPaymentMethod] = useState('CASH')
   const [customerPaid, setCustomerPaid] = useState('')
   const [processing, setProcessing] = useState(false)
+  const idemRef = useRef(null) // khóa chống tạo HĐ trùng (idempotency) cho lần thanh toán hiện tại
   const [result, setResult] = useState(null)
   const [closing, setClosing] = useState(false)
   const [categories, setCategories] = useState([])
@@ -162,6 +169,8 @@ function PosBoard({ shift, onShiftClosed }) {
   async function checkout() {
     if (cart.items.length === 0) return
     if (cashShort) { toast.warning('Tiền khách đưa chưa đủ'); return }
+    // Khóa chống trùng: dùng LẠI cùng key khi thử lại đơn này (mất mạng) → server không tạo HĐ thứ 2.
+    if (!idemRef.current) idemRef.current = genIdemKey()
     setProcessing(true)
     try {
       const inv = await invoiceApi.create({
@@ -171,13 +180,15 @@ function PosBoard({ shift, onShiftClosed }) {
         paymentMethod,
         customerPaid: paymentMethod === 'CASH' ? Number(customerPaid) : null,
         pointsToRedeem: cart.effectiveRedeem || 0,
+        idempotencyKey: idemRef.current,
       })
+      idemRef.current = null // thành công → đơn sau dùng key mới
       setResult(inv)
       cart.reset(); setPhone(''); setPromoCode(''); setCustomerPaid('')
       loadProducts()
       shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {})
       toast.success(`Đã tạo hóa đơn ${inv.code}`)
-    } catch (e) { toast.error(errMsg(e, 'Thanh toán thất bại')) }
+    } catch (e) { toast.error(errMsg(e, 'Thanh toán thất bại')) } // giữ idemRef để thử lại an toàn
     finally { setProcessing(false) }
   }
 

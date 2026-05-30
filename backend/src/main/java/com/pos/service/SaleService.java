@@ -74,6 +74,22 @@ public class SaleService {
 
     @Transactional
     public InvoiceResponse createInvoice(CreateInvoiceRequest req) {
+        // 0) Chống tạo TRÙNG: nếu FE gửi lại cùng idempotencyKey (mất phản hồi mạng) → trả HĐ đã tạo, KHÔNG tạo mới.
+        String idem = req.idempotencyKey() != null && !req.idempotencyKey().isBlank()
+                ? req.idempotencyKey().trim() : null;
+        if (idem != null) {
+            Invoice existing = invoiceRepository.findByIdempotencyKey(idem).orElse(null);
+            if (existing != null) {
+                PaymentTransaction pt = paymentRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(existing.getId()).orElse(null);
+                String qrUrl = null;
+                if (pt != null) {
+                    StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+                    qrUrl = VietQrUtil.buildQrUrl(cfg, pt.getAmount(), pt.getTransferContent());
+                }
+                return InvoiceResponse.from(existing, pt, qrUrl);
+            }
+        }
+
         // 1) Ca làm việc đang mở của thu ngân hiện tại (tiền điều kiện UC09)
         WorkShift shift = shiftRepository
                 .findFirstByUserIdAndStatusOrderByOpenedAtDesc(SecurityUtils.currentUserId(), ShiftStatus.OPEN)
@@ -156,6 +172,7 @@ public class SaleService {
         invoice.setPointsUsed(pointsUsed);
         invoice.setPointsEarned(pointsEarned);
         invoice.setCode(generateCode());
+        invoice.setIdempotencyKey(idem);
 
         // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô
         allocateStockFifo(invoice, neededByProduct);

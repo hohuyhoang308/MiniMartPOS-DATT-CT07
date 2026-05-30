@@ -81,6 +81,10 @@ public class Invoice {
     @Column(nullable = false)
     private InvoiceStatus status = InvoiceStatus.COMPLETED;
 
+    /** Khóa chống tạo trùng (idempotency) — FE sinh UUID mỗi lần thanh toán; gửi lại do mất mạng không tạo HĐ mới. */
+    @Column(name = "idempotency_key", length = 64, unique = true)
+    private String idempotencyKey;
+
     /** Audit hủy hóa đơn: ai hủy / khi nào / lý do (bắt buộc khi hủy). */
     @Column(name = "cancelled_by")
     private Long cancelledBy;

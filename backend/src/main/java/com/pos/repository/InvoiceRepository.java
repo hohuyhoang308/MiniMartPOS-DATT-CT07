@@ -14,10 +14,14 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     long countByCodeStartingWith(String prefix);
+
+    /** Tra HĐ theo khóa chống trùng (idempotency) — trả lại HĐ cũ thay vì tạo mới khi FE gửi lại. */
+    Optional<Invoice> findByIdempotencyKey(String idempotencyKey);
 
     /** Tổng doanh thu HĐ COMPLETED trong khoảng [from, to). */
     @Query("""

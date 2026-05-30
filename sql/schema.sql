@@ -178,6 +178,7 @@ CREATE TABLE invoices (
     cancelled_by    BIGINT,                                -- ai hủy (audit)
     cancelled_at    DATETIME,                              -- khi nào hủy
     cancel_reason   VARCHAR(255),                          -- lý do hủy (bắt buộc khi hủy)
+    idempotency_key VARCHAR(64) UNIQUE,                    -- chong tao HD trung khi gui lai
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_invoice_shift     FOREIGN KEY (shift_id)     REFERENCES work_shifts(id),
     CONSTRAINT fk_invoice_customer  FOREIGN KEY (customer_id)  REFERENCES customers(id),

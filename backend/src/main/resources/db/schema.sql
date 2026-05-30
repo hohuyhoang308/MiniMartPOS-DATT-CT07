@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     points_earned   INT NOT NULL DEFAULT 0,
     points_used     INT NOT NULL DEFAULT 0,
     status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    idempotency_key VARCHAR(64) UNIQUE,                    -- chống tạo HĐ trùng khi FE gửi lại do mất phản hồi
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_invoice_shift (shift_id),
     KEY idx_invoice_customer (customer_id),
@@ -321,6 +322,16 @@ SET @add_cancelled_by := (SELECT IF(
 PREPARE stmt_acb FROM @add_cancelled_by;
 EXECUTE stmt_acb;
 DEALLOCATE PREPARE stmt_acb;
+
+-- Cột khóa chống trùng (idempotency) — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_idem := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'idempotency_key'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN idempotency_key VARCHAR(64) NULL UNIQUE'));
+PREPARE stmt_idem FROM @add_idem;
+EXECUTE stmt_idem;
+DEALLOCATE PREPARE stmt_idem;
 
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)

@@ -16,5 +16,6 @@ public record CreateInvoiceRequest(
         String promotionCode,       // tùy chọn — mã giảm giá
         @NotNull(message = "Phải chọn hình thức thanh toán") PaymentMethod paymentMethod,
         BigDecimal customerPaid,    // bắt buộc khi thanh toán tiền mặt
-        Integer pointsToRedeem      // tùy chọn — số điểm khách muốn dùng để giảm trừ (cần có khách)
+        Integer pointsToRedeem,     // tùy chọn — số điểm khách muốn dùng để giảm trừ (cần có khách)
+        String idempotencyKey       // tùy chọn — khóa chống tạo trùng khi mất phản hồi mạng (FE sinh UUID/lần thanh toán)
 ) {}
