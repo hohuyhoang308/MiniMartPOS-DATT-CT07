@@ -32,6 +32,7 @@ public class CustomerController {
         return ApiResponse.ok(service.findByPhone(phone));
     }
 
+    /** Lịch sử mua + điểm của khách. Cashier có trang Khách hàng (đã được phép) nên giữ truy cập. */
     @GetMapping("/{id}/history")
     public ApiResponse<CustomerHistoryResponse> history(@PathVariable Long id) {
         return ApiResponse.ok(service.history(id));

@@ -51,7 +51,9 @@ public class ShiftController {
         return ApiResponse.ok(service.suggestedOpeningCash());
     }
 
+    /** Chi tiết một ca theo id — chỉ quản lý/chủ (tránh cashier dò ca người khác). */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ApiResponse<ShiftResponse> get(@PathVariable Long id) {
         return ApiResponse.ok(service.findById(id));
     }
