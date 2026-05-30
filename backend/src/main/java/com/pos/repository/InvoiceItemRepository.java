@@ -30,12 +30,16 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
                                     @Param("to") LocalDateTime to,
                                     Pageable pageable);
 
-    /** Lợi nhuận gộp = SUM((giá bán - giá vốn) * số lượng) của HĐ COMPLETED. */
+    /**
+     * Lợi nhuận gộp CHÍNH XÁC theo FIFO‑lô: COGS lấy đúng {@code import_price} của lô đã phân bổ khi bán
+     * (không dùng cost_price hiện tại của sản phẩm → báo cáo quá khứ không bị đổi khi đổi giá nhập).
+     * Lợi nhuận = Σ (giá bán − giá nhập của lô) × số lượng phân bổ, trên HĐ COMPLETED.
+     */
     @Query("""
-            SELECT COALESCE(SUM((ii.unitPrice - ii.product.costPrice) * ii.quantity), 0)
-            FROM InvoiceItem ii
-            WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
-              AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+            SELECT COALESCE(SUM((iib.invoiceItem.unitPrice - iib.batch.importPrice) * iib.quantity), 0)
+            FROM InvoiceItemBatch iib
+            WHERE iib.invoiceItem.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND iib.invoiceItem.invoice.createdAt >= :from AND iib.invoiceItem.invoice.createdAt < :to
             """)
     BigDecimal sumProfit(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
@@ -71,18 +75,27 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
     List<ProductSalesRow> soldQuantitySince(@Param("from") LocalDateTime from);
 
     /**
-     * Gợi ý "mua kèm" (market-basket): các sản phẩm hay xuất hiện CHUNG hóa đơn với sản phẩm cho trước,
-     * xếp theo số lần đồng xuất hiện giảm dần (chỉ tính HĐ COMPLETED).
+     * Gợi ý "mua kèm" (market-basket): số hóa đơn ĐỒNG XUẤT HIỆN co(A,B) của mỗi sản phẩm B với A.
+     * Đếm theo SỐ HÓA ĐƠN phân biệt (không phải số dòng) để tính lift đúng ở tầng service.
      */
     @Query("""
-            SELECT ii2.product.id AS productId, COUNT(ii2.id) AS cnt
+            SELECT ii2.product.id AS productId, COUNT(DISTINCT ii2.invoice.id) AS cnt
             FROM InvoiceItem ii1, InvoiceItem ii2
             WHERE ii1.invoice.id = ii2.invoice.id
               AND ii1.product.id = :productId
               AND ii2.product.id <> :productId
               AND ii1.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
             GROUP BY ii2.product.id
-            ORDER BY COUNT(ii2.id) DESC
+            ORDER BY COUNT(DISTINCT ii2.invoice.id) DESC
             """)
     List<ProductCountRow> boughtTogether(@Param("productId") Long productId, Pageable pageable);
+
+    /** Số HĐ COMPLETED chứa mỗi sản phẩm n(B) — mẫu số để tính lift cho gợi ý mua kèm. */
+    @Query("""
+            SELECT ii.product.id AS productId, COUNT(DISTINCT ii.invoice.id) AS cnt
+            FROM InvoiceItem ii
+            WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+            GROUP BY ii.product.id
+            """)
+    List<ProductCountRow> invoiceCountByProduct();
 }

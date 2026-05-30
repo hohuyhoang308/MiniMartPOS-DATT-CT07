@@ -13,6 +13,7 @@ import com.pos.repository.CategoryRepository;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.UnitRepository;
+import com.pos.repository.projection.ProductCountRow;
 import com.pos.repository.view.ProductStockViewRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -46,23 +47,37 @@ public class ProductService {
         this.invoiceItemRepository = invoiceItemRepository;
     }
 
+    /** Hỗ trợ tối thiểu: cần đồng xuất hiện ≥ ngần này HĐ mới coi là liên kết thật (lọc nhiễu đơn lẻ). */
+    private static final long MIN_SUPPORT = 2;
+
     /**
-     * Gợi ý "mua kèm" (tiny-AI): ưu tiên sản phẩm hay được mua CHUNG hóa đơn (từ lịch sử bán);
-     * nếu chưa đủ thì bù bằng sản phẩm CÙNG DANH MỤC (heuristic if/else). Chỉ trả hàng còn tồn.
+     * Gợi ý "mua kèm" (market-basket): xếp theo LIFT thay vì đếm thô để KHÔNG bị hàng bán chạy
+     * (túi nilon, nước suối…) lấn át. lift(A→B) = P(A∩B)/(P(A)·P(B)); với A cố định, xếp hạng tỉ lệ với
+     * co(A,B)/n(B). Lọc theo {@link #MIN_SUPPORT}. Thiếu thì bù bằng sản phẩm CÙNG DANH MỤC. Chỉ món còn tồn kệ.
      */
     public List<ProductResponse> relatedProducts(Long productId, int limit) {
         Product base = getOrThrow(productId);
         Map<Long, ProductStockView> stock = stockRepository.findAll().stream()
                 .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
 
+        // n(B): số HĐ chứa mỗi sản phẩm — mẫu số của lift
+        Map<Long, Long> invoiceCount = invoiceItemRepository.invoiceCountByProduct().stream()
+                .collect(Collectors.toMap(ProductCountRow::getProductId,
+                        r -> r.getCnt() != null ? r.getCnt() : 1L, (a, b) -> a));
+
         LinkedHashMap<Long, Product> picked = new LinkedHashMap<>();
-        // 1) Từ lịch sử: sản phẩm hay mua chung hóa đơn (chỉ gợi ý món còn hàng TRÊN KỆ)
-        for (var row : invoiceItemRepository.boughtTogether(productId, PageRequest.of(0, limit * 3))) {
-            if (picked.size() >= limit) break;
-            productRepository.findById(row.getProductId())
-                    .filter(p -> p.getStatus() == CommonStatus.ACTIVE && shelfOf(stock.get(p.getId())) > 0)
-                    .ifPresent(p -> picked.putIfAbsent(p.getId(), p));
-        }
+        // 1) Từ lịch sử: xếp theo lift = co(A,B)/n(B), lọc support tối thiểu, chỉ món còn hàng TRÊN KỆ
+        invoiceItemRepository.boughtTogether(productId, PageRequest.of(0, Math.max(limit * 5, 20))).stream()
+                .filter(r -> r.getCnt() != null && r.getCnt() >= MIN_SUPPORT)
+                .sorted((a, b) -> Double.compare(
+                        b.getCnt() / (double) Math.max(1L, invoiceCount.getOrDefault(b.getProductId(), 1L)),
+                        a.getCnt() / (double) Math.max(1L, invoiceCount.getOrDefault(a.getProductId(), 1L))))
+                .forEach(row -> {
+                    if (picked.size() >= limit) return;
+                    productRepository.findById(row.getProductId())
+                            .filter(p -> p.getStatus() == CommonStatus.ACTIVE && shelfOf(stock.get(p.getId())) > 0)
+                            .ifPresent(p -> picked.putIfAbsent(p.getId(), p));
+                });
         // 2) Fallback: bù bằng sản phẩm cùng danh mục còn hàng trên kệ
         if (picked.size() < limit) {
             for (Product p : productRepository.search(null, base.getCategory().getId())) {
