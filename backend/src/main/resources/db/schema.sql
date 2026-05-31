@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS products (
     category_id BIGINT NOT NULL,
     unit_id     BIGINT NOT NULL,
     cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,
-    sale_price  DECIMAL(12,2) NOT NULL,
+    sale_price  DECIMAL(12,2) NOT NULL,                  -- giá bán ĐÃ GỒM VAT (chuẩn bán lẻ VN)
+    tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,      -- thuế suất GTGT % (vd 0/8/10)
     image_url   VARCHAR(255),
     min_stock   INT NOT NULL DEFAULT 0,
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
@@ -148,6 +149,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     points_earned   INT NOT NULL DEFAULT 0,
     points_used     INT NOT NULL DEFAULT 0,
     status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,      -- phần VAT trong tổng (giá đã gồm VAT)
     idempotency_key VARCHAR(64) UNIQUE,                    -- chống tạo HĐ trùng khi FE gửi lại do mất phản hồi
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_invoice_shift (shift_id),
@@ -377,6 +379,21 @@ SET @add_idem := (SELECT IF(
 PREPARE stmt_idem FROM @add_idem;
 EXECUTE stmt_idem;
 DEALLOCATE PREPARE stmt_idem;
+
+-- Cột VAT: products.tax_rate & invoices.tax_amount — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_taxrate := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'products' AND column_name = 'tax_rate'),
+    'SELECT 1',
+    'ALTER TABLE products ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 8.00 AFTER sale_price'));
+PREPARE stmt_tr FROM @add_taxrate; EXECUTE stmt_tr; DEALLOCATE PREPARE stmt_tr;
+
+SET @add_taxamt := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'tax_amount'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER status'));
+PREPARE stmt_ta FROM @add_taxamt; EXECUTE stmt_ta; DEALLOCATE PREPARE stmt_ta;
 
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)

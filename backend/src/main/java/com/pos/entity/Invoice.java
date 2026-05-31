@@ -81,6 +81,10 @@ public class Invoice {
     @Column(nullable = false)
     private InvoiceStatus status = InvoiceStatus.COMPLETED;
 
+    /** Phần thuế GTGT trong tổng (giá đã gồm VAT) — chốt khi bán. */
+    @Column(name = "tax_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
     /** Khóa chống tạo trùng (idempotency) — FE sinh UUID mỗi lần thanh toán; gửi lại do mất mạng không tạo HĐ mới. */
     @Column(name = "idempotency_key", length = 64, unique = true)
     private String idempotencyKey;

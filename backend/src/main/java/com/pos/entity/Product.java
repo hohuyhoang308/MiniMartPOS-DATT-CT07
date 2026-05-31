@@ -45,6 +45,10 @@ public class Product {
     @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal salePrice;
 
+    /** Thuế suất GTGT % (giá bán đã gồm VAT). */
+    @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
+    private BigDecimal taxRate = new BigDecimal("8.00");
+
     @Column(name = "image_url", length = 255)
     private String imageUrl;
 

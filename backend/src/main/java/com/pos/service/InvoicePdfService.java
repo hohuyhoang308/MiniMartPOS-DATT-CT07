@@ -99,6 +99,9 @@ public class InvoicePdfService {
                 addRight(doc, "Giảm trừ: -" + MONEY.format(inv.getDiscountAmount()) + "đ", fNormal);
             }
             addRight(doc, "TỔNG CỘNG: " + MONEY.format(inv.getTotalAmount()) + "đ", fBold);
+            if (inv.getTaxAmount() != null && inv.getTaxAmount().signum() > 0) {
+                addRight(doc, "(Trong đó thuế GTGT: " + MONEY.format(inv.getTaxAmount()) + "đ)", fNormal);
+            }
             addLeft(doc, "Hình thức: " + (inv.getPaymentMethod().name().equals("CASH") ? "Tiền mặt" : "QR/Chuyển khoản"), fNormal);
             if (inv.getCustomerPaid() != null) {
                 addRight(doc, "Tiền khách đưa: " + MONEY.format(inv.getCustomerPaid()) + "đ", fNormal);

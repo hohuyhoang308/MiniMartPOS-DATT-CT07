@@ -169,6 +169,7 @@ public class ProductService {
         p.setUnit(unit);
         p.setCostPrice(req.costPrice());
         p.setSalePrice(req.salePrice());
+        p.setTaxRate(req.taxRate() != null ? req.taxRate() : new java.math.BigDecimal("8.00"));
         p.setImageUrl(req.imageUrl());
         p.setMinStock(req.minStock());
     }

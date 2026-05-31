@@ -20,6 +20,7 @@ public record InvoiceResponse(
         String promotionCode,
         BigDecimal subtotal,
         BigDecimal discountAmount,
+        BigDecimal taxAmount,
         BigDecimal totalAmount,
         PaymentMethod paymentMethod,
         BigDecimal customerPaid,
@@ -50,7 +51,7 @@ public record InvoiceResponse(
                 inv.getCustomer() != null ? inv.getCustomer().getId() : null,
                 inv.getCustomer() != null ? inv.getCustomer().getFullName() : null,
                 inv.getPromotion() != null ? inv.getPromotion().getCode() : null,
-                inv.getSubtotal(), inv.getDiscountAmount(), inv.getTotalAmount(),
+                inv.getSubtotal(), inv.getDiscountAmount(), inv.getTaxAmount(), inv.getTotalAmount(),
                 inv.getPaymentMethod(), inv.getCustomerPaid(), inv.getChangeAmount(),
                 inv.getPointsEarned(), inv.getPointsUsed(), inv.getStatus(), inv.getCreatedAt(),
                 items, payment);

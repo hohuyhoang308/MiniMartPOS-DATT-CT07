@@ -59,7 +59,8 @@ CREATE TABLE products (
     category_id BIGINT NOT NULL,
     unit_id     BIGINT NOT NULL,
     cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,          -- giá vốn hiện hành
-    sale_price  DECIMAL(12,2) NOT NULL,                    -- giá bán
+    sale_price  DECIMAL(12,2) NOT NULL,                    -- giá bán (da gom VAT)
+    tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,        -- thue suat GTGT %
     image_url   VARCHAR(255),
     min_stock   INT NOT NULL DEFAULT 0,                    -- mức tồn tối thiểu để cảnh báo
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
@@ -175,6 +176,7 @@ CREATE TABLE invoices (
     points_earned   INT NOT NULL DEFAULT 0,                -- điểm tích cho khách ở HĐ này
     points_used     INT NOT NULL DEFAULT 0,                -- điểm khách dùng để giảm trừ ở HĐ này
     status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,       -- phan VAT trong tong
     cancelled_by    BIGINT,                                -- ai hủy (audit)
     cancelled_at    DATETIME,                              -- khi nào hủy
     cancel_reason   VARCHAR(255),                          -- lý do hủy (bắt buộc khi hủy)

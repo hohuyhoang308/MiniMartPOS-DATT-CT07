@@ -138,6 +138,9 @@ export default function Invoices() {
               <div className="d-flex justify-content-between small"><span className="text-muted2">Tạm tính</span><span className="num">{formatMoney(detail?.subtotal)}</span></div>
               <div className="d-flex justify-content-between small text-success"><span>Giảm giá</span><span className="num">-{formatMoney(detail?.discountAmount)}</span></div>
               <div className="d-flex justify-content-between fw-bold fs-6 mt-1"><span>Tổng cộng</span><span className="num text-primary">{formatMoney(detail?.totalAmount)}</span></div>
+              {detail?.taxAmount > 0 && (
+                <div className="d-flex justify-content-between small text-muted2"><span>Trong đó thuế GTGT</span><span className="num">{formatMoney(detail?.taxAmount)}</span></div>
+              )}
               {detail?.paymentMethod === 'CASH' && (
                 <div className="d-flex justify-content-between small mt-1"><span className="text-muted2">Tiền thừa</span><span className="num">{formatMoney(detail?.changeAmount)}</span></div>
               )}

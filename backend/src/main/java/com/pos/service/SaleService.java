@@ -104,6 +104,7 @@ public class SaleService {
         invoice.setPaymentMethod(req.paymentMethod());
 
         BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal grossTax = BigDecimal.ZERO; // VAT trên giá đã gồm thuế (trước khi giảm)
         Map<Long, Integer> neededByProduct = new HashMap<>();
         for (SaleItemRequest line : req.items()) {
             Product product = productRepository.findById(line.productId())
@@ -114,7 +115,14 @@ public class SaleService {
             item.setUnitPrice(product.getSalePrice());
             invoice.addItem(item);
 
-            subtotal = subtotal.add(product.getSalePrice().multiply(BigDecimal.valueOf(line.quantity())));
+            BigDecimal lineAmount = product.getSalePrice().multiply(BigDecimal.valueOf(line.quantity()));
+            subtotal = subtotal.add(lineAmount);
+            // VAT đã gồm trong giá: thuế = tiền × r/(100+r)
+            BigDecimal r = product.getTaxRate() != null ? product.getTaxRate() : BigDecimal.ZERO;
+            if (r.signum() > 0) {
+                grossTax = grossTax.add(lineAmount.multiply(r)
+                        .divide(BigDecimal.valueOf(100).add(r), 2, RoundingMode.HALF_UP));
+            }
             neededByProduct.merge(product.getId(), line.quantity(), Integer::sum);
         }
         invoice.setSubtotal(subtotal);
@@ -154,6 +162,14 @@ public class SaleService {
         BigDecimal totalDiscount = promoDiscount.add(redeemValue);
         invoice.setDiscountAmount(totalDiscount);
         BigDecimal total = subtotal.subtract(totalDiscount);
+
+        // VAT trên số tiền THỰC THU: co giãn theo tỉ lệ sau giảm giá (giá đã gồm VAT).
+        if (grossTax.signum() > 0 && subtotal.signum() > 0) {
+            invoice.setTaxAmount(grossTax.multiply(total)
+                    .divide(subtotal, 2, RoundingMode.HALF_UP));
+        } else {
+            invoice.setTaxAmount(BigDecimal.ZERO);
+        }
 
         // 5) Thanh toán (kiểm theo số tiền cuối cùng sau giảm + đổi điểm)
         if (req.paymentMethod() == PaymentMethod.CASH) {
