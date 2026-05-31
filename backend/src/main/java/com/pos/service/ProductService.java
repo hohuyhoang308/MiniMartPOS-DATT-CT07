@@ -170,6 +170,13 @@ public class ProductService {
         p.setCostPrice(req.costPrice());
         p.setSalePrice(req.salePrice());
         p.setTaxRate(req.taxRate() != null ? req.taxRate() : new java.math.BigDecimal("8.00"));
+        p.setPackSize(req.packSize() != null && req.packSize() >= 1 ? req.packSize() : 1);
+        if (req.packUnitId() != null) {
+            p.setPackUnit(unitRepository.findById(req.packUnitId())
+                    .orElseThrow(() -> NotFoundException.of("đơn vị mua", req.packUnitId())));
+        } else {
+            p.setPackUnit(null);
+        }
         p.setImageUrl(req.imageUrl());
         p.setMinStock(req.minStock());
     }

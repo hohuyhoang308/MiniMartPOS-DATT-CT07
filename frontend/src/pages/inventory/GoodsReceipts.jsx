@@ -10,7 +10,7 @@ import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney, formatDateTime } from '../../utils/format'
 
-const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDate: '' })
+const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDate: '', byPack: false })
 
 export default function GoodsReceipts() {
   const toast = useToast()
@@ -66,10 +66,15 @@ export default function GoodsReceipts() {
       await receiptApi.create({
         supplierId: Number(form.supplierId),
         note: form.note, updateCostPrice: form.updateCostPrice,
-        items: form.items.map((it) => ({
-          productId: Number(it.productId), quantity: Number(it.quantity),
-          importPrice: Number(it.importPrice), expiryDate: it.expiryDate || null,
-        })),
+        items: form.items.map((it) => {
+          // Nhập theo THÙNG → quy đổi sang đơn vị bán cơ bản (lon) trước khi lưu (tồn luôn ở ĐV cơ bản).
+          const p = products.find((x) => String(x.id) === String(it.productId))
+          const k = it.byPack && p && p.packSize > 1 ? p.packSize : 1
+          return {
+            productId: Number(it.productId), quantity: Number(it.quantity) * k,
+            importPrice: Number(it.importPrice) / k, expiryDate: it.expiryDate || null,
+          }
+        }),
       })
       toast.success('Đã lập phiếu nhập, tồn kho đã tăng')
       setCreating(false); load()
@@ -130,9 +135,12 @@ export default function GoodsReceipts() {
             </Row>
 
             <Table size="sm" className="align-middle">
-              <thead><tr><th style={{ width: '38%' }}>Sản phẩm</th><th>Số lượng</th><th>Giá nhập</th><th>HSD</th><th className="text-end">Thành tiền</th><th></th></tr></thead>
+              <thead><tr><th style={{ width: '34%' }}>Sản phẩm</th><th>Số lượng</th><th>ĐV nhập</th><th>Giá nhập</th><th>HSD</th><th className="text-end">Thành tiền</th><th></th></tr></thead>
               <tbody>
-                {form?.items.map((it, idx) => (
+                {form?.items.map((it, idx) => {
+                  const lp = products.find((x) => String(x.id) === String(it.productId))
+                  const hasPack = lp && lp.packSize > 1 && lp.packUnitName
+                  return (
                   <tr key={idx}>
                     <td>
                       <Form.Select size="sm" value={it.productId} onChange={(e) => setItem(idx, 'productId', e.target.value)}>
@@ -140,7 +148,18 @@ export default function GoodsReceipts() {
                         {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.barcode})</option>)}
                       </Form.Select>
                     </td>
-                    <td><Form.Control size="sm" type="number" min={1} value={it.quantity} onChange={(e) => setItem(idx, 'quantity', e.target.value)} /></td>
+                    <td>
+                      <Form.Control size="sm" type="number" min={1} value={it.quantity} onChange={(e) => setItem(idx, 'quantity', e.target.value)} />
+                      {hasPack && it.byPack && <div className="text-muted2" style={{ fontSize: '.72rem' }}>= {Number(it.quantity || 0) * lp.packSize} {lp.unitName}</div>}
+                    </td>
+                    <td>
+                      {hasPack ? (
+                        <Form.Select size="sm" value={it.byPack ? 'pack' : 'base'} onChange={(e) => setItem(idx, 'byPack', e.target.value === 'pack')}>
+                          <option value="base">{lp.unitName} (lẻ)</option>
+                          <option value="pack">{lp.packUnitName} (×{lp.packSize})</option>
+                        </Form.Select>
+                      ) : <span className="text-muted2 small">{lp?.unitName || '—'}</span>}
+                    </td>
                     <td><Form.Control size="sm" type="number" min={0} value={it.importPrice} onChange={(e) => setItem(idx, 'importPrice', e.target.value)} /></td>
                     <td><Form.Control size="sm" type="date" value={it.expiryDate} onChange={(e) => setItem(idx, 'expiryDate', e.target.value)} /></td>
                     <td className="text-end num">{formatMoney(Number(it.quantity || 0) * Number(it.importPrice || 0))}</td>
@@ -151,7 +170,7 @@ export default function GoodsReceipts() {
                       </Button>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </Table>
             <Button size="sm" variant="soft" onClick={() => setForm({ ...form, items: [...form.items, emptyLine()] })}>

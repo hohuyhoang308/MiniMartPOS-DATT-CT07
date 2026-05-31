@@ -13,7 +13,7 @@ import { formatMoney } from '../../utils/format'
 
 const EMPTY = {
   barcode: '', name: '', categoryId: '', unitId: '',
-  costPrice: 0, salePrice: 0, taxRate: 8, imageUrl: '', minStock: 0, status: 'ACTIVE',
+  costPrice: 0, salePrice: 0, taxRate: 8, packSize: 1, packUnitId: '', imageUrl: '', minStock: 0, status: 'ACTIVE',
 }
 
 function StockBadge({ stock, min }) {
@@ -56,7 +56,8 @@ export default function Products() {
   function openEdit(p) {
     setForm({
       id: p.id, barcode: p.barcode, name: p.name, categoryId: p.categoryId, unitId: p.unitId,
-      costPrice: p.costPrice, salePrice: p.salePrice, taxRate: p.taxRate ?? 8, imageUrl: p.imageUrl || '',
+      costPrice: p.costPrice, salePrice: p.salePrice, taxRate: p.taxRate ?? 8,
+      packSize: p.packSize ?? 1, packUnitId: p.packUnitId || '', imageUrl: p.imageUrl || '',
       minStock: p.minStock, status: p.status,
     })
   }
@@ -69,6 +70,7 @@ export default function Products() {
         categoryId: Number(form.categoryId), unitId: Number(form.unitId),
         costPrice: Number(form.costPrice), salePrice: Number(form.salePrice),
         taxRate: Number(form.taxRate), minStock: Number(form.minStock),
+        packSize: Number(form.packSize) || 1, packUnitId: form.packUnitId ? Number(form.packUnitId) : null,
       }
       if (form.id) { await productApi.update(form.id, body); toast.success('Đã cập nhật sản phẩm') }
       else { await productApi.create(body); toast.success('Đã thêm sản phẩm') }
@@ -186,6 +188,16 @@ export default function Products() {
                 </Form.Select></Form.Group></Col>
               <Col md={3}><Form.Group className="mb-3"><Form.Label>Tồn tối thiểu</Form.Label>
                 <Form.Control type="number" min={0} value={form?.minStock} onChange={set('minStock')} /></Form.Group></Col>
+            </Row>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Đơn vị mua (thùng/lốc)</Form.Label>
+                <Form.Select value={form?.packUnitId} onChange={set('packUnitId')}>
+                  <option value="">— chỉ bán lẻ —</option>
+                  {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </Form.Select></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Quy cách: 1 đơn vị mua = ? đơn vị bán</Form.Label>
+                <Form.Control type="number" min={1} value={form?.packSize} onChange={set('packSize')}
+                  disabled={!form?.packUnitId} placeholder="vd: 24 (1 thùng = 24 lon)" /></Form.Group></Col>
             </Row>
             <Row className="align-items-end">
               <Col md={8}><Form.Group className="mb-3"><Form.Label>Ảnh (URL)</Form.Label>

@@ -49,6 +49,15 @@ public class Product {
     @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
     private BigDecimal taxRate = new BigDecimal("8.00");
 
+    /** Quy đổi: 1 đơn vị MUA (thùng) = pack_size đơn vị BÁN cơ bản (lon). 1 = không quy đổi. */
+    @Column(name = "pack_size", nullable = false)
+    private Integer packSize = 1;
+
+    /** Đơn vị mua (thùng/lốc); NULL nếu chỉ bán lẻ. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pack_unit_id")
+    private Unit packUnit;
+
     @Column(name = "image_url", length = 255)
     private String imageUrl;
 

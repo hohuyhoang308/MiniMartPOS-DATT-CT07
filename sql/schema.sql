@@ -61,6 +61,8 @@ CREATE TABLE products (
     cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,          -- giá vốn hiện hành
     sale_price  DECIMAL(12,2) NOT NULL,                    -- giá bán (da gom VAT)
     tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,        -- thue suat GTGT %
+    pack_size   INT NOT NULL DEFAULT 1,                     -- 1 thung = ? lon
+    pack_unit_id BIGINT,                                    -- don vi mua (thung)
     image_url   VARCHAR(255),
     min_stock   INT NOT NULL DEFAULT 0,                    -- mức tồn tối thiểu để cảnh báo
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
@@ -68,6 +70,7 @@ CREATE TABLE products (
     -- KHÔNG có current_stock: tồn kho suy ra từ lô (view v_product_stock)
     CONSTRAINT fk_product_category  FOREIGN KEY (category_id) REFERENCES categories(id),
     CONSTRAINT fk_product_unit      FOREIGN KEY (unit_id)     REFERENCES units(id),
+    CONSTRAINT fk_product_pack_unit FOREIGN KEY (pack_unit_id) REFERENCES units(id),
     CONSTRAINT chk_product_price    CHECK (sale_price >= 0 AND cost_price >= 0),
     CONSTRAINT chk_product_minstock CHECK (min_stock >= 0)
 ) ENGINE=InnoDB;

@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS products (
     cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,
     sale_price  DECIMAL(12,2) NOT NULL,                  -- giá bán ĐÃ GỒM VAT (chuẩn bán lẻ VN)
     tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,      -- thuế suất GTGT % (vd 0/8/10)
+    pack_size   INT NOT NULL DEFAULT 1,                   -- 1 ĐV mua (thùng) = ? ĐV bán cơ bản (lon)
+    pack_unit_id BIGINT,                                  -- đơn vị MUA (thùng/lốc) — NULL nếu chỉ bán lẻ
     image_url   VARCHAR(255),
     min_stock   INT NOT NULL DEFAULT 0,
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
@@ -60,7 +62,9 @@ CREATE TABLE IF NOT EXISTS products (
     KEY idx_product_unit (unit_id),
     CONSTRAINT fk_product_category  FOREIGN KEY (category_id) REFERENCES categories(id),
     CONSTRAINT fk_product_unit      FOREIGN KEY (unit_id)     REFERENCES units(id),
+    CONSTRAINT fk_product_pack_unit FOREIGN KEY (pack_unit_id) REFERENCES units(id),
     CONSTRAINT chk_product_price    CHECK (sale_price >= 0 AND cost_price >= 0),
+    CONSTRAINT chk_product_packsize CHECK (pack_size >= 1),
     CONSTRAINT chk_product_minstock CHECK (min_stock >= 0)
 ) ENGINE=InnoDB;
 
@@ -394,6 +398,14 @@ SET @add_taxamt := (SELECT IF(
     'SELECT 1',
     'ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER status'));
 PREPARE stmt_ta FROM @add_taxamt; EXECUTE stmt_ta; DEALLOCATE PREPARE stmt_ta;
+
+-- Cột đơn vị quy đổi (thùng↔lon): products.pack_size & pack_unit_id — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_pack := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'products' AND column_name = 'pack_size'),
+    'SELECT 1',
+    'ALTER TABLE products ADD COLUMN pack_size INT NOT NULL DEFAULT 1 AFTER tax_rate, ADD COLUMN pack_unit_id BIGINT NULL AFTER pack_size'));
+PREPARE stmt_pk FROM @add_pack; EXECUTE stmt_pk; DEALLOCATE PREPARE stmt_pk;
 
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)

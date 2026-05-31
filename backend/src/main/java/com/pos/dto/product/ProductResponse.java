@@ -17,6 +17,9 @@ public record ProductResponse(
         BigDecimal costPrice,
         BigDecimal salePrice,
         BigDecimal taxRate,
+        Integer packSize,
+        Long packUnitId,
+        String packUnitName,
         String imageUrl,
         Integer minStock,
         CommonStatus status,
@@ -29,7 +32,11 @@ public record ProductResponse(
                 p.getId(), p.getBarcode(), p.getName(),
                 p.getCategory().getId(), p.getCategory().getName(),
                 p.getUnit().getId(), p.getUnit().getName(),
-                p.getCostPrice(), p.getSalePrice(), p.getTaxRate(), p.getImageUrl(),
+                p.getCostPrice(), p.getSalePrice(), p.getTaxRate(),
+                p.getPackSize(),
+                p.getPackUnit() != null ? p.getPackUnit().getId() : null,
+                p.getPackUnit() != null ? p.getPackUnit().getName() : null,
+                p.getImageUrl(),
                 p.getMinStock(), p.getStatus(),
                 nz(currentStock), nz(shelfStock), nz(warehouseStock));
     }
