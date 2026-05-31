@@ -130,6 +130,7 @@ function PosBoard({ shift, onShiftClosed }) {
     if ((p.shelfStock ?? 0) <= 0) { toast.warning(`"${p.name}" hết hàng trên kệ (cần lên hàng từ kho)`); return }
     cart.addProduct({ ...p, currentStock: p.shelfStock }) // POS chỉ bán phần trên kệ
     refreshRelated(p.id)
+    searchRef.current?.focus() // giữ con trỏ ở ô quét để quét liên tục (kể cả khi bấm chuột vào sản phẩm)
   }
   async function refreshRelated(productId) {
     try { setRelated(await productApi.related(productId)) } catch { /* bỏ qua gợi ý */ }
@@ -270,7 +271,9 @@ function PosBoard({ shift, onShiftClosed }) {
                     </div>
                     <div className="qty-stepper">
                       <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity - 1)}>−</button>
-                      <span className="q">{i.quantity}</span>
+                      <input className="q" type="number" min={1} value={i.quantity}
+                        style={{ width: 44, textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 600 }}
+                        onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) cart.setQuantity(i.productId, Math.max(1, v)) }} />
                       <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity + 1)}>+</button>
                     </div>
                     <div className="num fw-semibold text-end" style={{ width: 78, fontSize: '.85rem' }}>{formatMoney(i.salePrice * i.quantity)}</div>
