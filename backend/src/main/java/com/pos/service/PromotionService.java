@@ -103,8 +103,10 @@ public class PromotionService {
 
         BigDecimal discount;
         if (p.getDiscountType() == DiscountType.PERCENT) {
+            // VND không có hào → làm tròn về ĐỒNG (scale 0). Tránh tiền lẻ không tiêu được.
             discount = subtotal.multiply(p.getDiscountValue())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                    .setScale(2, RoundingMode.UNNECESSARY);
         } else {
             discount = p.getDiscountValue();
         }
