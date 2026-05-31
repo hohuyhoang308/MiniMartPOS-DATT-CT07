@@ -367,6 +367,21 @@ CREATE TABLE audit_logs (
     CONSTRAINT fk_audit_user FOREIGN KEY (actor_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
+-- So cai diem tich luy (loyalty ledger): moi thay doi diem la 1 dong (truy vet, doi soat).
+CREATE TABLE loyalty_point_ledger (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id   BIGINT NOT NULL,
+    invoice_id    BIGINT,
+    delta         INT NOT NULL,
+    reason        VARCHAR(40) NOT NULL,
+    balance_after INT NOT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_lpl_customer (customer_id),
+    KEY idx_lpl_invoice (invoice_id),
+    CONSTRAINT fk_lpl_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng - thay cột dư thừa)
 -- =====================================================================

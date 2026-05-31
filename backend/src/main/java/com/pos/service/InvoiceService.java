@@ -32,15 +32,18 @@ public class InvoiceService {
     private final PaymentTransactionRepository paymentRepository;
     private final StoreConfigRepository storeConfigRepository;
     private final AuditService auditService;
+    private final LoyaltyService loyaltyService;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           PaymentTransactionRepository paymentRepository,
                           StoreConfigRepository storeConfigRepository,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          LoyaltyService loyaltyService) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.storeConfigRepository = storeConfigRepository;
         this.auditService = auditService;
+        this.loyaltyService = loyaltyService;
     }
 
     /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
@@ -94,13 +97,17 @@ public class InvoiceService {
         CustomUserDetails me = SecurityUtils.currentUser();
         if (me != null) inv.setCancelledBy(me.getId());
 
-        // Hoàn điểm cho khách: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng (không để âm)
+        // Hoàn điểm cho khách: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng (không để âm) + ghi sổ cái.
         Customer customer = inv.getCustomer();
         if (customer != null) {
             int earned = inv.getPointsEarned() != null ? inv.getPointsEarned() : 0;
             int used = inv.getPointsUsed() != null ? inv.getPointsUsed() : 0;
             int restored = Math.max(0, customer.getLoyaltyPoints() - earned + used);
             customer.setLoyaltyPoints(restored);
+            int netDelta = used - earned; // đảo chiều: trả lại điểm đã dùng, gỡ điểm đã tích
+            if (netDelta != 0) {
+                loyaltyService.record(customer.getId(), inv.getId(), netDelta, "CANCEL_REVERSAL", restored);
+            }
         }
 
         // Giảm lượt dùng khuyến mãi (không để âm)

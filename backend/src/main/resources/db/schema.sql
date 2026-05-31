@@ -300,6 +300,22 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     CONSTRAINT fk_audit_user FOREIGN KEY (actor_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
+-- 13. SỔ CÁI ĐIỂM TÍCH LŨY (loyalty ledger) — mỗi thay đổi điểm là 1 dòng (append-only) để truy vết,
+--     đối soát số dư = tổng delta. delta>0 tích, delta<0 dùng/điều chỉnh.
+CREATE TABLE IF NOT EXISTS loyalty_point_ledger (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id   BIGINT NOT NULL,
+    invoice_id    BIGINT,                                -- HĐ phát sinh (NULL nếu điều chỉnh tay)
+    delta         INT NOT NULL,                          -- +tích / −dùng / ±điều chỉnh
+    reason        VARCHAR(40) NOT NULL,                  -- EARN, REDEEM, CANCEL_REVERSAL...
+    balance_after INT NOT NULL,                          -- số dư sau thay đổi (đối soát)
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_lpl_customer (customer_id),
+    KEY idx_lpl_invoice (invoice_id),
+    CONSTRAINT fk_lpl_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  MIGRATION nhẹ cho CSDL CŨ (idempotent): thêm cột points_used nếu thiếu.
 --  (MySQL không có ADD COLUMN IF NOT EXISTS → kiểm tra qua information_schema.)

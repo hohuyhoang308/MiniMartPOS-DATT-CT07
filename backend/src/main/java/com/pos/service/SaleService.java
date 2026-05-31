@@ -49,6 +49,7 @@ public class SaleService {
     private final StoreConfigRepository storeConfigRepository;
     private final PromotionService promotionService;
     private final PromotionRepository promotionRepository;
+    private final LoyaltyService loyaltyService;
 
     public SaleService(InvoiceRepository invoiceRepository,
                        ProductRepository productRepository,
@@ -59,7 +60,9 @@ public class SaleService {
                        PaymentTransactionRepository paymentRepository,
                        StoreConfigRepository storeConfigRepository,
                        PromotionService promotionService,
-                       PromotionRepository promotionRepository) {
+                       PromotionRepository promotionRepository,
+                       LoyaltyService loyaltyService) {
+        this.loyaltyService = loyaltyService;
         this.invoiceRepository = invoiceRepository;
         this.productRepository = productRepository;
         this.customerRepository = customerRepository;
@@ -130,10 +133,12 @@ public class SaleService {
         //    đổi điểm làm giảm số tiền phải trả. 1 điểm = POINT_VALUE đồng.
         Customer customer = null;
         int pointsUsed = 0;
+        int startPoints = 0;
         BigDecimal redeemValue = BigDecimal.ZERO;
         if (req.customerId() != null) {
             customer = customerRepository.findById(req.customerId())
                     .orElseThrow(() -> NotFoundException.of("khách hàng", req.customerId()));
+            startPoints = customer.getLoyaltyPoints();
             invoice.setCustomer(customer);
 
             int wantRedeem = req.pointsToRedeem() != null ? Math.max(0, req.pointsToRedeem()) : 0;
@@ -185,6 +190,16 @@ public class SaleService {
 
         // 9) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
+
+        // 9b) Ghi SỔ CÁI ĐIỂM: dùng điểm (−) trước, rồi tích điểm (+) — số dư sau mỗi bước để đối soát.
+        if (customer != null) {
+            if (pointsUsed > 0) {
+                loyaltyService.record(customer.getId(), saved.getId(), -pointsUsed, "REDEEM", startPoints - pointsUsed);
+            }
+            if (pointsEarned > 0) {
+                loyaltyService.record(customer.getId(), saved.getId(), pointsEarned, "EARN", startPoints - pointsUsed + pointsEarned);
+            }
+        }
 
         // 10) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M
         PaymentTransaction pt = null;
