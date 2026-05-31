@@ -5,7 +5,7 @@ import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
-import { invoiceApi } from '../../api/sales'
+import { invoiceApi, returnApi } from '../../api/sales'
 import client from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
@@ -24,6 +24,7 @@ export default function Invoices() {
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [returnTarget, setReturnTarget] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -154,10 +155,15 @@ export default function Invoices() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={() => openPdf(detail.id)}><i className="bi bi-printer me-1"></i>In PDF</Button>
-          {canCancel && detail?.status === 'COMPLETED' &&
-            <Button variant="danger" onClick={() => setCancelTarget(detail)}><i className="bi bi-x-circle me-1"></i>Hủy hóa đơn</Button>}
+          {canCancel && detail?.status === 'COMPLETED' && <>
+            <Button variant="outline-primary" onClick={() => setReturnTarget(detail)}><i className="bi bi-arrow-return-left me-1"></i>Trả hàng</Button>
+            <Button variant="danger" onClick={() => setCancelTarget(detail)}><i className="bi bi-x-circle me-1"></i>Hủy hóa đơn</Button>
+          </>}
         </Modal.Footer>
       </Modal>
+
+      <ReturnModal invoice={returnTarget} onHide={() => setReturnTarget(null)}
+        onDone={() => { setReturnTarget(null); setDetail(null); load() }} />
 
       <Modal show={!!cancelTarget} onHide={() => { setCancelTarget(null); setCancelReason('') }} centered>
         <Modal.Header closeButton><Modal.Title>Hủy hóa đơn {cancelTarget?.code}</Modal.Title></Modal.Header>
@@ -175,5 +181,83 @@ export default function Invoices() {
         </Modal.Footer>
       </Modal>
     </div>
+  )
+}
+
+/** Modal trả hàng: chọn dòng + số lượng (≤ còn được trả), xem trước tiền hoàn, gửi. */
+function ReturnModal({ invoice, onHide, onDone }) {
+  const toast = useToast()
+  const [lines, setLines] = useState([])
+  const [qty, setQty] = useState({}) // invoiceItemId -> số trả
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!invoice) return
+    setLoading(true); setQty({}); setReason('')
+    returnApi.returnable(invoice.id)
+      .then((rs) => setLines(rs.filter((l) => l.returnableQty > 0)))
+      .catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
+  }, [invoice])
+
+  if (!invoice) return null
+  const refund = lines.reduce((s, l) => s + (Number(qty[l.invoiceItemId]) || 0) * l.unitPrice, 0)
+  const picked = lines.filter((l) => Number(qty[l.invoiceItemId]) > 0)
+
+  async function submit() {
+    if (picked.length === 0) { toast.warning('Chọn ít nhất 1 sản phẩm để trả'); return }
+    if (reason.trim().length < 3) { toast.warning('Nhập lý do trả (≥ 3 ký tự)'); return }
+    setSaving(true)
+    try {
+      const body = { invoiceId: invoice.id, reason: reason.trim(),
+        items: picked.map((l) => ({ invoiceItemId: l.invoiceItemId, quantity: Number(qty[l.invoiceItemId]) })) }
+      const r = await returnApi.create(body)
+      toast.success(`Đã trả hàng — hoàn ${formatMoney(r.refundAmount)}`)
+      onDone()
+    } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal show={!!invoice} onHide={onHide} centered size="lg">
+      <Modal.Header closeButton><Modal.Title>Trả hàng · HĐ {invoice.code}</Modal.Title></Modal.Header>
+      <Modal.Body>
+        <p className="text-muted2 small">Chọn số lượng trả cho từng sản phẩm (tối đa phần chưa trả). Hàng trả về <b>kho</b>, hoàn tiền theo đơn giá bán. Ghi nhật ký.</p>
+        {loading ? <div className="text-center py-3">Đang tải…</div> : lines.length === 0 ? (
+          <div className="text-muted2 text-center py-3">Hóa đơn này không còn gì để trả.</div>
+        ) : (
+          <Table size="sm" className="align-middle">
+            <thead><tr><th>Sản phẩm</th><th className="text-center">Đã bán</th><th className="text-center">Đã trả</th><th className="text-center">Trả lần này</th><th className="text-end">Hoàn</th></tr></thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr key={l.invoiceItemId}>
+                  <td className="fw-semibold">{l.productName}</td>
+                  <td className="text-center num">{l.soldQty}</td>
+                  <td className="text-center num text-muted2">{l.returnedQty}</td>
+                  <td className="text-center" style={{ width: 110 }}>
+                    <Form.Control type="number" size="sm" min={0} max={l.returnableQty} value={qty[l.invoiceItemId] ?? ''}
+                      onChange={(e) => { const v = Math.max(0, Math.min(l.returnableQty, parseInt(e.target.value, 10) || 0)); setQty((q) => ({ ...q, [l.invoiceItemId]: v })) }}
+                      placeholder={`≤ ${l.returnableQty}`} />
+                  </td>
+                  <td className="text-end num">{formatMoney((Number(qty[l.invoiceItemId]) || 0) * l.unitPrice)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+        <Form.Label className="mt-2">Lý do trả <span className="text-danger">*</span></Form.Label>
+        <Form.Control as="textarea" rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
+          placeholder="vd: hàng lỗi, khách đổi ý, mua nhầm…" />
+        <div className="d-flex justify-content-end mt-3">
+          <div className="fw-bold fs-6">Tổng hoàn: <span className="text-primary num">{formatMoney(refund)}</span></div>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="light" onClick={onHide}>Đóng</Button>
+        <Button onClick={submit} disabled={saving || picked.length === 0 || reason.trim().length < 3}>
+          {saving ? 'Đang xử lý…' : 'Xác nhận trả hàng'}
+        </Button>
+      </Modal.Footer>
+    </Modal>
   )
 }

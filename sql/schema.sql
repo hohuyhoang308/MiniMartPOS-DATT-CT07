@@ -279,6 +279,34 @@ CREATE TABLE IF NOT EXISTS shelf_returns (
 CREATE INDEX idx_sr_batch ON shelf_returns(batch_id);
 CREATE INDEX idx_sr_shelf ON shelf_returns(shelf_id);
 
+-- Tra hang / hoan tien: chung tu tra tham chieu HD goc; hang tra ve kho.
+CREATE TABLE IF NOT EXISTS sales_returns (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    invoice_id    BIGINT NOT NULL,
+    reason        VARCHAR(255) NOT NULL,
+    refund_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    created_by    BIGINT,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ret_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id),
+    CONSTRAINT fk_ret_user    FOREIGN KEY (created_by)  REFERENCES users(id)
+) ENGINE=InnoDB;
+CREATE INDEX idx_ret_invoice ON sales_returns(invoice_id);
+
+CREATE TABLE IF NOT EXISTS sales_return_items (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    return_id       BIGINT NOT NULL,
+    invoice_item_id BIGINT NOT NULL,
+    batch_id        BIGINT NOT NULL,
+    quantity        INT NOT NULL,
+    unit_price      DECIMAL(12,2) NOT NULL,
+    CONSTRAINT fk_reti_return FOREIGN KEY (return_id)       REFERENCES sales_returns(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reti_item   FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(id),
+    CONSTRAINT fk_reti_batch  FOREIGN KEY (batch_id)        REFERENCES goods_receipt_items(id),
+    CONSTRAINT chk_reti_qty   CHECK (quantity > 0)
+) ENGINE=InnoDB;
+CREATE INDEX idx_reti_return ON sales_return_items(return_id);
+CREATE INDEX idx_reti_batch ON sales_return_items(batch_id);
+
 -- ---------------------------------------------------------------------
 -- 9. GIAO DỊCH THANH TOÁN ĐIỆN TỬ — VietQR + WEB2M (FR-A1, FR-A4)
 --    Chỉ dùng cho thanh toán QR/chuyển khoản cần ĐỐI SOÁT TỰ ĐỘNG qua WEB2M.
@@ -400,11 +428,15 @@ FROM (
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id
-                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
+                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0)
+              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
+                WHERE rti.batch_id = gri.id), 0) AS sold,
             COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
                 WHERE st.batch_id = gri.id), 0)
               - COALESCE((SELECT SUM(sr.quantity) FROM shelf_returns sr
-                WHERE sr.batch_id = gri.id), 0) AS transferred
+                WHERE sr.batch_id = gri.id), 0)
+              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
+                WHERE rti.batch_id = gri.id), 0) AS transferred
     FROM goods_receipt_items gri
 ) b;
 

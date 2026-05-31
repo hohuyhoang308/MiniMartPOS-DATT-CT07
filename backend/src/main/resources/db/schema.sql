@@ -233,6 +233,35 @@ CREATE TABLE IF NOT EXISTS shelf_returns (
     CONSTRAINT chk_sr_qty  CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
+-- 8d. TRẢ HÀNG / HOÀN TIỀN (sau bán) — chứng từ trả tham chiếu HĐ gốc; hàng trả về KHO.
+CREATE TABLE IF NOT EXISTS sales_returns (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    invoice_id    BIGINT NOT NULL,                       -- HĐ gốc (COMPLETED)
+    reason        VARCHAR(255) NOT NULL,                 -- lý do trả
+    refund_amount DECIMAL(14,2) NOT NULL DEFAULT 0,      -- số tiền hoàn (= Σ số lượng × đơn giá dòng)
+    created_by    BIGINT,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_ret_invoice (invoice_id),
+    CONSTRAINT fk_ret_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id),
+    CONSTRAINT fk_ret_user    FOREIGN KEY (created_by)  REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- Dòng trả hàng = số lượng của 1 LÔ (batch) trả về kho (truy được giá vốn để báo cáo).
+CREATE TABLE IF NOT EXISTS sales_return_items (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    return_id       BIGINT NOT NULL,
+    invoice_item_id BIGINT NOT NULL,                     -- dòng bán gốc
+    batch_id        BIGINT NOT NULL,                     -- lô trả về (= goods_receipt_items.id)
+    quantity        INT NOT NULL,
+    unit_price      DECIMAL(12,2) NOT NULL,              -- đơn giá bán (snapshot) để tính hoàn
+    KEY idx_reti_return (return_id),
+    KEY idx_reti_batch (batch_id),
+    CONSTRAINT fk_reti_return  FOREIGN KEY (return_id)       REFERENCES sales_returns(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reti_item    FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(id),
+    CONSTRAINT fk_reti_batch   FOREIGN KEY (batch_id)        REFERENCES goods_receipt_items(id),
+    CONSTRAINT chk_reti_qty    CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
 -- 9. Giao dịch thanh toán QR -----------------------------------------
 CREATE TABLE IF NOT EXISTS payment_transactions (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -365,14 +394,20 @@ SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
 FROM (
     SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
             (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id LIMIT 1) AS shelf_id,
+            -- đã bán = phân bổ bán (HĐ COMPLETED) − đã TRẢ HÀNG (trả thì coi như chưa bán)
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id
-                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0) AS sold,
+                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0)
+              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
+                WHERE rti.batch_id = gri.id), 0) AS sold,
+            -- lên kệ ròng = lên kệ − lấy về kho − TRẢ HÀNG (hàng trả về KHO, không về kệ)
             COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
                 WHERE st.batch_id = gri.id), 0)
               - COALESCE((SELECT SUM(sr.quantity) FROM shelf_returns sr
-                WHERE sr.batch_id = gri.id), 0) AS transferred
+                WHERE sr.batch_id = gri.id), 0)
+              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
+                WHERE rti.batch_id = gri.id), 0) AS transferred
     FROM goods_receipt_items gri
 ) b;
 
