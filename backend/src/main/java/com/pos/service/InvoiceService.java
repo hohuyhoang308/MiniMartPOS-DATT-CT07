@@ -11,6 +11,7 @@ import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
+import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.StoreConfigRepository;
 import org.springframework.data.domain.PageRequest;
 import com.pos.security.CustomUserDetails;
@@ -33,17 +34,20 @@ public class InvoiceService {
     private final StoreConfigRepository storeConfigRepository;
     private final AuditService auditService;
     private final LoyaltyService loyaltyService;
+    private final SalesReturnRepository salesReturnRepository;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           PaymentTransactionRepository paymentRepository,
                           StoreConfigRepository storeConfigRepository,
                           AuditService auditService,
-                          LoyaltyService loyaltyService) {
+                          LoyaltyService loyaltyService,
+                          SalesReturnRepository salesReturnRepository) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.storeConfigRepository = storeConfigRepository;
         this.auditService = auditService;
         this.loyaltyService = loyaltyService;
+        this.salesReturnRepository = salesReturnRepository;
     }
 
     /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
@@ -90,6 +94,10 @@ public class InvoiceService {
         Invoice inv = getOrThrow(id);
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Hóa đơn này đã bị hủy trước đó");
+        }
+        // Đã có phiếu TRẢ HÀNG → hủy sẽ làm tồn kho cộng dư (double-count). Buộc xử lý qua trả hàng.
+        if (!salesReturnRepository.findByInvoiceIdOrderByCreatedAtDesc(id).isEmpty()) {
+            throw new BadRequestException("Hóa đơn đã có phiếu trả hàng — không thể hủy. Hãy xử lý phần còn lại qua TRẢ HÀNG.");
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
         inv.setCancelReason(reason.trim());
