@@ -3,6 +3,8 @@ package com.pos.service;
 import com.pos.dto.dashboard.DashboardResponse;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.InvoiceRepository;
+import com.pos.repository.SalesReturnItemRepository;
+import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.view.ExpiringBatchViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
 import org.springframework.data.domain.PageRequest;
@@ -30,15 +32,21 @@ public class DashboardService {
     private final InvoiceItemRepository invoiceItemRepository;
     private final ProductStockViewRepository stockRepository;
     private final ExpiringBatchViewRepository expiringRepository;
+    private final SalesReturnRepository returnRepository;
+    private final SalesReturnItemRepository returnItemRepository;
 
     public DashboardService(InvoiceRepository invoiceRepository,
                             InvoiceItemRepository invoiceItemRepository,
                             ProductStockViewRepository stockRepository,
-                            ExpiringBatchViewRepository expiringRepository) {
+                            ExpiringBatchViewRepository expiringRepository,
+                            SalesReturnRepository returnRepository,
+                            SalesReturnItemRepository returnItemRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.stockRepository = stockRepository;
         this.expiringRepository = expiringRepository;
+        this.returnRepository = returnRepository;
+        this.returnItemRepository = returnItemRepository;
     }
 
     public DashboardResponse getDashboard() {
@@ -48,11 +56,17 @@ public class DashboardService {
         LocalDateTime startYesterday = today.minusDays(1).atStartOfDay();
         LocalDateTime startMonth = today.withDayOfMonth(1).atStartOfDay();
 
-        BigDecimal revenueToday = invoiceRepository.sumRevenue(startToday, startTomorrow);
-        BigDecimal revenueYesterday = invoiceRepository.sumRevenue(startYesterday, startToday);
-        BigDecimal revenueMonth = invoiceRepository.sumRevenue(startMonth, startTomorrow);
-        BigDecimal profitToday = invoiceItemRepository.sumProfit(startToday, startTomorrow);
-        BigDecimal profitMonth = invoiceItemRepository.sumProfit(startMonth, startTomorrow);
+        // Doanh thu/lợi nhuận RÒNG = bán − trả hàng (trừ tiền hoàn & lợi nhuận hàng trả, theo ngày trả).
+        BigDecimal revenueToday = invoiceRepository.sumRevenue(startToday, startTomorrow)
+                .subtract(returnRepository.sumRefundBetween(startToday, startTomorrow));
+        BigDecimal revenueYesterday = invoiceRepository.sumRevenue(startYesterday, startToday)
+                .subtract(returnRepository.sumRefundBetween(startYesterday, startToday));
+        BigDecimal revenueMonth = invoiceRepository.sumRevenue(startMonth, startTomorrow)
+                .subtract(returnRepository.sumRefundBetween(startMonth, startTomorrow));
+        BigDecimal profitToday = invoiceItemRepository.sumProfit(startToday, startTomorrow)
+                .subtract(returnItemRepository.sumReturnedProfitBetween(startToday, startTomorrow));
+        BigDecimal profitMonth = invoiceItemRepository.sumProfit(startMonth, startTomorrow)
+                .subtract(returnItemRepository.sumReturnedProfitBetween(startMonth, startTomorrow));
 
         long invoiceCountToday = invoiceRepository.countCompleted(startToday, startTomorrow);
         long itemsSoldToday = invoiceItemRepository.sumQuantity(startToday, startTomorrow);

@@ -25,24 +25,51 @@ public class ReportService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final ShiftSummaryViewRepository shiftSummaryRepository;
+    private final com.pos.repository.SalesReturnRepository returnRepository;
+    private final com.pos.repository.SalesReturnItemRepository returnItemRepository;
 
     public ReportService(InvoiceRepository invoiceRepository,
                          InvoiceItemRepository invoiceItemRepository,
-                         ShiftSummaryViewRepository shiftSummaryRepository) {
+                         ShiftSummaryViewRepository shiftSummaryRepository,
+                         com.pos.repository.SalesReturnRepository returnRepository,
+                         com.pos.repository.SalesReturnItemRepository returnItemRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.shiftSummaryRepository = shiftSummaryRepository;
+        this.returnRepository = returnRepository;
+        this.returnItemRepository = returnItemRepository;
     }
 
     public RevenueReportResponse revenue(LocalDate from, LocalDate to, ReportPeriod period) {
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(1).atStartOfDay();
+        String fmt = period.sqlFormat();
 
-        List<RevenueReportResponse.PeriodPoint> points = invoiceRepository
-                .revenueByPeriod(start, end, period.sqlFormat()).stream()
+        // Hàng TRẢ theo kỳ → trừ doanh thu (tiền hoàn) & lợi nhuận (lãi hàng trả) cho RÒNG.
+        java.util.Map<String, BigDecimal> refundByBucket = new java.util.LinkedHashMap<>();
+        for (var r : returnRepository.refundByPeriod(start, end, fmt)) refundByBucket.put(r.getBucket(), nz(r.getAmount()));
+        java.util.Map<String, BigDecimal> retProfitByBucket = new java.util.LinkedHashMap<>();
+        for (var r : returnItemRepository.returnedProfitByPeriod(start, end, fmt)) retProfitByBucket.put(r.getBucket(), nz(r.getAmount()));
+
+        java.util.List<RevenueReportResponse.PeriodPoint> points = new java.util.ArrayList<>(invoiceRepository
+                .revenueByPeriod(start, end, fmt).stream()
                 .map(r -> new RevenueReportResponse.PeriodPoint(
-                        r.getBucket(), nz(r.getRevenue()), nz(r.getProfit()), r.getInvoiceCount()))
-                .toList();
+                        r.getBucket(),
+                        nz(r.getRevenue()).subtract(refundByBucket.getOrDefault(r.getBucket(), BigDecimal.ZERO)),
+                        nz(r.getProfit()).subtract(retProfitByBucket.getOrDefault(r.getBucket(), BigDecimal.ZERO)),
+                        r.getInvoiceCount()))
+                .toList());
+        // Kỳ chỉ có TRẢ HÀNG (không có bán) → thêm điểm âm để tổng khớp.
+        java.util.Set<String> salesBuckets = points.stream()
+                .map(RevenueReportResponse.PeriodPoint::label).collect(java.util.stream.Collectors.toSet());
+        for (String b : refundByBucket.keySet()) {
+            if (!salesBuckets.contains(b)) {
+                points.add(new RevenueReportResponse.PeriodPoint(b,
+                        refundByBucket.get(b).negate(),
+                        retProfitByBucket.getOrDefault(b, BigDecimal.ZERO).negate(), 0L));
+            }
+        }
+        points.sort(java.util.Comparator.comparing(RevenueReportResponse.PeriodPoint::label));
 
         // Tổng tính từ các kỳ để luôn khớp tuyệt đối với bảng/biểu đồ hiển thị.
         BigDecimal totalRevenue = points.stream().map(RevenueReportResponse.PeriodPoint::revenue)
