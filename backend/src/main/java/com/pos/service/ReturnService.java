@@ -123,6 +123,13 @@ public class ReturnService {
             refund = refund.add(item.getUnitPrice().multiply(BigDecimal.valueOf(qty)));
         }
 
+        // Hoàn theo số tiền THỰC TRẢ: nếu HĐ gốc có giảm giá (KM/đổi điểm) thì hoàn theo tỉ lệ total/subtotal,
+        // tránh hoàn dư so với số khách đã trả.
+        BigDecimal sub = inv.getSubtotal();
+        if (sub != null && sub.signum() > 0 && inv.getTotalAmount() != null) {
+            refund = refund.multiply(inv.getTotalAmount())
+                    .divide(sub, 0, java.math.RoundingMode.HALF_UP);
+        }
         ret.setRefundAmount(refund);
         SalesReturn saved = returnRepository.save(ret);
         auditService.log("RETURN", "INVOICE", inv.getId(),
