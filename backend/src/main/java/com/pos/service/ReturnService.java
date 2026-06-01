@@ -34,17 +34,20 @@ public class ReturnService {
     private final SalesReturnItemRepository returnItemRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final LoyaltyService loyaltyService;
 
     public ReturnService(InvoiceRepository invoiceRepository,
                          SalesReturnRepository returnRepository,
                          SalesReturnItemRepository returnItemRepository,
                          UserRepository userRepository,
-                         AuditService auditService) {
+                         AuditService auditService,
+                         LoyaltyService loyaltyService) {
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
         this.returnItemRepository = returnItemRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.loyaltyService = loyaltyService;
     }
 
     /** Các dòng của hóa đơn kèm số CÒN ĐƯỢC TRẢ (đã trừ phần đã trả trước đó). */
@@ -132,6 +135,20 @@ public class ReturnService {
         }
         ret.setRefundAmount(refund);
         SalesReturn saved = returnRepository.save(ret);
+
+        // Thu hồi ĐIỂM TÍCH đã thưởng cho phần hàng trả (theo tỉ lệ tiền hoàn / tổng HĐ).
+        Customer customer = inv.getCustomer();
+        int earned = inv.getPointsEarned() != null ? inv.getPointsEarned() : 0;
+        if (customer != null && earned > 0 && inv.getTotalAmount() != null && inv.getTotalAmount().signum() > 0) {
+            int clawback = refund.multiply(BigDecimal.valueOf(earned))
+                    .divide(inv.getTotalAmount(), 0, java.math.RoundingMode.FLOOR).intValue();
+            if (clawback > 0) {
+                int newBalance = Math.max(0, customer.getLoyaltyPoints() - clawback);
+                customer.setLoyaltyPoints(newBalance);
+                loyaltyService.record(customer.getId(), inv.getId(), -clawback, "RETURN", newBalance);
+            }
+        }
+
         auditService.log("RETURN", "INVOICE", inv.getId(),
                 "Trả hàng HĐ " + inv.getCode() + ", hoàn " + refund + "đ. Lý do: " + req.reason().trim());
         return ReturnResponse.from(saved);
