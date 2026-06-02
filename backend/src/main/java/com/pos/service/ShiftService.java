@@ -29,15 +29,18 @@ public class ShiftService {
     private final UserRepository userRepository;
     private final ShiftSummaryViewRepository summaryRepository;
     private final InvoiceRepository invoiceRepository;
+    private final com.pos.repository.SalesReturnRepository returnRepository;
 
     public ShiftService(WorkShiftRepository shiftRepository,
                         UserRepository userRepository,
                         ShiftSummaryViewRepository summaryRepository,
-                        InvoiceRepository invoiceRepository) {
+                        InvoiceRepository invoiceRepository,
+                        com.pos.repository.SalesReturnRepository returnRepository) {
         this.shiftRepository = shiftRepository;
         this.userRepository = userRepository;
         this.summaryRepository = summaryRepository;
         this.invoiceRepository = invoiceRepository;
+        this.returnRepository = returnRepository;
     }
 
     /** Mở ca cho thu ngân đang đăng nhập (nếu chưa có ca OPEN). */
@@ -107,10 +110,14 @@ public class ShiftService {
     private ShiftResponse toResponse(WorkShift shift) {
         var summary = summaryRepository.findByShiftId(shift.getId());
         BigDecimal cashSales = invoiceRepository.sumCashSalesByShift(shift.getId());
+        // Tiền hoàn trả hàng phát sinh trong ca (theo khoảng thời gian ca) — chi ra khỏi két.
+        LocalDateTime from = shift.getOpenedAt();
+        LocalDateTime to = shift.getClosedAt() != null ? shift.getClosedAt() : LocalDateTime.now();
+        BigDecimal cashRefunds = (from != null) ? returnRepository.sumRefundBetween(from, to) : BigDecimal.ZERO;
         return ShiftResponse.from(
                 shift, shift.getUser().getFullName(),
                 summary.map(s -> s.getTotalSales()).orElse(BigDecimal.ZERO),
                 summary.map(s -> s.getInvoiceCount()).orElse(0L),
-                cashSales);
+                cashSales, cashRefunds);
     }
 }

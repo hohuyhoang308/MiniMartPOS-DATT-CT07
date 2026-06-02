@@ -29,22 +29,26 @@ public record ShiftResponse(
         Long invoiceCount,
         BigDecimal cashSales,
         BigDecimal qrSales,
+        BigDecimal cashRefunds,
         BigDecimal expectedCash,
         BigDecimal cashDifference
 ) {
     public static ShiftResponse from(WorkShift s, String cashierName,
-                                     BigDecimal totalSales, Long invoiceCount, BigDecimal cashSales) {
+                                     BigDecimal totalSales, Long invoiceCount, BigDecimal cashSales,
+                                     BigDecimal cashRefunds) {
         BigDecimal opening = s.getOpeningCash() != null ? s.getOpeningCash() : BigDecimal.ZERO;
         BigDecimal total = totalSales != null ? totalSales : BigDecimal.ZERO;
         BigDecimal cash = cashSales != null ? cashSales : BigDecimal.ZERO;
+        BigDecimal refunds = cashRefunds != null ? cashRefunds : BigDecimal.ZERO;
         BigDecimal qr = total.subtract(cash).max(BigDecimal.ZERO);  // doanh thu QR = tổng − tiền mặt
-        BigDecimal expected = opening.add(cash);
+        // Tiền mặt dự kiến = đầu ca + tiền mặt bán − tiền hoàn trả (chi quỹ khi trả hàng).
+        BigDecimal expected = opening.add(cash).subtract(refunds);
         BigDecimal diff = s.getClosingCash() != null ? s.getClosingCash().subtract(expected) : null;
         return new ShiftResponse(
                 s.getId(), s.getUser().getId(), cashierName,
                 opening, s.getClosingCash(),
                 s.getOpenedAt(), s.getClosedAt(), s.getStatus(),
                 total, invoiceCount != null ? invoiceCount : 0L,
-                cash, qr, expected, diff);
+                cash, qr, refunds, expected, diff);
     }
 }

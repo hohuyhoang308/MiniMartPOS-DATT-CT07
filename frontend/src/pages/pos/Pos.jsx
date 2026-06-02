@@ -410,6 +410,9 @@ function CloseShiftModal({ show, shift, onHide, onClosed }) {
           <div className="soft-card p-3 mb-3">
             <Recon label="Tiền đầu ca" value={info.openingCash} />
             <Recon label="Tiền mặt bán trong ca" value={info.cashSales} icon="bi-plus-lg" />
+            {Number(info.cashRefunds || 0) > 0 && (
+              <Recon label="Tiền hoàn trả hàng" value={info.cashRefunds} icon="bi-dash-lg" />
+            )}
             <hr className="my-2" />
             <Recon label="Tiền mặt dự kiến trong két" value={expected} strong />
             <div className="d-flex justify-content-between text-muted2 small mt-2">
