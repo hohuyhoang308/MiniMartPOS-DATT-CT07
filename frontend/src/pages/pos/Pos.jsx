@@ -12,6 +12,7 @@ import EmptyState from '../../components/ui/EmptyState'
 import Calculator from '../../components/ui/Calculator'
 import InfoBanner from '../../components/ui/InfoBanner'
 import Recon from '../../components/ui/Recon'
+import MoneyInput from '../../components/ui/MoneyInput'
 import PaymentResultModal from './PaymentResultModal'
 
 const QUICK_CASH = [20000, 50000, 100000, 200000, 500000]
@@ -65,7 +66,7 @@ function OpenShiftPanel({ onOpened }) {
             <p className="text-muted2">Tiền đầu ca được điền sẵn theo <b>tiền cuối ca trước</b> — chỉ cần xác nhận, không phải đếm lại.</p>
             <InputGroup className="mb-2">
               <InputGroup.Text>Tiền đầu ca</InputGroup.Text>
-              <Form.Control type="number" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} />
+              <MoneyInput value={openingCash} onChange={setOpeningCash} />
               <InputGroup.Text>đ</InputGroup.Text>
             </InputGroup>
             {suggested != null && (
@@ -348,7 +349,7 @@ function PosBoard({ shift, onShiftClosed }) {
                 <>
                   <InputGroup size="sm" className="mb-2">
                     <InputGroup.Text>Khách đưa</InputGroup.Text>
-                    <Form.Control type="number" value={customerPaid} onChange={(e) => setCustomerPaid(e.target.value)} />
+                    <MoneyInput value={customerPaid} onChange={setCustomerPaid} />
                     <InputGroup.Text>đ</InputGroup.Text>
                   </InputGroup>
                   <div className="d-flex gap-1 flex-wrap mb-2">
@@ -429,7 +430,7 @@ function CloseShiftModal({ show, shift, onHide, onClosed }) {
             </Button>
           </div>
           <InputGroup>
-            <Form.Control type="number" autoFocus value={cash} onChange={(e) => setCash(e.target.value)} />
+            <MoneyInput autoFocus value={cash} onChange={setCash} />
             <InputGroup.Text>đ</InputGroup.Text>
           </InputGroup>
           <div className="small text-muted2 mt-1">Không cần đếm lại nếu khớp — bấm <b>Khớp quỹ</b> để dùng số dự kiến.</div>

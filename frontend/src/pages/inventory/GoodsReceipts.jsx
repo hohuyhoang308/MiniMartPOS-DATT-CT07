@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
+import MoneyInput from '../../components/ui/MoneyInput'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
 import { receiptApi, supplierApi, productApi } from '../../api/catalog'
@@ -160,7 +161,7 @@ export default function GoodsReceipts() {
                         </Form.Select>
                       ) : <span className="text-muted2 small">{lp?.unitName || '—'}</span>}
                     </td>
-                    <td><Form.Control size="sm" type="number" min={0} value={it.importPrice} onChange={(e) => setItem(idx, 'importPrice', e.target.value)} /></td>
+                    <td><MoneyInput size="sm" value={it.importPrice} onChange={(v) => setItem(idx, 'importPrice', v)} /></td>
                     <td><Form.Control size="sm" type="date" value={it.expiryDate} onChange={(e) => setItem(idx, 'expiryDate', e.target.value)} /></td>
                     <td className="text-end num">{formatMoney(Number(it.quantity || 0) * Number(it.importPrice || 0))}</td>
                     <td className="text-end">
