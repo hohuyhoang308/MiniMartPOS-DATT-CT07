@@ -75,6 +75,19 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
     List<ProductSalesRow> soldQuantitySince(@Param("from") LocalDateTime from);
 
     /**
+     * Sản lượng bán theo (sản phẩm, NGÀY) kể từ {@code from} — mỗi dòng là số bán 1 ngày của 1 SP.
+     * Dùng để ước lượng ĐỘ BIẾN ĐỘNG nhu cầu (σ) → tính tồn an toàn theo mức phục vụ.
+     */
+    @Query(value = """
+            SELECT ii.product_id AS productId, COALESCE(SUM(ii.quantity), 0) AS soldQty
+            FROM invoice_items ii
+            JOIN invoices i ON i.id = ii.invoice_id
+            WHERE i.status = 'COMPLETED' AND i.created_at >= :from
+            GROUP BY ii.product_id, DATE(i.created_at)
+            """, nativeQuery = true)
+    List<ProductSalesRow> dailySalesSince(@Param("from") LocalDateTime from);
+
+    /**
      * Gợi ý "mua kèm" (market-basket): số hóa đơn ĐỒNG XUẤT HIỆN co(A,B) của mỗi sản phẩm B với A.
      * Đếm theo SỐ HÓA ĐƠN phân biệt (không phải số dòng) để tính lift đúng ở tầng service.
      */

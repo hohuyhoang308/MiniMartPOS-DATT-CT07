@@ -37,6 +37,8 @@ public class InventoryService {
     private static final double ORDER_COST = 50_000;
     /** Tỷ lệ chi phí lưu kho/năm trên giá vốn (H) — giả định 20%/năm. */
     private static final double HOLDING_RATE = 0.20;
+    /** Hệ số mức phục vụ z cho điểm đặt hàng (1.65 ≈ 95% không hết hàng). */
+    private static final double SERVICE_Z = 1.65;
 
     private final ProductStockViewRepository stockRepository;
     private final ExpiringBatchViewRepository expiringRepository;
@@ -85,6 +87,12 @@ public class InventoryService {
         for (var row : invoiceItemRepository.soldQuantitySince(from)) {
             soldByProduct.put(row.getProductId(), row.getSoldQty() != null ? row.getSoldQty() : 0L);
         }
+        // Tổng bình phương lượng bán theo NGÀY (để tính phương sai nhu cầu σ²).
+        Map<Long, Double> sumSqByProduct = new HashMap<>();
+        for (var row : invoiceItemRepository.dailySalesSince(from)) {
+            double q = row.getSoldQty() != null ? row.getSoldQty() : 0;
+            sumSqByProduct.merge(row.getProductId(), q * q, Double::sum);
+        }
         Map<Long, BigDecimal> costByProduct = productRepository.findAll().stream()
                 .collect(Collectors.toMap(Product::getId, Product::getCostPrice, (a, b) -> a));
 
@@ -95,8 +103,12 @@ public class InventoryService {
             long sold = soldByProduct.getOrDefault(v.getProductId(), 0L);
             double avgDaily = sold / (double) VELOCITY_DAYS;
 
-            // Điểm đặt lại = ngưỡng tối thiểu + lượng bán trong thời gian chờ giao.
-            double reorderPoint = min + avgDaily * LEAD_DAYS;
+            // Độ lệch chuẩn nhu cầu/ngày: σ = √(E[q²] − E[q]²), tính trên cả ngày không bán (=0).
+            double meanSq = sumSqByProduct.getOrDefault(v.getProductId(), 0.0) / VELOCITY_DAYS;
+            double sigma = Math.sqrt(Math.max(0, meanSq - avgDaily * avgDaily));
+            // Tồn an toàn theo mức phục vụ: SS = z·σ·√L. Điểm đặt = nhu cầu trong leadtime + SS.
+            double safetyStock = SERVICE_Z * sigma * Math.sqrt(LEAD_DAYS);
+            double reorderPoint = avgDaily * LEAD_DAYS + safetyStock;
             boolean needReorder = current <= reorderPoint || current <= min;
             if (!needReorder) continue;
 
