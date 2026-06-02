@@ -6,6 +6,7 @@ import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import ExpiryPill from '../../components/ui/ExpiryPill'
+import ShelfContentModal from '../../components/inventory/ShelfContentModal'
 import { productApi } from '../../api/catalog'
 import { inventoryApi, shelfApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
@@ -21,6 +22,7 @@ export default function Shelf() {
   const [q, setQ] = useState('')
   const [onlyNeed, setOnlyNeed] = useState(true)
   const [target, setTarget] = useState(null)
+  const [shelfDetail, setShelfDetail] = useState(null) // kệ đang xem nội dung / về kho
 
   function load(first) {
     if (first) setLoading(true)
@@ -43,12 +45,13 @@ export default function Shelf() {
 
   return (
     <div>
-      <PageHeader title="Lên kệ" subtitle="Đưa hàng từ kho ra kệ để bán — chọn lô theo HSD (cận hạn trước)" />
+      <PageHeader title="Kệ hàng (lên kệ / về kho)" subtitle="Thao tác kệ hằng ngày của thu ngân — đưa hàng ra kệ để bán hoặc lấy bớt về kho" />
 
-      <InfoBanner id="shelf" title="Lên kệ là gì?">
+      <InfoBanner id="shelf" title="Lên kệ & Về kho">
         Hàng nhập về nằm trong <b>KHO</b>; muốn bán phải đưa ra <b>KỆ</b>. Khi <b>kệ cạn</b> (≤ tối thiểu) mà
-        <b> kho còn</b> → mặt hàng hiện ở đây để bạn bấm <b>"Lên kệ"</b>: chọn <b>kệ</b>, nhập số lượng, hệ thống
-        tự lấy <b>lô cận hạn trước (FIFO)</b>. Đây là thao tác hằng ngày của <b>thu ngân</b>.
+        <b> kho còn</b> → bấm <b>"Lên kệ"</b> (tự lấy <b>lô cận hạn trước - FIFO</b>). Ngược lại, mở một <b>kệ</b> ở
+        mục <b>"Kệ trong cửa hàng"</b> bên dưới để xem kệ chứa gì và bấm <b>"Về kho"</b> (đặt xuống). Đây là thao
+        tác hằng ngày của <b>thu ngân</b>; còn <b>thêm/sửa/xoá kệ</b> là việc của <b>quản lý</b> (trang Cấu hình kệ).
       </InfoBanner>
 
       <Row className="g-3 mb-3 stagger">
@@ -94,7 +97,35 @@ export default function Shelf() {
         </div>
       </Card>
 
+      <h6 className="fw-bold mt-4 mb-2"><i className="bi bi-grid-3x3-gap me-2"></i>Kệ trong cửa hàng <span className="text-muted2 fw-normal small">— bấm để xem kệ chứa gì & lấy hàng về kho</span></h6>
+      <Row className="g-2">
+        {shelves.map((s) => {
+          const cap = s.capacity ?? 0
+          const pct = cap > 0 ? Math.min(100, Math.round((s.totalQuantity / cap) * 100)) : 0
+          return (
+            <Col md={3} sm={6} key={s.id}>
+              <Card className="border-0 h-100 cursor-pointer" onClick={() => setShelfDetail(s)}>
+                <Card.Body className="py-2 px-3">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="fw-semibold"><span className="stat-chip chip-sky me-2" style={{ width: 28, height: 28, fontSize: '.72rem' }}><i className="bi bi-grid-3x3-gap"></i></span>{s.code}</span>
+                    <span className="num small text-muted2">{s.totalQuantity}/{cap > 0 ? cap : '∞'}</span>
+                  </div>
+                  <div className="text-muted2 small text-truncate">{s.name || '—'} · {s.productCount} mặt hàng</div>
+                  {cap > 0 && (
+                    <div className="progress mt-1" style={{ height: 4, background: '#eef2f7' }}>
+                      <div className="progress-bar" style={{ width: `${pct}%`, background: pct >= 100 ? '#f43f5e' : pct >= 80 ? '#f59e0b' : 'var(--brand-500)' }} />
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          )
+        })}
+        {shelves.length === 0 && <Col><EmptyState icon="bi-grid-3x3-gap" title="Chưa có kệ — nhờ quản lý tạo ở trang Cấu hình kệ" /></Col>}
+      </Row>
+
       <ShelfTransferModal product={target} shelves={shelves} onHide={() => setTarget(null)} onDone={() => { setTarget(null); load(false) }} />
+      <ShelfContentModal shelf={shelfDetail} onHide={() => setShelfDetail(null)} onChanged={() => load(false)} />
     </div>
   )
 }
