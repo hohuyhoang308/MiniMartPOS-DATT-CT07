@@ -25,6 +25,7 @@ export const inventoryApi = {
   expiring: () => client.get('/inventory/expiring').then(unwrap),
   suggestions: () => client.get('/inventory/suggestions').then(unwrap),
   batches: (productId) => client.get(`/inventory/batches/${productId}`).then(unwrap),
+  abcXyz: () => client.get('/inventory/abc-xyz').then(unwrap),
 }
 
 /** Kệ vật lý (FR8): xem/lên kệ (mọi vai trò) + CRUD kệ (quản lý). */

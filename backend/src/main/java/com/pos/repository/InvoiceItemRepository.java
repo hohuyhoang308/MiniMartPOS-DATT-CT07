@@ -87,6 +87,18 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             """, nativeQuery = true)
     List<ProductSalesRow> dailySalesSince(@Param("from") LocalDateTime from);
 
+    /** Doanh thu + sản lượng theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — phân tích ABC/XYZ. */
+    @Query("""
+            SELECT ii.product.id AS productId,
+                   COALESCE(SUM(ii.subtotal), 0) AS revenue,
+                   COALESCE(SUM(ii.quantity), 0) AS qty
+            FROM InvoiceItem ii
+            WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND ii.invoice.createdAt >= :from
+            GROUP BY ii.product.id
+            """)
+    List<com.pos.repository.projection.ProductRevenueRow> revenueByProductSince(@Param("from") LocalDateTime from);
+
     /**
      * Gợi ý "mua kèm" (market-basket): số hóa đơn ĐỒNG XUẤT HIỆN co(A,B) của mỗi sản phẩm B với A.
      * Đếm theo SỐ HÓA ĐƠN phân biệt (không phải số dòng) để tính lift đúng ở tầng service.

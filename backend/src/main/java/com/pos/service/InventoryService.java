@@ -157,4 +157,54 @@ public class InventoryService {
             default -> 2;
         };
     }
+
+    /** Cửa sổ phân tích ABC/XYZ (1 quý). */
+    private static final int ABC_DAYS = 90;
+
+    /**
+     * Phân loại ABC/XYZ: ABC theo doanh thu luỹ kế (Pareto 80/95%), XYZ theo độ biến động nhu cầu
+     * (CV = σ/μ). Giúp dồn kiểm soát chặt cho nhóm A/X, nới nhóm C/Z. Xếp theo doanh thu giảm dần.
+     */
+    public List<com.pos.dto.inventory.AbcXyzResponse> abcXyzAnalysis() {
+        LocalDateTime from = LocalDateTime.now().minusDays(ABC_DAYS);
+
+        Map<Long, Double> sumSq = new HashMap<>();
+        for (var row : invoiceItemRepository.dailySalesSince(from)) {
+            double q = row.getSoldQty() != null ? row.getSoldQty() : 0;
+            sumSq.merge(row.getProductId(), q * q, Double::sum);
+        }
+        Map<Long, String> names = productRepository.findAll().stream()
+                .collect(Collectors.toMap(Product::getId, Product::getName, (a, b) -> a));
+
+        var rows = invoiceItemRepository.revenueByProductSince(from).stream()
+                .filter(r -> r.getRevenue() != null && r.getRevenue().signum() > 0)
+                .sorted((a, b) -> b.getRevenue().compareTo(a.getRevenue()))
+                .toList();
+        double totalRevenue = rows.stream().mapToDouble(r -> r.getRevenue().doubleValue()).sum();
+        if (totalRevenue <= 0) return List.of();
+
+        List<com.pos.dto.inventory.AbcXyzResponse> result = new ArrayList<>();
+        double cum = 0;
+        for (var r : rows) {
+            double rev = r.getRevenue().doubleValue();
+            double share = rev / totalRevenue * 100.0;
+            // Xếp theo luỹ kế TRƯỚC item (Pareto): item làm vượt 80% vẫn thuộc A; item đầu luôn là A.
+            String abc = cum < 80.0 ? "A" : cum < 95.0 ? "B" : "C";
+            cum += share;
+
+            long qty = r.getQty() != null ? r.getQty() : 0;
+            double mean = qty / (double) ABC_DAYS;
+            double sigma = Math.sqrt(Math.max(0, sumSq.getOrDefault(r.getProductId(), 0.0) / ABC_DAYS - mean * mean));
+            double cv = mean > 0 ? sigma / mean : 0;
+            String xyz = cv < 0.5 ? "X" : cv < 1.0 ? "Y" : "Z";
+
+            result.add(new com.pos.dto.inventory.AbcXyzResponse(
+                    r.getProductId(), names.getOrDefault(r.getProductId(), "?"),
+                    r.getRevenue(), round1(share), round1(cum), abc, qty, round2(cv), xyz));
+        }
+        return result;
+    }
+
+    private static double round1(double v) { return Math.round(v * 10.0) / 10.0; }
+    private static double round2(double v) { return Math.round(v * 100.0) / 100.0; }
 }

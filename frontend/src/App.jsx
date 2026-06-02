@@ -12,6 +12,7 @@ import Catalog from './pages/catalog/Catalog'
 import Suppliers from './pages/catalog/Suppliers'
 import GoodsReceipts from './pages/inventory/GoodsReceipts'
 import Inventory from './pages/inventory/Inventory'
+import AbcXyz from './pages/inventory/AbcXyz'
 import Shelf from './pages/inventory/Shelf'
 import ShelfManage from './pages/inventory/ShelfManage'
 import Customers from './pages/crm/Customers'
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="receipts" element={<GoodsReceipts />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="abc-xyz" element={<AbcXyz />} />
             <Route path="shelves" element={<ShelfManage />} />
             <Route path="promotions" element={<Promotions />} />
             <Route path="reports" element={<Reports />} />

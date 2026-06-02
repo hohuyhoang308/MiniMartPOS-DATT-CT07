@@ -44,6 +44,12 @@ public class InventoryController {
         return ApiResponse.ok(service.reorderSuggestions());
     }
 
+    /** Phân loại ABC/XYZ (Pareto doanh thu × độ biến động nhu cầu) — ưu tiên kiểm soát tồn. */
+    @GetMapping("/abc-xyz")
+    public ApiResponse<List<com.pos.dto.inventory.AbcXyzResponse>> abcXyz() {
+        return ApiResponse.ok(service.abcXyzAnalysis());
+    }
+
     /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). Cả thu ngân (để lên kệ). */
     @GetMapping("/batches/{productId}")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")

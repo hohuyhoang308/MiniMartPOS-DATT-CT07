@@ -18,6 +18,7 @@ export const NAV_SECTIONS = [
       { to: '/suppliers', icon: 'bi-truck', label: 'Nhà cung cấp', roles: ['ADMIN', 'MANAGER'] },
       { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['ADMIN', 'MANAGER'] },
       { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & cảnh báo', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/abc-xyz', icon: 'bi-bar-chart-steps', label: 'Phân tích ABC/XYZ', roles: ['ADMIN', 'MANAGER'] },
       { to: '/shelves', icon: 'bi-grid-3x3-gap-fill', label: 'Quản lý kệ', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
