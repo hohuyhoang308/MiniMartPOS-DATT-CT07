@@ -168,6 +168,24 @@
 [data-bs-theme="dark"] .recharts-default-tooltip .recharts-tooltip-label,
 [data-bs-theme="dark"] .recharts-default-tooltip .recharts-tooltip-item { color: var(--text) !important; }
 
+/* Màu primary sáng hơn cho dễ đọc trên nền tối (link, .text-primary, giá…) */
+[data-bs-theme="dark"] { --bs-primary: var(--brand-500); --bs-primary-rgb: 52, 211, 153; --bs-link-color: #6ee7b7; --bs-link-hover-color: #a7f3d0; }
+[data-bs-theme="dark"] .text-primary { color: #34d399 !important; }
+
+/* ===== Sidebar (luôn tối) — tách biệt rõ với nội dung tối ===== */
+[data-bs-theme="dark"] .sidebar {
+  background: linear-gradient(185deg, #0c1424 0%, #070b16 100%);
+  border-right: 1px solid rgba(255, 255, 255, .07);
+  box-shadow: 4px 0 28px rgba(0, 0, 0, .35);
+}
+
+/* ===== Login — thẻ đăng nhập chuyển TỐI trong dark mode ===== */
+[data-bs-theme="dark"] .login-card {
+  background: rgba(26, 36, 54, .97);
+  border-color: rgba(255, 255, 255, .09);
+}
+[data-bs-theme="dark"] .login-card .text-muted2 { color: var(--muted) !important; }
+
 /* Nút chuyển Sáng/Tối ở thanh trên */
 .theme-toggle {
   width: 38px; height: 38px; border-radius: var(--r-pill);
