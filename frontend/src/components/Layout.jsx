@@ -3,12 +3,14 @@ import { Badge, Dropdown } from 'react-bootstrap'
 import Sidebar from './Sidebar'
 import { findNav } from './navConfig'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 
 const ROLE_LABEL = { ADMIN: 'Chủ cửa hàng', MANAGER: 'Quản lý', CASHIER: 'Thu ngân' }
 const ROLE_COLOR = { ADMIN: 'pill-violet', MANAGER: 'pill-info', CASHIER: 'pill-success' }
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const current = findNav(location.pathname)
@@ -32,6 +34,10 @@ export default function Layout() {
             <small>Hệ thống POS cửa hàng tiện lợi</small>
           </div>
           <div className="d-flex align-items-center gap-3">
+            <button type="button" className="theme-toggle" onClick={toggleTheme}
+              title={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}>
+              <i className={`bi ${theme === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill'}`}></i>
+            </button>
             <span className={`pill ${ROLE_COLOR[user?.role] || 'pill-muted'}`}>
               <i className="bi bi-person-fill"></i>{ROLE_LABEL[user?.role] || user?.role}
             </span>

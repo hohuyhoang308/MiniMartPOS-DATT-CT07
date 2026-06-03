@@ -54,6 +54,55 @@
   --bs-border-color: var(--border);
 }
 
+/* =====================================================================
+   GIAO DIỆN TỐI (Dark mode) — bật bằng data-bs-theme="dark" trên <html>.
+   Bootstrap 5.3 tự đổi màu component; dưới đây override biến design-system
+   + vài chỗ hardcode (heading/topbar dùng màu ink tối ở light).
+   ===================================================================== */
+[data-bs-theme="dark"] {
+  --bg: #0a0f1c;
+  --surface: #111a2e;
+  --surface-2: #18233c;
+  --border: #25324c;
+  --text: #e6edf7;
+  --muted: #93a3bd;
+
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--text);
+  --bs-border-color: var(--border);
+  --bs-secondary-bg: var(--surface-2);
+  --bs-tertiary-bg: var(--surface);
+  --bs-emphasis-color: var(--text);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, .55);
+}
+
+/* Heading & các chỗ dùng ink (tối) ở light → sáng lại ở dark */
+[data-bs-theme="dark"] h1, [data-bs-theme="dark"] h2, [data-bs-theme="dark"] h3,
+[data-bs-theme="dark"] h4, [data-bs-theme="dark"] h5, [data-bs-theme="dark"] h6,
+[data-bs-theme="dark"] .display-font,
+[data-bs-theme="dark"] .topbar .page-trail,
+[data-bs-theme="dark"] .stat-card .stat-value { color: var(--text); }
+
+[data-bs-theme="dark"] .text-muted2 { color: var(--muted) !important; }
+[data-bs-theme="dark"] .topbar { background: rgba(17, 26, 46, .85); }
+[data-bs-theme="dark"] ::-webkit-scrollbar-thumb { background: #2a3854; border-color: var(--bg); }
+[data-bs-theme="dark"] .card,
+[data-bs-theme="dark"] .soft-card,
+[data-bs-theme="dark"] .table-wrap,
+[data-bs-theme="dark"] .modal-content { background-color: var(--surface); }
+
+/* Nút chuyển Sáng/Tối ở thanh trên */
+.theme-toggle {
+  width: 38px; height: 38px; border-radius: var(--r-pill);
+  border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); display: grid; place-items: center;
+  font-size: 1.05rem; cursor: pointer; transition: all .15s ease;
+}
+.theme-toggle:hover { background: var(--brand-500); color: #fff; border-color: var(--brand-500); }
+
 * { box-sizing: border-box; }
 
 body {
