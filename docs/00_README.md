@@ -58,6 +58,9 @@ Hệ thống tách thành **2 phần** rõ ràng: **Frontend (React)** gọi **B
 | `04_Thiet_ke_CSDL_ERD.md` | Sơ đồ ERD, đặc tả **chi tiết từng bảng** (không dư thừa), ràng buộc, script SQL | **Mục 2, 5** |
 | `05_Thiet_ke_UML.md` | Class Diagram, Sequence Diagram, Activity Diagram | **Mục 2** |
 | `06_Bao_cao_do_an.md` | Báo cáo đồ án đầy đủ theo cấu trúc tiêu chí mục 8 | **Mục 8** (tổng hợp tất cả) |
+| `08_Phan_quyen_va_chuc_nang.md` | Ma trận chức năng × vai trò (ADMIN/MANAGER/CASHIER), phân vai kệ, bảo mật | Mục 5 |
+| `09_Doi_chieu_tieu_chi.md` | Đối chiếu hệ thống với bảng tiêu chí chấm | Mục 8 |
+| `10_Nang_cap_va_bo_sung.md` | **Giải thích chi tiết toàn bộ tính năng mới & phần đã sửa** (trả hàng, VAT, quy đổi, audit, sổ cái điểm, toàn vẹn dữ liệu, ABC/XYZ…) | **Mục 3, 5, 9** |
 | `sql/schema.sql` | Script tạo CSDL MySQL + dữ liệu mẫu | Mục 5, 7 |
 
 ### 4. Ánh xạ tài liệu ↔ Bảng tiêu chí chấm điểm (10đ)
