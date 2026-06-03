@@ -23,17 +23,20 @@ src/
 ├── api/            # client axios + module gọi API (auth, catalog, sales, misc)
 ├── context/        # AuthContext, CartContext, ToastContext
 ├── routes/         # PrivateRoute (phân quyền theo vai trò)
-├── components/     # Layout, Sidebar, navConfig + ui/ (PageHeader, StatCard, StatusPill,
-│                   #   ConfirmModal, EmptyState, Loading…)
+├── components/     # Layout, Sidebar, navConfig
+│   ├── ui/         #   PageHeader, StatCard, StatusPill, ConfirmModal, EmptyState, Loading,
+│   │               #   ExpiryPill, InfoBanner, Recon, Calculator, MoneyInput (mask tiền)…
+│   └── inventory/  #   ShelfContentModal (xem kệ + về kho — dùng chung)
 ├── pages/
 │   ├── auth/       # Login
 │   ├── dashboard/  # Tổng quan (stat + area chart + top SP)
-│   ├── pos/        # Bán hàng POS (quét mã, giỏ, thanh toán CASH/QR, in PDF)
-│   ├── catalog/    # Products, Categories, Units, Suppliers
-│   ├── inventory/  # Inventory (chart cảnh báo), GoodsReceipts (nhập kho)
+│   ├── pos/        # Bán hàng POS (quét mã, giỏ, thanh toán CASH/QR, in PDF, idempotency)
+│   ├── catalog/    # Products (+thuế suất, quy cách), Categories, Units, Suppliers
+│   ├── inventory/  # Inventory, GoodsReceipts (nhập theo thùng), Shelf (kệ hàng: lên/về kho),
+│   │               #   ShelfManage (cấu hình kệ), AbcXyz (phân tích ABC/XYZ)
 │   ├── crm/        # Customers (+lịch sử), Promotions
-│   ├── invoices/   # Hóa đơn (lọc, chi tiết, hủy, PDF)
-│   ├── reports/    # Báo cáo doanh thu + theo ca + xuất Excel
+│   ├── invoices/   # Hóa đơn (lọc, chi tiết, hủy có lý do, trả hàng, PDF)
+│   ├── reports/    # Báo cáo doanh thu + lợi nhuận (ròng) + theo ca + xuất Excel
 │   └── admin/      # Users, Settings (cửa hàng + VietQR + WEB2M + Telegram)
 └── utils/          # format tiền/ngày
 ```
