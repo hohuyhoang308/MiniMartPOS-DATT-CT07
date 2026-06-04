@@ -43,6 +43,11 @@ export const dashboardApi = {
   get: () => client.get('/dashboard').then(unwrap),
 }
 
+/** Nhật ký kiểm toán (chỉ ADMIN). */
+export const auditApi = {
+  recent: () => client.get('/audit').then(unwrap),
+}
+
 export const reportApi = {
   revenue: (from, to, groupBy = 'DAY') =>
     client.get('/reports/revenue', { params: { from, to, groupBy } }).then(unwrap),

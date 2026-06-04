@@ -21,6 +21,7 @@ import Reports from './pages/reports/Reports'
 import Shifts from './pages/shifts/Shifts'
 import Users from './pages/admin/Users'
 import Settings from './pages/admin/Settings'
+import Audit from './pages/admin/Audit'
 
 /** Trang chủ theo vai trò: thu ngân → POS, còn lại → Dashboard. */
 function RoleHome() {
@@ -60,6 +61,7 @@ export default function App() {
 
           {/* Admin */}
           <Route element={<PrivateRoute roles={['ADMIN']} />}>
+            <Route path="audit" element={<Audit />} />
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />
           </Route>

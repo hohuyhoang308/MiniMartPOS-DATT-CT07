@@ -37,7 +37,7 @@ src/
 │   ├── crm/        # Customers (+lịch sử), Promotions
 │   ├── invoices/   # Hóa đơn (lọc, chi tiết, hủy có lý do, trả hàng, PDF)
 │   ├── reports/    # Báo cáo doanh thu + lợi nhuận (ròng) + theo ca + xuất Excel
-│   └── admin/      # Users, Settings (cửa hàng + VietQR + WEB2M + Telegram)
+│   └── admin/      # Users, Settings (cửa hàng + VietQR + WEB2M + Telegram), Audit (nhật ký kiểm toán)
 └── utils/          # format tiền/ngày
 ```
 
