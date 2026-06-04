@@ -214,7 +214,7 @@ export default function Reports() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" />
                     <YAxis tickFormatter={(v) => `${v / 1000}k`} />
-                    <Tooltip formatter={(v, n) => [formatMoney(v), n === 'revenue' ? 'Doanh thu' : 'Lợi nhuận']} />
+                    <Tooltip cursor={false} formatter={(v, n) => [formatMoney(v), n === 'revenue' ? 'Doanh thu' : 'Lợi nhuận']} />
                     <Legend formatter={(v) => (v === 'revenue' ? 'Doanh thu' : 'Lợi nhuận')} />
                     <Area type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2.5} fill="url(#revFill)" />
                     <Line type="monotone" dataKey="profit" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />

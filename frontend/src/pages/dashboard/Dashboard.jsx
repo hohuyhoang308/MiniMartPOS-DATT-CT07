@@ -144,7 +144,7 @@ export default function Dashboard() {
                     </linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" /><YAxis tickFormatter={(v) => `${v / 1000}k`} />
-                    <Tooltip formatter={(v) => formatMoney(v)} />
+                    <Tooltip cursor={false} formatter={(v) => formatMoney(v)} />
                     <Area type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2.5} fill="url(#dRev)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -162,7 +162,7 @@ export default function Dashboard() {
                     <Pie data={payData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
                       {payData.map((p, i) => <Cell key={i} fill={PAY_COLOR[p.method] || CAT_COLORS[i]} />)}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v)} /><Legend />
+                    <Tooltip cursor={false} formatter={(v) => formatMoney(v)} /><Legend />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -182,8 +182,8 @@ export default function Dashboard() {
                   <BarChart data={hourData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" /><YAxis tickFormatter={(v) => `${v / 1000}k`} />
-                    <Tooltip formatter={(v) => formatMoney(v)} />
-                    <Bar dataKey="revenue" fill="#0ea5e9" radius={[5, 5, 0, 0]} />
+                    <Tooltip cursor={false} formatter={(v) => formatMoney(v)} />
+                    <Bar dataKey="revenue" fill="#0ea5e9" radius={[5, 5, 0, 0]} activeBar={false} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -200,8 +200,8 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" tickFormatter={(v) => `${v / 1000}k`} />
                     <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v) => formatMoney(v)} />
-                    <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={18}>
+                    <Tooltip cursor={false} formatter={(v) => formatMoney(v)} />
+                    <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={18} activeBar={false}>
                       {catData.map((c, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
