@@ -170,11 +170,14 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
             invoicesSeeded = seedSalesHistory(createdBy, shelfRemain, shelfBatchesByProduct);
         }
 
-        log.info("Đã seed {} sản phẩm + {} NCC + lên kệ; tạo {} hóa đơn lịch sử 30 ngày.",
+        log.info("Đã seed {} sản phẩm + {} NCC + lên kệ; tạo {} hóa đơn lịch sử 12 tuần.",
                 created, suppliers.size(), invoicesSeeded);
     }
 
     // ===================== LỊCH SỬ BÁN HÀNG =====================
+
+    /** Số ngày lịch sử demo (12 tuần) — đủ "rổ" tuần để XYZ phân loại được X/Y/Z thay vì dồn hết vào Z. */
+    private static final int HISTORY_DAYS = 84;
 
     private int seedSalesHistory(User createdBy, Map<Long, int[]> shelfRemain,
                                  Map<Long, List<GoodsReceiptItem>> shelfBatchesByProduct) {
@@ -183,42 +186,108 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         if (productIds.isEmpty()) return 0;
 
         Random rnd = new Random(42); // tái lập được
-        // Trọng số phổ biến: vài SP bán chạy (nhóm A), phần lớn bán ít → ABC/XYZ có ý nghĩa
-        Map<Long, Double> popularity = new HashMap<>();
-        for (Long pid : productIds) popularity.put(pid, Math.pow(rnd.nextDouble(), 2) + 0.05);
 
+        // ---- Hồ sơ nhu cầu mỗi mặt hàng (để ABC × XYZ có phổ thật) ----
+        //  pop    : mức phổ biến (Pareto: vài SP bán chạy, đa số bán ít) → quyết định DOANH THU (ABC)
+        //  pSell  : xác suất phát sinh bán trong 1 ngày → cao thì bán ĐỀU (CV thấp → X/Y),
+        //           thấp thì THẤT THƯỜNG (CV cao → Z). Trộn thêm độ-đều "độc lập" để có cả AZ, CX…
+        //  meanQty: số lượng trung bình mỗi ngày-có-bán
+        Map<Long, Double> pSell = new HashMap<>();
+        Map<Long, Double> meanQty = new HashMap<>();
+        for (Long pid : productIds) {
+            double pop = Math.pow(rnd.nextDouble(), 1.7) + 0.04;     // độ phổ biến → quyết định DOANH THU (ABC)
+            meanQty.put(pid, 1.0 + 5.0 * pop);
+            // Gán "tầng độ đều" theo tỉ lệ cố định để bảng có đủ X/Y/Z (không phó mặc may rủi):
+            //  ~45% bán ĐỀU (→ X), ~35% DAO ĐỘNG (→ Y), ~20% THẤT THƯỜNG (→ Z).
+            double t = rnd.nextDouble();
+            double p = t < 0.45 ? 0.70 + 0.25 * rnd.nextDouble()    // bán gần như mỗi ngày → CV thấp
+                     : t < 0.80 ? 0.32 + 0.30 * rnd.nextDouble()    // bán cách quãng → CV vừa
+                     :            0.07 + 0.06 * rnd.nextDouble();   // bán lẻ tẻ vài lần/tháng → CV cao
+            pSell.put(pid, p);
+        }
+
+        // ---- Sinh chuỗi nhu cầu theo ngày + tổng nhu cầu mỗi SP ----
+        // d = 0 (HISTORY_DAYS ngày trước) … HISTORY_DAYS (hôm nay) để Dashboard có "doanh thu hôm nay".
+        List<List<long[]>> demandByDay = new ArrayList<>();
+        Map<Long, Integer> totalDemand = new HashMap<>();
+        for (int d = 0; d <= HISTORY_DAYS; d++) {
+            List<long[]> today = new ArrayList<>();
+            for (Long pid : productIds) {
+                if (rnd.nextDouble() >= pSell.get(pid)) continue;
+                double m = meanQty.get(pid);
+                int q = (int) Math.max(1, Math.round(m * (0.4 + 1.2 * rnd.nextDouble())));
+                today.add(new long[]{pid, q});
+                totalDemand.merge(pid, q, Integer::sum);
+            }
+            demandByDay.add(today);
+        }
+
+        // ---- Lô "cung ứng lịch sử" riêng: số lượng = ĐÚNG tổng nhu cầu → bán hết về 0, KHÔNG đụng tồn
+        //      hiện tại (giữ nguyên bức tranh tồn kho/cận HSD/cần nhập của các lô đang bày bán). ----
+        Supplier supplier = supplierRepository.findAll().stream().findFirst().orElse(null);
+        GoodsReceipt histReceipt = new GoodsReceipt();
+        histReceipt.setCode(nextReceiptCode());
+        histReceipt.setSupplier(supplier);
+        histReceipt.setCreatedBy(createdBy);
+        histReceipt.setNote("Cung ứng cho lịch sử bán hàng 12 tuần (demo)");
+        BigDecimal histTotal = BigDecimal.ZERO;
+        Map<Long, GoodsReceiptItem> histBatch = new HashMap<>();
+        for (Long pid : productIds) {
+            int need = totalDemand.getOrDefault(pid, 0);
+            if (need <= 0) continue;
+            Product prod = shelfBatchesByProduct.get(pid).get(0).getProduct();
+            GoodsReceiptItem hb = new GoodsReceiptItem();
+            hb.setProduct(prod);
+            hb.setQuantity(need);
+            hb.setImportPrice(prod.getCostPrice());
+            hb.setExpiryDate(LocalDate.now().plusDays(2)); // bán hết về 0 nên HSD không ảnh hưởng hiển thị
+            histReceipt.addItem(hb);
+            histBatch.put(pid, hb);
+            histTotal = histTotal.add(prod.getCostPrice().multiply(BigDecimal.valueOf(need)));
+        }
+        histReceipt.setTotalAmount(histTotal);
+        goodsReceiptRepository.save(histReceipt); // cascade → lô có id
+        for (var e : histBatch.entrySet()) shelfRemain.put(e.getValue().getId(), new int[]{e.getValue().getQuantity()});
+
+        // ---- Bán theo ngày: gói nhu cầu của ngày thành các hóa đơn 1..4 dòng ----
         long invSeq = 0;
         int totalInvoices = 0;
         List<long[]> shiftBackdate = new ArrayList<>();   // [shiftId, dayOffset]
         List<long[]> invBackdate = new ArrayList<>();      // [invoiceId, dayOffset, minuteOfDay]
-
-        for (int day = 30; day >= 0; day--) { // gồm cả hôm nay (day=0) để Dashboard có "doanh thu hôm nay"
-            // 1 ca/ngày cho thu ngân
+        for (int d = 0; d <= HISTORY_DAYS; d++) {
+            int dayOffset = HISTORY_DAYS - d; // d=HISTORY_DAYS → hôm nay (offset 0)
             WorkShift shift = new WorkShift();
             shift.setUser(cashier);
             shift.setOpeningCash(BigDecimal.valueOf(500000));
             shift.setStatus(ShiftStatus.CLOSED);
             shift = workShiftRepository.save(shift);
-            shiftBackdate.add(new long[]{shift.getId(), day});
-
-            int invoicesToday = 3 + rnd.nextInt(7); // 3..9 hóa đơn/ngày
+            shiftBackdate.add(new long[]{shift.getId(), dayOffset});
             BigDecimal cashInDrawer = BigDecimal.valueOf(500000);
-            for (int n = 0; n < invoicesToday; n++) {
-                Invoice inv = buildRandomInvoice(rnd, shift, productIds, popularity, shelfRemain, shelfBatchesByProduct, ++invSeq);
+
+            List<long[]> demand = new ArrayList<>(demandByDay.get(d));
+            Collections.shuffle(demand, rnd);
+            int i = 0;
+            while (i < demand.size()) {
+                int lines = 1 + rnd.nextInt(4);
+                List<long[]> basket = demand.subList(i, Math.min(i + lines, demand.size()));
+                i += basket.size();
+                Invoice inv = buildInvoiceFromDemand(rnd, shift, basket, shelfRemain, histBatch, ++invSeq);
                 if (inv == null) continue;
                 Invoice saved = invoiceRepository.save(inv);
-                // total = subtotal (giảm giá 0); chỉ tiền mặt mới vào két (QR vào ngân hàng).
+                // chỉ tiền mặt mới vào két (QR vào ngân hàng)
                 if (saved.getPaymentMethod() == PaymentMethod.CASH) cashInDrawer = cashInDrawer.add(saved.getSubtotal());
                 int minute = 8 * 60 + rnd.nextInt(13 * 60); // 8h..21h
-                invBackdate.add(new long[]{saved.getId(), day, minute});
+                invBackdate.add(new long[]{saved.getId(), dayOffset, minute});
                 totalInvoices++;
             }
-            // tiền cuối ca = đầu ca + tiền mặt bán (xấp xỉ — bỏ qua QR cho đơn giản)
             shift.setClosingCash(cashInDrawer);
         }
         invoiceRepository.flush();
 
         // Backdate created_at / opened_at / closed_at (vì @CreationTimestamp không cho set qua JPA)
+        em.createNativeQuery("UPDATE goods_receipts SET created_at = :t WHERE id = :id")
+                .setParameter("t", LocalDateTime.now().minusDays(HISTORY_DAYS + 1L).withHour(7).withMinute(0).withSecond(0).withNano(0))
+                .setParameter("id", histReceipt.getId()).executeUpdate();
         for (long[] s : shiftBackdate) {
             em.createNativeQuery("UPDATE work_shifts SET opened_at = :o, closed_at = :c WHERE id = :id")
                     .setParameter("o", LocalDateTime.now().minusDays(s[1]).withHour(8).withMinute(0).withSecond(0).withNano(0))
@@ -233,42 +302,29 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         return totalInvoices;
     }
 
-    /** Dựng 1 hóa đơn ngẫu nhiên: 1..4 dòng, lấy hàng FIFO từ tồn kệ (RAM). Trả null nếu không đủ hàng. */
-    private Invoice buildRandomInvoice(Random rnd, WorkShift shift, List<Long> productIds, Map<Long, Double> popularity,
-                                       Map<Long, int[]> shelfRemain, Map<Long, List<GoodsReceiptItem>> shelfBatchesByProduct,
-                                       long seq) {
-        int lines = 1 + rnd.nextInt(4);
+    /** Dựng 1 hóa đơn từ giỏ nhu cầu đã định sẵn (SP + số lượng), lấy hàng từ lô cung ứng lịch sử. */
+    private Invoice buildInvoiceFromDemand(Random rnd, WorkShift shift, List<long[]> basket,
+                                           Map<Long, int[]> shelfRemain, Map<Long, GoodsReceiptItem> histBatch, long seq) {
         Invoice inv = new Invoice();
         inv.setShift(shift);
         BigDecimal subtotal = BigDecimal.ZERO, tax = BigDecimal.ZERO;
-        Set<Long> usedProducts = new HashSet<>();
-        for (int l = 0; l < lines; l++) {
-            Long pid = pickWeighted(rnd, productIds, popularity);
-            if (pid == null || !usedProducts.add(pid)) continue;
-            int want = 1 + rnd.nextInt(3);
-            List<GoodsReceiptItem> batches = shelfBatchesByProduct.getOrDefault(pid, List.of());
-            batches.sort(Comparator.comparing(b -> b.getExpiryDate() == null ? LocalDate.MAX : b.getExpiryDate()));
-            int allocated = 0;
-            Product prod = null;
+        for (long[] line : basket) {
+            GoodsReceiptItem b = histBatch.get(line[0]);
+            if (b == null) continue;
+            int[] rem = shelfRemain.get(b.getId());
+            int take = rem == null ? 0 : Math.min(rem[0], (int) line[1]);
+            if (take <= 0) continue;
+            rem[0] -= take;
+            Product prod = b.getProduct();
             InvoiceItem item = new InvoiceItem();
-            for (GoodsReceiptItem b : batches) {
-                if (allocated >= want) break;
-                int[] rem = shelfRemain.get(b.getId());
-                if (rem == null || rem[0] <= 0) continue;
-                int take = Math.min(rem[0], want - allocated);
-                rem[0] -= take;
-                allocated += take;
-                prod = b.getProduct();
-                InvoiceItemBatch alloc = new InvoiceItemBatch();
-                alloc.setBatch(b); alloc.setQuantity(take);
-                item.addBatch(alloc);
-            }
-            if (allocated == 0 || prod == null) continue;
             item.setProduct(prod);
-            item.setQuantity(allocated);
+            item.setQuantity(take);
             item.setUnitPrice(prod.getSalePrice());
+            InvoiceItemBatch alloc = new InvoiceItemBatch();
+            alloc.setBatch(b); alloc.setQuantity(take);
+            item.addBatch(alloc);
             inv.addItem(item);
-            BigDecimal lineAmt = prod.getSalePrice().multiply(BigDecimal.valueOf(allocated));
+            BigDecimal lineAmt = prod.getSalePrice().multiply(BigDecimal.valueOf(take));
             subtotal = subtotal.add(lineAmt);
             BigDecimal r = prod.getTaxRate();
             if (r != null && r.signum() > 0) {
@@ -291,13 +347,6 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         inv.setStatus(InvoiceStatus.COMPLETED);
         inv.setCode(String.format("HDS%05d", seq));
         return inv;
-    }
-
-    private Long pickWeighted(Random rnd, List<Long> ids, Map<Long, Double> w) {
-        double total = 0; for (Long id : ids) total += w.getOrDefault(id, 0.1);
-        double x = rnd.nextDouble() * total;
-        for (Long id : ids) { x -= w.getOrDefault(id, 0.1); if (x <= 0) return id; }
-        return ids.isEmpty() ? null : ids.get(ids.size() - 1);
     }
 
     // ===================== SUY RA THUẾ / QUY CÁCH / NCC =====================

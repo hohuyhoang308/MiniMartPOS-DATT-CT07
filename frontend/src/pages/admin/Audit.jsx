@@ -36,7 +36,7 @@ export default function Audit() {
   const actions = [...new Set(rows.map((r) => r.action))]
 
   return (
-    <div>
+    <div className="page-fill">
       <PageHeader title="Nhật ký kiểm toán" subtitle="Vết ai làm gì, khi nào — cho các thao tác nhạy cảm (200 vết mới nhất)" />
 
       <InfoBanner id="audit" title="Nhật ký kiểm toán là gì?">
@@ -45,7 +45,7 @@ export default function Audit() {
         Nhật ký là <b>chỉ thêm</b> (không sửa/xóa được).
       </InfoBanner>
 
-      <Card className="border-0">
+      <Card className="border-0 fill-card">
         <Card.Body className="d-flex align-items-center gap-2 flex-wrap">
           <span className="text-muted2 small">Lọc theo hành động:</span>
           <Form.Select size="sm" style={{ maxWidth: 220 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -53,7 +53,7 @@ export default function Audit() {
             {actions.map((a) => <option key={a} value={a}>{ACTION[a]?.label || a}</option>)}
           </Form.Select>
         </Card.Body>
-        <div className="table-responsive" style={{ maxHeight: 560, overflowY: 'auto' }}>
+        <div className="table-responsive fill-scroll">
           <Table hover className="mb-0 align-middle">
             <thead><tr>
               <th>Thời điểm</th><th>Người thực hiện</th><th className="text-center">Hành động</th>

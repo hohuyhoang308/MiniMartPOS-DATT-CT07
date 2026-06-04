@@ -312,7 +312,17 @@ a { text-decoration: none; }
 .topbar .page-trail { font-family: var(--font-display); font-weight: 700; color: var(--ink-900); }
 .topbar .page-trail small { font-family: var(--font-body); font-weight: 400; color: var(--muted); }
 
-.content { padding: 26px; flex: 1; width: 100%; }
+.content { padding: 26px; flex: 1; width: 100%; display: flex; flex-direction: column; }
+
+/* ---- Trang "lấp đầy chiều cao": bảng kéo dài xuống đáy màn hình, không chừa
+   khoảng trống ở dưới. Bảng dài sẽ cuộn trong khung thay vì bị cắt cứng. ---- */
+.page-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.page-fill .fill-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Phần đầu thẻ (thanh lọc/tab) giữ chiều cao tự nhiên — không tranh chiều cao với bảng
+   (Bootstrap mặc định .card-body có flex:1 1 auto nên sẽ nở ra nếu không ghì lại). */
+.page-fill .fill-card > .card-body { flex: 0 0 auto; }
+.page-fill .fill-card .fill-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.page-fill .fill-row { flex: 1; min-height: 0; }
 
 /* =====================================================================
    PAGE HEADER

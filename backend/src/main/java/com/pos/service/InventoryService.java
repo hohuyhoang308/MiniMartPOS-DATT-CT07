@@ -160,6 +160,8 @@ public class InventoryService {
 
     /** Cửa sổ phân tích ABC/XYZ (1 quý). */
     private static final int ABC_DAYS = 90;
+    /** Số "rổ" TUẦN trong cửa sổ (90 ngày ≈ 13 tuần) — đơn vị tính độ biến động nhu cầu cho XYZ. */
+    private static final int ABC_WEEKS = (int) Math.ceil(ABC_DAYS / 7.0);
 
     /**
      * Phân loại ABC/XYZ: ABC theo doanh thu luỹ kế (Pareto 80/95%), XYZ theo độ biến động nhu cầu
@@ -168,10 +170,12 @@ public class InventoryService {
     public List<com.pos.dto.inventory.AbcXyzResponse> abcXyzAnalysis() {
         LocalDateTime from = LocalDateTime.now().minusDays(ABC_DAYS);
 
-        Map<Long, Double> sumSq = new HashMap<>();
-        for (var row : invoiceItemRepository.dailySalesSince(from)) {
+        // Độ biến động (XYZ) tính trên lượng bán theo TUẦN — gộp tuần để bỏ nhiễu "ngày bán = 0"
+        // của bán lẻ, tránh việc mọi mặt hàng đều bị xếp Z (thất thường) một cách giả tạo.
+        Map<Long, Double> weeklySumSq = new HashMap<>();
+        for (var row : invoiceItemRepository.weeklySalesSince(from)) {
             double q = row.getSoldQty() != null ? row.getSoldQty() : 0;
-            sumSq.merge(row.getProductId(), q * q, Double::sum);
+            weeklySumSq.merge(row.getProductId(), q * q, Double::sum);
         }
         Map<Long, String> names = productRepository.findAll().stream()
                 .collect(Collectors.toMap(Product::getId, Product::getName, (a, b) -> a));
@@ -193,9 +197,11 @@ public class InventoryService {
             cum += share;
 
             long qty = r.getQty() != null ? r.getQty() : 0;
-            double mean = qty / (double) ABC_DAYS;
-            double sigma = Math.sqrt(Math.max(0, sumSq.getOrDefault(r.getProductId(), 0.0) / ABC_DAYS - mean * mean));
-            double cv = mean > 0 ? sigma / mean : 0;
+            // μ, σ theo TUẦN: trung bình = tổng bán / số tuần; tuần không bán tính như 0 (vẫn vào mẫu số).
+            double meanWeekly = qty / (double) ABC_WEEKS;
+            double sigmaWeekly = Math.sqrt(Math.max(0,
+                    weeklySumSq.getOrDefault(r.getProductId(), 0.0) / ABC_WEEKS - meanWeekly * meanWeekly));
+            double cv = meanWeekly > 0 ? sigmaWeekly / meanWeekly : 0;
             String xyz = cv < 0.5 ? "X" : cv < 1.0 ? "Y" : "Z";
 
             result.add(new com.pos.dto.inventory.AbcXyzResponse(

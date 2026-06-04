@@ -14,9 +14,9 @@ const EMPTY_CAT = { name: '', description: '', status: 'ACTIVE' }
 /** Gộp "Danh mục" + "Đơn vị tính" vào một màn hình cho gọn (đều là dữ liệu nền của sản phẩm). */
 export default function Catalog() {
   return (
-    <div>
+    <div className="page-fill">
       <PageHeader title="Danh mục & Đơn vị tính" subtitle="Dữ liệu nền phân loại sản phẩm — quản lý chung một nơi" />
-      <Row className="g-3">
+      <Row className="g-3 fill-row">
         <Col lg={7}><CategorySection /></Col>
         <Col lg={5}><UnitSection /></Col>
       </Row>

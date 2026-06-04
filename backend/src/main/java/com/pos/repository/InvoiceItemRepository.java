@@ -87,6 +87,21 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             """, nativeQuery = true)
     List<ProductSalesRow> dailySalesSince(@Param("from") LocalDateTime from);
 
+    /**
+     * Sản lượng bán theo (sản phẩm, TUẦN) kể từ {@code from} — mỗi dòng là số bán trong 1 tuần của 1 SP.
+     * Gộp theo tuần để LÀM MƯỢT chuỗi nhu cầu bán lẻ (rất nhiều ngày bán = 0). Nếu tính độ biến động
+     * theo từng NGÀY thì các ngày trống sẽ thổi phồng σ khiến mọi mặt hàng đều "thất thường" (Z) —
+     * gộp tuần cho ra CV (XYZ) phản ánh đúng độ ổn định thực tế của nhu cầu.
+     */
+    @Query(value = """
+            SELECT ii.product_id AS productId, COALESCE(SUM(ii.quantity), 0) AS soldQty
+            FROM invoice_items ii
+            JOIN invoices i ON i.id = ii.invoice_id
+            WHERE i.status = 'COMPLETED' AND i.created_at >= :from
+            GROUP BY ii.product_id, FLOOR(DATEDIFF(i.created_at, :from) / 7)
+            """, nativeQuery = true)
+    List<ProductSalesRow> weeklySalesSince(@Param("from") LocalDateTime from);
+
     /** Doanh thu + sản lượng theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — phân tích ABC/XYZ. */
     @Query("""
             SELECT ii.product.id AS productId,

@@ -16,6 +16,12 @@ const ADVICE = {
   B: 'Quan trọng vừa — theo dõi định kỳ.',
   C: 'Đuôi dài — nới lỏng, gom đơn để tiết kiệm chi phí đặt.',
 }
+/** Ý nghĩa dễ hiểu của nhóm XYZ (hiện khi rê chuột vào nhãn). */
+const XYZ_MEAN = {
+  X: 'Bán ĐỀU đặn mỗi tuần — dễ dự báo, ít cần tồn dự phòng.',
+  Y: 'Bán DAO ĐỘNG vừa phải theo tuần — cần theo dõi.',
+  Z: 'Bán THẤT THƯỜNG (lúc nhiều lúc ít) — khó dự báo, cần dự phòng nhiều hơn.',
+}
 
 export default function AbcXyz() {
   const toast = useToast()
@@ -31,13 +37,25 @@ export default function AbcXyz() {
   const count = (c, key) => rows.filter((r) => r[key] === c).length
 
   return (
-    <div>
+    <div className="page-fill">
       <PageHeader title="Phân tích ABC / XYZ" subtitle="Phân loại sản phẩm theo doanh thu (Pareto) × độ biến động nhu cầu (90 ngày)" />
 
-      <InfoBanner id="abcxyz" title="ABC/XYZ là gì?">
-        <b>ABC</b> theo doanh thu luỹ kế: <b>A</b> = nhóm tạo ~80% doanh thu, <b>B</b> = 80–95%, <b>C</b> = đuôi còn lại.
-        <b> XYZ</b> theo độ biến động nhu cầu (CV = σ/μ): <b>X</b> ổn định (&lt;0.5), <b>Y</b> dao động, <b>Z</b> thất thường (≥1.0).
-        Nhóm <b>AX</b> (bán chạy & đều) cần đảm bảo luôn còn hàng; nhóm <b>CZ</b> (ít & thất thường) nên gom đơn, giảm tồn.
+      <InfoBanner id="abcxyz" title="ABC/XYZ là gì? Đọc bảng thế nào?">
+        <div className="mb-2">
+          <b>ABC — xếp theo DOANH THU</b> (quy tắc Pareto 80/20): <b>A</b> = nhóm tạo ~80% doanh thu
+          (ít mặt hàng nhưng quan trọng nhất), <b>B</b> = phần kế tiếp (80–95%), <b>C</b> = phần đuôi còn lại.
+        </div>
+        <div className="mb-2">
+          <b>XYZ — xếp theo ĐỘ ỔN ĐỊNH nhu cầu.</b> Đo bằng <b>CV = độ lệch chuẩn ÷ trung bình</b> lượng bán
+          <b> mỗi TUẦN</b> (gộp theo tuần để bỏ nhiễu những ngày không phát sinh bán). <b>CV càng nhỏ → bán càng đều</b>:
+          <span className="badge bg-primary mx-1">X</span> đều đặn (CV &lt; 0,5),
+          <span className="badge bg-info mx-1">Y</span> dao động vừa (0,5–1,0),
+          <span className="badge bg-danger mx-1">Z</span> thất thường (≥ 1,0).
+        </div>
+        <div>
+          <b>Phối hợp để quyết định:</b> <b>A·X</b> (bán chạy &amp; đều) → luôn giữ đủ hàng, kiểm soát chặt;
+          <b> C·Z</b> (ít &amp; thất thường) → đặt thưa, gom đơn, giảm tồn để đỡ đọng vốn.
+        </div>
       </InfoBanner>
 
       <Row className="g-3 mb-3">
@@ -52,13 +70,17 @@ export default function AbcXyz() {
         ))}
       </Row>
 
-      <Card className="border-0">
-        <div className="table-responsive" style={{ maxHeight: 540, overflowY: 'auto' }}>
+      <Card className="border-0 fill-card">
+        <div className="table-responsive fill-scroll">
           <Table hover className="mb-0 align-middle">
             <thead><tr>
-              <th>Sản phẩm</th><th className="text-end">Doanh thu (90n)</th><th className="text-end">% DT</th>
-              <th className="text-end">Luỹ kế</th><th className="text-center">ABC</th>
-              <th className="text-end">Đã bán</th><th className="text-end">CV</th><th className="text-center">XYZ</th>
+              <th>Sản phẩm</th><th className="text-end">Doanh thu (90n)</th>
+              <th className="text-end" title="Phần trăm doanh thu của mặt hàng trên tổng">% DT</th>
+              <th className="text-end" title="Doanh thu luỹ kế cộng dồn — dùng để chia nhóm A/B/C">Luỹ kế</th>
+              <th className="text-center">ABC</th>
+              <th className="text-end">Đã bán</th>
+              <th className="text-end" title="Hệ số biến động THEO TUẦN (σ/μ): càng nhỏ thì bán càng đều">CV/tuần</th>
+              <th className="text-center">XYZ</th>
             </tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -70,7 +92,9 @@ export default function AbcXyz() {
                   <td className="text-center"><span className={`badge bg-${ABC_COLOR[r.abcClass]}`}>{r.abcClass}</span></td>
                   <td className="text-end num">{r.soldQty}</td>
                   <td className="text-end num text-muted2">{r.cv}</td>
-                  <td className="text-center"><span className={`badge bg-${XYZ_COLOR[r.xyzClass]}`}>{r.xyzClass}</span></td>
+                  <td className="text-center">
+                    <span className={`badge bg-${XYZ_COLOR[r.xyzClass]}`} title={XYZ_MEAN[r.xyzClass]} style={{ cursor: 'help' }}>{r.xyzClass}</span>
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-bar-chart" title="Chưa đủ dữ liệu bán hàng để phân tích" /></td></tr>}

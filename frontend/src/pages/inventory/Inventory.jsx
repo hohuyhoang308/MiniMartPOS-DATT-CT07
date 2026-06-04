@@ -44,7 +44,7 @@ export default function Inventory() {
   if (loading) return <Loading />
 
   return (
-    <div>
+    <div className="page-fill">
       <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Tồn theo lô/HSD, đề xuất nhập (EOQ) — đưa hàng lên kệ ở trang Lên kệ" />
 
       <InfoBanner id="inventory" title="Đọc bảng tồn kho">
@@ -60,7 +60,7 @@ export default function Inventory() {
         <Col md={3}><StatCard icon="bi-calendar-x-fill" chip="rose" label="Lô cận/quá HSD (30 ngày)" value={expiring.length} /></Col>
       </Row>
 
-      <Card className="border-0">
+      <Card className="border-0 fill-card">
         <Card.Body className="pb-0 d-flex justify-content-between align-items-start flex-wrap gap-2">
           <Nav variant="pills" activeKey={tab} onSelect={setTab} className="mb-3 gap-2">
             <Nav.Item><Nav.Link eventKey="all">Tất cả ({stock.length})</Nav.Link></Nav.Item>
@@ -76,7 +76,7 @@ export default function Inventory() {
             })}><i className="bi bi-box-arrow-in-down me-1"></i>Lập phiếu nhập ({suggestions.length})</Button>
           )}
         </Card.Body>
-        <div className="table-responsive" style={{ maxHeight: 460, overflowY: 'auto' }}>
+        <div className="table-responsive fill-scroll">
           {tab === 'expiring' ? (
             <Table hover className="mb-0">
               <thead><tr><th>Sản phẩm</th><th className="text-center">Tồn lô</th><th>HSD</th><th className="text-center">Còn lại</th></tr></thead>
