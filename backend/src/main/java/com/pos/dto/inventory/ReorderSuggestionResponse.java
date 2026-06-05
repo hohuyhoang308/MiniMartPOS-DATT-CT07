@@ -11,6 +11,9 @@ import java.math.BigDecimal;
  * @param reorderPoint      điểm tái đặt hàng = nhu cầu trong lead time + tồn an toàn (khi tồn ≤ mức này thì nên đặt)
  * @param eoq               lượng đặt hàng kinh tế EOQ = √(2·D·S/H) (số lượng đặt tối ưu mỗi lần)
  * @param urgency           OUT (hết hàng) | URGENT (sắp hết/dưới ngưỡng) | REORDER (nên nhập)
+ * @param abcClass          nhóm ABC theo doanh thu (A/B/C) — quyết định mức phục vụ &amp; kỳ dự trữ
+ * @param xyzClass          nhóm XYZ theo độ ổn định nhu cầu (X/Y/Z)
+ * @param hasExpiringStock  có lô cận/quá HSD → cân nhắc đẩy bán trước khi nhập thêm (tránh ôm hàng hết hạn)
  */
 public record ReorderSuggestionResponse(
         Long productId,
@@ -24,5 +27,8 @@ public record ReorderSuggestionResponse(
         int suggestedQty,
         int reorderPoint,
         int eoq,
-        String urgency
+        String urgency,
+        String abcClass,
+        String xyzClass,
+        boolean hasExpiringStock
 ) {}

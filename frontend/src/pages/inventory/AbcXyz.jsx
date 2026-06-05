@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Card, Col, Row, Table } from 'react-bootstrap'
+import { useNavigate } from 'react-router-dom'
+import { Button, Card, Col, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -25,6 +26,7 @@ const XYZ_MEAN = {
 
 export default function AbcXyz() {
   const toast = useToast()
+  const navigate = useNavigate()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -57,6 +59,12 @@ export default function AbcXyz() {
           <b> C·Z</b> (ít &amp; thất thường) → đặt thưa, gom đơn, giảm tồn để đỡ đọng vốn.
         </div>
       </InfoBanner>
+
+      <div className="d-flex justify-content-end mb-3">
+        <Button size="sm" onClick={() => navigate('/inventory', { state: { tab: 'suggest' } })}>
+          <i className="bi bi-cart-plus me-1"></i>Đề xuất nhập theo phân loại này
+        </Button>
+      </div>
 
       <Row className="g-3 mb-3">
         {['A', 'B', 'C'].map((c) => (

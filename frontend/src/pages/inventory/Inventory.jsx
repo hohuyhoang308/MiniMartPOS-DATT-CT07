@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Button, Card, Col, Modal, Nav, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -17,6 +17,9 @@ const URGENCY = {
   REORDER: { cls: 'pill-info', icon: 'bi-arrow-repeat', label: 'Nên nhập' },
 }
 
+// Màu nhóm ABC (theo doanh thu): A chủ lực → đậm, C đuôi → mờ.
+const ABC_CLS = { A: 'pill-violet', B: 'pill-info', C: 'pill-muted' }
+
 function ShelfCell({ s }) {
   const shelf = s.shelfStock ?? 0
   const cls = shelf <= 0 ? 'text-danger' : shelf <= s.minStock ? 'text-warning' : 'text-success'
@@ -26,11 +29,12 @@ function ShelfCell({ s }) {
 export default function Inventory() {
   const toast = useToast()
   const navigate = useNavigate()
+  const location = useLocation()
   const [stock, setStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState(location.state?.tab || 'all') // mở sẵn tab khi điều hướng từ ABC/XYZ
   const [batchTarget, setBatchTarget] = useState(null)
 
   useEffect(() => {
@@ -49,8 +53,10 @@ export default function Inventory() {
 
       <InfoBanner id="inventory" title="Đọc bảng tồn kho">
         Mỗi sản phẩm có tồn <b>KỆ</b> (bán được) và <b>KHO</b> (chưa lên kệ). Bấm <b>tên sản phẩm</b> để xem
-        các <b>lô + HSD</b>. <b>Cận HSD</b>: lô sắp/đã hết hạn — ưu tiên bán. <b>Đề xuất nhập</b>: kèm
-        <b> điểm tái đặt</b> và <b>EOQ</b> (lượng đặt tối ưu). Việc <b>lên kệ</b> làm ở trang riêng <b>"Lên kệ"</b>.
+        các <b>lô + HSD</b>. <b>Cận HSD</b>: lô sắp/đã hết hạn — ưu tiên bán. <b>Đề xuất nhập</b> dùng luôn
+        kết quả <b>ABC/XYZ</b> (cột <b>Nhóm</b>): hàng <b>A</b> giữ kỹ hơn (mức phục vụ cao), hàng <b>C·Z</b>
+        đặt thưa & ít tồn; kèm <b>điểm tái đặt</b> và <b>EOQ</b>. Dòng có dấu <i className="bi bi-calendar-x-fill text-warning"></i>
+        là đang có lô <b>cận HSD</b> — nên đẩy bán trước khi nhập thêm. Việc <b>lên kệ</b> làm ở trang <b>"Lên kệ"</b>.
       </InfoBanner>
 
       <Row className="g-3 mb-3 stagger">
@@ -99,7 +105,7 @@ export default function Inventory() {
           ) : tab === 'suggest' ? (
             <Table hover className="mb-0 align-middle">
               <thead><tr>
-                <th>Sản phẩm</th><th className="text-center">Tồn / Min</th><th className="text-center">Bán 30 ngày</th>
+                <th>Sản phẩm</th><th className="text-center">Nhóm</th><th className="text-center">Tồn / Min</th><th className="text-center">Bán 30 ngày</th>
                 <th className="text-center">Tái đặt</th><th className="text-center">EOQ</th><th className="text-center">Đề xuất</th><th className="text-center">Độ khẩn</th>
               </tr></thead>
               <tbody>
@@ -107,17 +113,26 @@ export default function Inventory() {
                   const u = URGENCY[s.urgency] || URGENCY.REORDER
                   return (
                     <tr key={s.productId}>
-                      <td className="fw-semibold">{s.name}<div className="text-muted2 small">{s.soldLast30} bán · {s.avgDailySold}/ngày</div></td>
+                      <td className="fw-semibold">{s.name}
+                        {s.hasExpiringStock && <i className="bi bi-calendar-x-fill text-warning ms-1" title="Có lô cận/quá HSD — nên đẩy bán trước khi nhập thêm"></i>}
+                        <div className="text-muted2 small">{s.soldLast30} bán · {s.avgDailySold}/ngày</div>
+                      </td>
+                      <td className="text-center">
+                        <span className={`pill ${ABC_CLS[s.abcClass] || 'pill-muted'}`}
+                          title="ABC theo doanh thu · XYZ theo độ ổn định nhu cầu — quyết định mức giữ hàng">
+                          {s.abcClass}·{s.xyzClass}
+                        </span>
+                      </td>
                       <td className="text-center num">{s.currentStock} / {s.minStock}</td>
                       <td className="text-center num">{s.daysUntilStockout != null ? `${s.daysUntilStockout} ngày` : '—'}</td>
-                      <td className="text-center num" title="Điểm tái đặt hàng">{s.reorderPoint}</td>
+                      <td className="text-center num" title="Điểm tái đặt hàng (đã tính theo mức phục vụ của nhóm ABC)">{s.reorderPoint}</td>
                       <td className="text-center num text-primary fw-semibold" title="Lượng đặt kinh tế (EOQ)">{s.eoq}</td>
                       <td className="text-center num fw-bold text-success">+{s.suggestedQty}</td>
                       <td className="text-center"><span className={`pill ${u.cls}`}><i className={`bi ${u.icon}`}></i>{u.label}</span></td>
                     </tr>
                   )
                 })}
-                {suggestions.length === 0 && <tr><td colSpan={7}><EmptyState icon="bi-check2-circle" title="Tồn kho ổn — chưa cần nhập thêm" /></td></tr>}
+                {suggestions.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-check2-circle" title="Tồn kho ổn — chưa cần nhập thêm" /></td></tr>}
               </tbody>
             </Table>
           ) : (
