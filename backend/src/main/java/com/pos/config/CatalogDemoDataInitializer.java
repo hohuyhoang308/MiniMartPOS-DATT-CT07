@@ -132,9 +132,9 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
             return;
         }
 
-        // Mỗi NCC một phiếu nhập; gom tất cả lô vừa tạo + đưa ~60% lên kệ (nhớ tồn kệ từng lô trong RAM).
-        Map<Long, int[]> shelfRemain = new HashMap<>();       // batchId -> [tồn kệ còn lại]
-        Map<Long, List<GoodsReceiptItem>> shelfBatchesByProduct = new HashMap<>();
+        // Mỗi NCC một phiếu nhập; gom lô vừa tạo + đưa lên kệ tới khi gần đầy (tôn trọng SỨC CHỨA kệ).
+        Map<Long, int[]> shelfLoad = new HashMap<>();                 // shelfId -> [đang chứa]
+        Map<Long, Product> productsWithStock = new LinkedHashMap<>(); // productId -> Product (để sinh lịch sử bán)
         for (int sup = 0; sup < suppliers.size(); sup++) {
             List<GoodsReceiptItem> batches = batchesBySupplier.get(sup);
             if (batches.isEmpty()) continue;
@@ -153,24 +153,31 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
 
             for (int i = 0; i < batches.size(); i++) {
                 GoodsReceiptItem it = batches.get(i);
+                productsWithStock.put(it.getProduct().getId(), it.getProduct());
                 Shelf shelf = shelves.get(catsBySupplier.get(sup).get(i));
                 if (shelf == null) continue;
-                int shelfQty = Math.min(it.getQuantity(), Math.max(1, (int) Math.round(it.getQuantity() * 0.6)));
+                // Lên kệ ~60% nhưng KHÔNG vượt sức chứa kệ — phần dư để trong kho (đúng thực tế).
+                int cap = shelf.getCapacity() != null ? shelf.getCapacity() : 0;
+                int[] load = shelfLoad.computeIfAbsent(shelf.getId(), k -> new int[]{0});
+                int room = cap > 0 ? cap - load[0] : Integer.MAX_VALUE;
+                if (room <= 0) continue; // kệ đã đầy → để toàn bộ trong kho
+                int want = Math.max(1, (int) Math.round(it.getQuantity() * 0.6));
+                int shelfQty = Math.min(Math.min(want, it.getQuantity()), room);
+                if (shelfQty <= 0) continue;
                 ShelfTransfer st = new ShelfTransfer();
                 st.setBatch(it); st.setShelf(shelf); st.setQuantity(shelfQty); st.setCreatedBy(createdBy);
                 shelfTransferRepository.save(st);
-                shelfRemain.put(it.getId(), new int[]{shelfQty});
-                shelfBatchesByProduct.computeIfAbsent(it.getProduct().getId(), k -> new ArrayList<>()).add(it);
+                load[0] += shelfQty;
             }
         }
 
-        // Lịch sử bán hàng 30 ngày (chỉ khi chưa có hóa đơn) → Dashboard/Báo cáo/ABC-XYZ có số liệu.
+        // Lịch sử bán hàng 12 tuần (chỉ khi chưa có hóa đơn) → Dashboard/Báo cáo/ABC-XYZ có số liệu.
         int invoicesSeeded = 0;
         if (invoiceRepository.count() == 0) {
-            invoicesSeeded = seedSalesHistory(createdBy, shelfRemain, shelfBatchesByProduct);
+            invoicesSeeded = seedSalesHistory(createdBy, shelves, productsWithStock);
         }
 
-        log.info("Đã seed {} sản phẩm + {} NCC + lên kệ; tạo {} hóa đơn lịch sử 12 tuần.",
+        log.info("Đã seed {} sản phẩm + {} NCC + lên kệ (tôn trọng sức chứa); tạo {} hóa đơn lịch sử 12 tuần.",
                 created, suppliers.size(), invoicesSeeded);
     }
 
@@ -179,11 +186,12 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     /** Số ngày lịch sử demo (12 tuần) — đủ "rổ" tuần để XYZ phân loại được X/Y/Z thay vì dồn hết vào Z. */
     private static final int HISTORY_DAYS = 84;
 
-    private int seedSalesHistory(User createdBy, Map<Long, int[]> shelfRemain,
-                                 Map<Long, List<GoodsReceiptItem>> shelfBatchesByProduct) {
+    private int seedSalesHistory(User createdBy, Map<String, Shelf> shelves,
+                                 Map<Long, Product> productsWithStock) {
         User cashier = userRepository.findByUsername("cashier").orElse(createdBy);
-        List<Long> productIds = new ArrayList<>(shelfBatchesByProduct.keySet());
+        List<Long> productIds = new ArrayList<>(productsWithStock.keySet());
         if (productIds.isEmpty()) return 0;
+        Map<Long, int[]> shelfRemain = new HashMap<>();   // batchId (lô lịch sử) -> [còn lại để bán]
 
         Random rnd = new Random(42); // tái lập được
 
@@ -235,19 +243,30 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         for (Long pid : productIds) {
             int need = totalDemand.getOrDefault(pid, 0);
             if (need <= 0) continue;
-            Product prod = shelfBatchesByProduct.get(pid).get(0).getProduct();
+            Product prod = productsWithStock.get(pid);
             GoodsReceiptItem hb = new GoodsReceiptItem();
             hb.setProduct(prod);
             hb.setQuantity(need);
             hb.setImportPrice(prod.getCostPrice());
-            hb.setExpiryDate(LocalDate.now().plusDays(2)); // bán hết về 0 nên HSD không ảnh hưởng hiển thị
+            hb.setExpiryDate(null); // lô lịch sử: lên kệ rồi bán hết → tồn về 0, không ảnh hưởng HSD/cảnh báo
             histReceipt.addItem(hb);
             histBatch.put(pid, hb);
             histTotal = histTotal.add(prod.getCostPrice().multiply(BigDecimal.valueOf(need)));
         }
         histReceipt.setTotalAmount(histTotal);
         goodsReceiptRepository.save(histReceipt); // cascade → lô có id
-        for (var e : histBatch.entrySet()) shelfRemain.put(e.getValue().getId(), new int[]{e.getValue().getQuantity()});
+
+        // Đưa lô lịch sử LÊN KỆ đúng bằng số sẽ bán (transferred = sold) → on_shelf = 0 và in_warehouse = 0:
+        // lịch sử bán KHÔNG làm tồn kệ/kho âm hay phình, giữ nguyên bức tranh tồn của các lô đang bày bán.
+        for (var e : histBatch.entrySet()) {
+            GoodsReceiptItem hb = e.getValue();
+            shelfRemain.put(hb.getId(), new int[]{hb.getQuantity()});
+            Shelf shelf = shelves.get(hb.getProduct().getCategory().getName());
+            if (shelf == null) continue;
+            ShelfTransfer st = new ShelfTransfer();
+            st.setBatch(hb); st.setShelf(shelf); st.setQuantity(hb.getQuantity()); st.setCreatedBy(createdBy);
+            shelfTransferRepository.save(st);
+        }
 
         // ---- Bán theo ngày: gói nhu cầu của ngày thành các hóa đơn 1..4 dòng ----
         long invSeq = 0;
