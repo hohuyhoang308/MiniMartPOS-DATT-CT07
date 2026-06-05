@@ -28,15 +28,18 @@ public class GoodsReceiptService {
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     public GoodsReceiptService(GoodsReceiptRepository receiptRepository,
                                SupplierRepository supplierRepository,
                                ProductRepository productRepository,
-                               UserRepository userRepository) {
+                               UserRepository userRepository,
+                               AuditService auditService) {
         this.receiptRepository = receiptRepository;
         this.supplierRepository = supplierRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.auditService = auditService;
     }
 
     public List<GoodsReceiptResponse> findAll() {
@@ -87,7 +90,12 @@ public class GoodsReceiptService {
         receipt.setTotalAmount(total);
 
         // Lưu phiếu + các lô (cascade). Tồn kho tự tăng vì view tính từ lô mới.
-        return GoodsReceiptResponse.from(receiptRepository.save(receipt));
+        GoodsReceipt saved = receiptRepository.save(receipt);
+        auditService.log("CREATE_RECEIPT", "GOODS_RECEIPT", saved.getId(),
+                "Nhập kho " + saved.getCode() + " từ NCC " + supplier.getName()
+                        + " — " + req.items().size() + " mặt hàng, tổng " + total + "đ"
+                        + (updateCost ? " (cập nhật giá vốn)" : ""));
+        return GoodsReceiptResponse.from(saved);
     }
 
     /** Sinh mã PN<yyyyMMdd>-<seq 3 chữ số>. */

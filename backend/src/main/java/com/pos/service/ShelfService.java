@@ -33,6 +33,7 @@ public class ShelfService {
     private final GoodsReceiptItemRepository batchRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
+    private final AuditService auditService;
 
     public ShelfService(ShelfRepository shelfRepository,
                         BatchStockViewRepository batchStockRepository,
@@ -40,7 +41,8 @@ public class ShelfService {
                         ShelfReturnRepository shelfReturnRepository,
                         GoodsReceiptItemRepository batchRepository,
                         UserRepository userRepository,
-                        ProductRepository productRepository) {
+                        ProductRepository productRepository,
+                        AuditService auditService) {
         this.shelfRepository = shelfRepository;
         this.batchStockRepository = batchStockRepository;
         this.shelfTransferRepository = shelfTransferRepository;
@@ -48,6 +50,7 @@ public class ShelfService {
         this.batchRepository = batchRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
+        this.auditService = auditService;
     }
 
     // ---------- CRUD kệ ----------
@@ -158,6 +161,8 @@ public class ShelfService {
         if (moved == 0) {
             throw new BadRequestException("Không có lô phù hợp trong kho để lên kệ này (lô có thể đã thuộc kệ khác).");
         }
+        auditService.log("SHELVE", "SHELF", shelfId,
+                "Lên kệ " + moved + " sản phẩm #" + productId + " lên kệ " + shelf.getCode());
         return moved;
     }
 
@@ -190,6 +195,8 @@ public class ShelfService {
         r.setQuantity(quantity);
         r.setCreatedBy(user);
         shelfReturnRepository.save(r);
+        auditService.log("SHELF_RETURN", "SHELF", shelf.getId(),
+                "Lấy về kho " + quantity + " từ lô #" + batchId + " (kệ " + shelf.getCode() + ")");
         return quantity;
     }
 

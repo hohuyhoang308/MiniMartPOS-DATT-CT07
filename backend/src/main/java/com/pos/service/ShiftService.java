@@ -30,17 +30,20 @@ public class ShiftService {
     private final ShiftSummaryViewRepository summaryRepository;
     private final InvoiceRepository invoiceRepository;
     private final com.pos.repository.SalesReturnRepository returnRepository;
+    private final AuditService auditService;
 
     public ShiftService(WorkShiftRepository shiftRepository,
                         UserRepository userRepository,
                         ShiftSummaryViewRepository summaryRepository,
                         InvoiceRepository invoiceRepository,
-                        com.pos.repository.SalesReturnRepository returnRepository) {
+                        com.pos.repository.SalesReturnRepository returnRepository,
+                        AuditService auditService) {
         this.shiftRepository = shiftRepository;
         this.userRepository = userRepository;
         this.summaryRepository = summaryRepository;
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
+        this.auditService = auditService;
     }
 
     /** Mở ca cho thu ngân đang đăng nhập (nếu chưa có ca OPEN). */
@@ -91,7 +94,12 @@ public class ShiftService {
         shift.setClosingCash(closingCash);
         shift.setClosedAt(LocalDateTime.now());
         shift.setStatus(ShiftStatus.CLOSED);
-        return toResponse(shiftRepository.save(shift));
+        ShiftResponse resp = toResponse(shiftRepository.save(shift));
+        auditService.log("CLOSE_SHIFT", "SHIFT", shift.getId(),
+                "Đóng ca #" + shift.getId() + " (" + shift.getUser().getFullName() + "), đếm "
+                        + closingCash + "đ, chênh lệch quỹ " + resp.cashDifference() + "đ"
+                        + (isManager && !shift.getUser().getId().equals(me.getId()) ? " [đóng hộ]" : ""));
+        return resp;
     }
 
     /** Ca đang mở của thu ngân hiện tại (null nếu chưa mở ca). */

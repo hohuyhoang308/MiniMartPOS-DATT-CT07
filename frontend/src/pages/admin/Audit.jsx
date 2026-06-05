@@ -10,8 +10,19 @@ import { errMsg } from '../../api/client'
 
 const ACTION = {
   CANCEL_INVOICE: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Hủy hóa đơn' },
+  EXPIRE_INVOICE: { cls: 'pill-muted', icon: 'bi-clock-history', label: 'HĐ QR quá hạn' },
   RETURN: { cls: 'pill-warning', icon: 'bi-arrow-return-left', label: 'Trả hàng' },
   CHANGE_PRICE: { cls: 'pill-info', icon: 'bi-tag-fill', label: 'Đổi giá' },
+  CONFIRM_PAYMENT: { cls: 'pill-success', icon: 'bi-check2-circle', label: 'Xác nhận thanh toán' },
+  CREATE_RECEIPT: { cls: 'pill-info', icon: 'bi-box-seam', label: 'Nhập kho' },
+  SHELVE: { cls: 'pill-info', icon: 'bi-box-arrow-in-up', label: 'Lên kệ' },
+  SHELF_RETURN: { cls: 'pill-warning', icon: 'bi-box-arrow-down', label: 'Lấy về kho' },
+  CLOSE_SHIFT: { cls: 'pill-violet', icon: 'bi-door-closed-fill', label: 'Đóng ca' },
+  CREATE_USER: { cls: 'pill-success', icon: 'bi-person-plus-fill', label: 'Tạo tài khoản' },
+  UPDATE_USER: { cls: 'pill-info', icon: 'bi-person-gear', label: 'Sửa tài khoản' },
+  LOCK_USER: { cls: 'pill-danger', icon: 'bi-person-lock', label: 'Khóa tài khoản' },
+  RESET_PASSWORD: { cls: 'pill-warning', icon: 'bi-key-fill', label: 'Đặt lại mật khẩu' },
+  UPDATE_CONFIG: { cls: 'pill-muted', icon: 'bi-gear-fill', label: 'Đổi cấu hình' },
 }
 
 function fmtTime(t) {
@@ -40,9 +51,10 @@ export default function Audit() {
       <PageHeader title="Nhật ký kiểm toán" subtitle="Vết ai làm gì, khi nào — cho các thao tác nhạy cảm (200 vết mới nhất)" />
 
       <InfoBanner id="audit" title="Nhật ký kiểm toán là gì?">
-        Ghi lại <b>người thực hiện</b>, <b>thời điểm</b> và <b>lý do</b> của các thao tác nhạy cảm:
-        <b> hủy hóa đơn</b>, <b>trả hàng</b>, <b>đổi giá</b>. Giúp truy vết & chống gian lận (vd void-rồi-thủ-tiền).
-        Nhật ký là <b>chỉ thêm</b> (không sửa/xóa được).
+        Ghi lại <b>người thực hiện</b>, <b>thời điểm</b> và <b>chi tiết</b> của các thao tác nhạy cảm:
+        <b> hủy/quá hạn hóa đơn</b>, <b>trả hàng</b>, <b>đổi giá</b>, <b>xác nhận thanh toán</b>, <b>nhập kho</b>,
+        <b> lên kệ / lấy về kho</b>, <b>đóng ca</b>, <b>tài khoản & mật khẩu</b>, <b>đổi cấu hình</b>.
+        Giúp truy vết & chống gian lận (vd void-rồi-thủ-tiền). Nhật ký là <b>chỉ thêm</b> (không sửa/xóa được).
       </InfoBanner>
 
       <Card className="border-0 fill-card">

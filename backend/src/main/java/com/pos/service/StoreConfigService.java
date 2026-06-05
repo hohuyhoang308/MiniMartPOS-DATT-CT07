@@ -13,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreConfigService {
 
     private final StoreConfigRepository repository;
+    private final AuditService auditService;
 
-    public StoreConfigService(StoreConfigRepository repository) {
+    public StoreConfigService(StoreConfigRepository repository, AuditService auditService) {
         this.repository = repository;
+        this.auditService = auditService;
     }
 
     public StoreConfig getEntity() {
@@ -51,6 +53,10 @@ public class StoreConfigService {
         if (req.notifyPayment() != null) c.setNotifyPayment(req.notifyPayment());
         if (req.notifyLowStock() != null) c.setNotifyLowStock(req.notifyLowStock());
         if (req.notifyNewInvoice() != null) c.setNotifyNewInvoice(req.notifyNewInvoice());
-        return StoreConfigResponse.from(repository.save(c));
+        StoreConfig saved = repository.save(c);
+        auditService.log("UPDATE_CONFIG", "STORE_CONFIG",
+                saved.getId() != null ? saved.getId().longValue() : null,
+                "Cập nhật cấu hình cửa hàng / tích hợp");
+        return StoreConfigResponse.from(saved);
     }
 }

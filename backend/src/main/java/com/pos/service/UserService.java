@@ -23,10 +23,12 @@ public class UserService {
 
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
-    public UserService(UserRepository repository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, AuditService auditService) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     public List<UserResponse> findAll() {
@@ -44,7 +46,10 @@ public class UserService {
         u.setFullName(req.fullName());
         u.setRole(req.role());
         u.setStatus(UserStatus.ACTIVE);
-        return UserResponse.from(repository.save(u));
+        User saved = repository.save(u);
+        auditService.log("CREATE_USER", "USER", saved.getId(),
+                "Tạo tài khoản " + saved.getUsername() + " (vai trò " + saved.getRole() + ")");
+        return UserResponse.from(saved);
     }
 
     @Transactional
@@ -57,7 +62,11 @@ public class UserService {
         u.setFullName(req.fullName());
         u.setRole(req.role());
         u.setStatus(req.status());
-        return UserResponse.from(repository.save(u));
+        User saved = repository.save(u);
+        auditService.log("UPDATE_USER", "USER", saved.getId(),
+                "Cập nhật tài khoản " + saved.getUsername() + " → vai trò " + saved.getRole()
+                        + ", trạng thái " + saved.getStatus());
+        return UserResponse.from(saved);
     }
 
     @Transactional
@@ -65,6 +74,7 @@ public class UserService {
         User u = getOrThrow(id);
         u.setPasswordHash(passwordEncoder.encode(req.newPassword()));
         repository.save(u);
+        auditService.log("RESET_PASSWORD", "USER", id, "Đặt lại mật khẩu tài khoản " + u.getUsername());
     }
 
     /** Khóa tài khoản (xóa mềm) — không xóa cứng vì còn tham chiếu phiếu nhập/ca. */
@@ -76,6 +86,7 @@ public class UserService {
         }
         u.setStatus(UserStatus.LOCKED);
         repository.save(u);
+        auditService.log("LOCK_USER", "USER", id, "Khóa tài khoản " + u.getUsername());
     }
 
     private User getOrThrow(Long id) {

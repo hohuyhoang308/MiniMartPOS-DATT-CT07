@@ -45,4 +45,11 @@ public interface BatchStockViewRepository extends JpaRepository<BatchStockView, 
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
     List<BatchStockView> findByShelf(@Param("shelfId") Long shelfId);
+
+    /**
+     * ĐỐI SOÁT TOÀN VẸN: các lô có tồn ÂM (kệ hoặc kho). Bất biến đúng thì danh sách này LUÔN rỗng —
+     * có dòng nghĩa là một mutation tồn đã lọt qua khóa/bị ghi sai. Dùng cho job cảnh báo định kỳ.
+     */
+    @Query("SELECT v FROM BatchStockView v WHERE v.onShelf < 0 OR v.inWarehouse < 0")
+    List<BatchStockView> findNegativeStock();
 }
