@@ -13,6 +13,7 @@ import com.pos.repository.SalesReturnItemRepository;
 import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.UserRepository;
 import com.pos.security.SecurityUtils;
+import com.pos.util.Money;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -145,8 +146,7 @@ public class ReturnService {
         // tránh hoàn dư so với số khách đã trả.
         BigDecimal sub = inv.getSubtotal();
         if (sub != null && sub.signum() > 0 && inv.getTotalAmount() != null) {
-            refund = refund.multiply(inv.getTotalAmount())
-                    .divide(sub, 0, java.math.RoundingMode.HALF_UP);
+            refund = Money.prorate(refund, inv.getTotalAmount(), sub);
         }
         ret.setRefundAmount(refund);
         SalesReturn saved = returnRepository.save(ret);

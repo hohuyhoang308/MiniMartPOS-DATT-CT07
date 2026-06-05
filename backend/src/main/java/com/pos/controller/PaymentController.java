@@ -22,12 +22,6 @@ public class PaymentController {
         this.web2mSyncService = web2mSyncService;
     }
 
-    /** Hiển thị VietQR cho hóa đơn (trả URL ảnh QR + nội dung CK). */
-    @GetMapping("/qr")
-    public ApiResponse<PaymentInfoResponse> qr(@RequestParam Long invoiceId) {
-        return ApiResponse.ok(paymentService.getQr(invoiceId));
-    }
-
     /** FE poll trạng thái thanh toán. */
     @GetMapping("/{invoiceId}/status")
     public ApiResponse<PaymentInfoResponse> status(@PathVariable Long invoiceId) {

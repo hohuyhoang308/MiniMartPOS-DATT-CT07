@@ -16,6 +16,7 @@ import com.pos.repository.*;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.security.SecurityUtils;
 import com.pos.util.CodeGenerator;
+import com.pos.util.Money;
 import com.pos.util.VietQrUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -169,10 +170,9 @@ public class SaleService {
         invoice.setDiscountAmount(totalDiscount);
         BigDecimal total = subtotal.subtract(totalDiscount);
 
-        // VAT trên số tiền THỰC THU: co giãn theo tỉ lệ sau giảm giá (giá đã gồm VAT).
+        // VAT trên số tiền THỰC THU: co giãn theo tỉ lệ sau giảm giá (giá đã gồm VAT). Làm tròn về ĐỒNG.
         if (grossTax.signum() > 0 && subtotal.signum() > 0) {
-            invoice.setTaxAmount(grossTax.multiply(total)
-                    .divide(subtotal, 2, RoundingMode.HALF_UP));
+            invoice.setTaxAmount(Money.prorate(grossTax, total, subtotal));
         } else {
             invoice.setTaxAmount(BigDecimal.ZERO);
         }
@@ -204,16 +204,10 @@ public class SaleService {
         // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô
         allocateStockFifo(invoice, neededByProduct);
 
-        // 8) Tăng lượt dùng KM
-        if (promotion != null) {
-            promotion.setUsedCount(promotion.getUsedCount() + 1);
-            promotionRepository.save(promotion);
-        }
-
-        // 9) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
+        // 8) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
 
-        // 9b) Ghi SỔ CÁI ĐIỂM: dùng điểm (−) trước, rồi tích điểm (+) — số dư sau mỗi bước để đối soát.
+        // 8b) Ghi SỔ CÁI ĐIỂM: dùng điểm (−) trước, rồi tích điểm (+) — số dư sau mỗi bước để đối soát.
         if (customer != null) {
             if (pointsUsed > 0) {
                 loyaltyService.record(customer.getId(), saved.getId(), -pointsUsed, "REDEEM", startPoints - pointsUsed);
@@ -221,6 +215,13 @@ public class SaleService {
             if (pointsEarned > 0) {
                 loyaltyService.record(customer.getId(), saved.getId(), pointsEarned, "EARN", startPoints - pointsUsed + pointsEarned);
             }
+        }
+
+        // 8c) Tăng lượt dùng KM bằng UPDATE ATOMIC có điều kiện usage_limit (chống đua: 2 đơn cùng mã
+        //     không thể cùng vượt giới hạn). Hết lượt do đơn khác vừa dùng → rollback toàn bộ giao dịch.
+        if (promotion != null && promotionRepository.tryConsume(promotion.getId()) == 0) {
+            throw new ConflictException("Mã giảm giá \"" + promotion.getCode()
+                    + "\" vừa hết lượt sử dụng — hãy bỏ mã rồi thử lại");
         }
 
         // 10) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M

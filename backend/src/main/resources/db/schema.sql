@@ -462,9 +462,6 @@ FROM products p
 LEFT JOIN v_batch_stock bs ON bs.product_id = p.id
 GROUP BY p.id, p.barcode, p.name, p.min_stock;
 
-CREATE OR REPLACE VIEW v_low_stock AS
-SELECT * FROM v_product_stock WHERE current_stock <= min_stock;
-
 CREATE OR REPLACE VIEW v_expiring_batches AS
 SELECT  bs.batch_id,
         bs.product_id,

@@ -245,8 +245,7 @@ erDiagram
 | View | Nội dung |
 |---|---|
 | `v_batch_stock` | Tồn **từng lô** tách KHO/KỆ: `on_shelf` = (lên kệ − về kho − **trả hàng**) − đã bán; `in_warehouse` = nhập − (lên kệ − về kho − **trả hàng**); kèm `shelf_id`. **Bảo toàn:** on_shelf + in_warehouse = quantity_remaining |
-| `v_product_stock` | Tồn từng SP: tổng + tách `shelf_stock`/`warehouse_stock` |
-| `v_low_stock` | SP tồn ≤ mức tối thiểu |
+| `v_product_stock` | Tồn từng SP: tổng + tách `shelf_stock`/`warehouse_stock` (lọc `current_stock ≤ min_stock` để ra SP tồn thấp) |
 | `v_expiring_batches` | Lô còn hàng & HSD ≤ 30 ngày |
 | `v_customer_spending` | Tổng chi tiêu + số HĐ của khách |
 | `v_shift_summary` | Doanh thu + số HĐ theo ca |

@@ -26,6 +26,5 @@ export const paymentApi = {
 
 export const returnApi = {
   returnable: (invoiceId) => client.get(`/returns/invoice/${invoiceId}/returnable`).then(unwrap),
-  byInvoice: (invoiceId) => client.get(`/returns/invoice/${invoiceId}`).then(unwrap),
   create: (body) => client.post('/returns', body).then(unwrap),
 }

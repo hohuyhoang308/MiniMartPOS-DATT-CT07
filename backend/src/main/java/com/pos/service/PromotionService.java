@@ -9,11 +9,11 @@ import com.pos.entity.enums.DiscountType;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.PromotionRepository;
+import com.pos.util.Money;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -103,10 +103,8 @@ public class PromotionService {
 
         BigDecimal discount;
         if (p.getDiscountType() == DiscountType.PERCENT) {
-            // VND không có hào → làm tròn về ĐỒNG (scale 0). Tránh tiền lẻ không tiêu được.
-            discount = subtotal.multiply(p.getDiscountValue())
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                    .setScale(2, RoundingMode.UNNECESSARY);
+            // VND không có hào → làm tròn về ĐỒNG (Money). Tránh tiền lẻ không tiêu được.
+            discount = Money.round(subtotal.multiply(p.getDiscountValue()).movePointLeft(2));
         } else {
             discount = p.getDiscountValue();
         }

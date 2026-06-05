@@ -463,10 +463,6 @@ FROM products p
 LEFT JOIN v_batch_stock bs ON bs.product_id = p.id
 GROUP BY p.id, p.barcode, p.name, p.min_stock;
 
--- Sản phẩm tồn thấp (FR8.2)
-CREATE OR REPLACE VIEW v_low_stock AS
-SELECT * FROM v_product_stock WHERE current_stock <= min_stock;
-
 -- Lô còn hàng & cận/quá HSD trong 30 ngày tới (FR8.2)
 CREATE OR REPLACE VIEW v_expiring_batches AS
 SELECT  bs.batch_id,
@@ -635,8 +631,7 @@ INSERT INTO payment_transactions (invoice_id, amount, transfer_content, status) 
 --  KIỂM TRA NHANH
 -- =====================================================================
 -- SELECT * FROM v_batch_stock;        -- tồn từng lô (batch 1 còn 46, batch 4 còn 59)
--- SELECT * FROM v_product_stock;      -- tồn từng sản phẩm
--- SELECT * FROM v_low_stock;          -- Kem Merino tồn 0
+-- SELECT * FROM v_product_stock;      -- tồn từng sản phẩm (lọc WHERE current_stock<=min_stock để xem tồn thấp)
 -- SELECT * FROM v_customer_spending;  -- An: 24500
 -- SELECT * FROM v_shift_summary;      -- ca 1: 24500 + 10000 = 34500
 -- SELECT * FROM v_pending_payments;   -- HĐ HD20260606-0002 chờ đối soát QR

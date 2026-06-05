@@ -11,6 +11,7 @@ import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
+import com.pos.repository.PromotionRepository;
 import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.StoreConfigRepository;
 import org.springframework.data.domain.PageRequest;
@@ -35,19 +36,22 @@ public class InvoiceService {
     private final AuditService auditService;
     private final LoyaltyService loyaltyService;
     private final SalesReturnRepository salesReturnRepository;
+    private final PromotionRepository promotionRepository;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
                           PaymentTransactionRepository paymentRepository,
                           StoreConfigRepository storeConfigRepository,
                           AuditService auditService,
                           LoyaltyService loyaltyService,
-                          SalesReturnRepository salesReturnRepository) {
+                          SalesReturnRepository salesReturnRepository,
+                          PromotionRepository promotionRepository) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.storeConfigRepository = storeConfigRepository;
         this.auditService = auditService;
         this.loyaltyService = loyaltyService;
         this.salesReturnRepository = salesReturnRepository;
+        this.promotionRepository = promotionRepository;
     }
 
     /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
@@ -147,8 +151,8 @@ public class InvoiceService {
             }
         }
         Promotion promo = inv.getPromotion();
-        if (promo != null && promo.getUsedCount() != null && promo.getUsedCount() > 0) {
-            promo.setUsedCount(promo.getUsedCount() - 1);
+        if (promo != null) {
+            promotionRepository.releaseOne(promo.getId()); // giảm lượt dùng KM atomic (không để âm)
         }
     }
 
