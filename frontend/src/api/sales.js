@@ -20,6 +20,8 @@ export const invoiceApi = {
 export const paymentApi = {
   // QR đã trả kèm khi tạo hóa đơn; FE chỉ cần poll trạng thái thanh toán.
   status: (invoiceId) => client.get(`/payments/${invoiceId}/status`).then(unwrap),
+  // Thu ngân xác nhận đã nhận tiền QR (khi chưa khớp tự động qua WEB2M) → hoàn tất hóa đơn.
+  confirm: (invoiceId) => client.post(`/payments/${invoiceId}/confirm`).then(unwrap),
 }
 
 export const returnApi = {

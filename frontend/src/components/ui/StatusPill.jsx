@@ -7,6 +7,7 @@ const MAP = {
   CLOSED: { cls: 'pill-muted', icon: 'bi-lock-fill', label: 'Đã đóng' },
   COMPLETED: { cls: 'pill-success', icon: 'bi-check-circle-fill', label: 'Hoàn tất' },
   CANCELLED: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Đã hủy' },
+  PENDING_PAYMENT: { cls: 'pill-warning', icon: 'bi-hourglass-split', label: 'Chờ thanh toán' },
   PENDING: { cls: 'pill-warning', icon: 'bi-hourglass-split', label: 'Chờ thanh toán' },
   PAID: { cls: 'pill-success', icon: 'bi-check-circle-fill', label: 'Đã thanh toán' },
   EXPIRED: { cls: 'pill-muted', icon: 'bi-clock-history', label: 'Hết hạn' },

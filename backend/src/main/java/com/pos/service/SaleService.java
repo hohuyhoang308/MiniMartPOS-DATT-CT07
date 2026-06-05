@@ -4,6 +4,7 @@ import com.pos.dto.invoice.InvoiceResponse;
 import com.pos.dto.sale.CreateInvoiceRequest;
 import com.pos.dto.sale.SaleItemRequest;
 import com.pos.entity.*;
+import com.pos.entity.enums.InvoiceStatus;
 import com.pos.entity.enums.PaymentMethod;
 import com.pos.entity.enums.PaymentStatus;
 import com.pos.entity.enums.ShiftStatus;
@@ -102,6 +103,11 @@ public class SaleService {
         Invoice invoice = new Invoice();
         invoice.setShift(shift);
         invoice.setPaymentMethod(req.paymentMethod());
+        // QR: chưa nhận tiền ngay → HĐ ở trạng thái CHỜ THANH TOÁN (giữ chỗ tồn nhưng chưa tính doanh thu).
+        // Chỉ chuyển COMPLETED khi WEB2M khớp tiền hoặc thu ngân xác nhận tay. Tiền mặt: COMPLETED ngay.
+        if (req.paymentMethod() == PaymentMethod.QR) {
+            invoice.setStatus(InvoiceStatus.PENDING_PAYMENT);
+        }
 
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal grossTax = BigDecimal.ZERO; // VAT trên giá đã gồm thuế (trước khi giảm)

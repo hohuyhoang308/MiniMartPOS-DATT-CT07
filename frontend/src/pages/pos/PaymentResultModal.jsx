@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, Modal, Spinner } from 'react-bootstrap'
-import client from '../../api/client'
+import client, { errMsg } from '../../api/client'
 import { paymentApi, invoiceApi } from '../../api/sales'
+import { useToast } from '../../context/ToastContext'
 import { formatMoney } from '../../utils/format'
 
-export default function PaymentResultModal({ invoice, onClose }) {
+export default function PaymentResultModal({ invoice, onClose, onPaid }) {
+  const toast = useToast()
   const [payStatus, setPayStatus] = useState(null)
   const [printing, setPrinting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
   const isQr = invoice?.paymentMethod === 'QR'
 
-  // Poll trạng thái thanh toán QR (FE poll như thiết kế UC22)
+  // Poll trạng thái thanh toán QR (FE poll như thiết kế UC22).
+  // Khi nhận PAID (tự động qua WEB2M hoặc xác nhận tay) → báo cha refresh số liệu ca.
   useEffect(() => {
     if (!invoice || !isQr) return
     setPayStatus(invoice.payment?.status || 'PENDING')
@@ -18,11 +22,26 @@ export default function PaymentResultModal({ invoice, onClose }) {
       try {
         const s = await paymentApi.status(invoice.id)
         setPayStatus(s.status)
-        if (s.status === 'PAID') clearInterval(timer)
+        if (s.status === 'PAID') { clearInterval(timer); onPaid?.() }
       } catch { /* bỏ qua */ }
     }, 3000)
     return () => clearInterval(timer)
   }, [invoice, isQr])
+
+  // Thu ngân xác nhận đã nhận tiền QR (khi chưa bật/khớp WEB2M tự động).
+  async function confirmPaid() {
+    setConfirming(true)
+    try {
+      await paymentApi.confirm(invoice.id)
+      setPayStatus('PAID')
+      onPaid?.()
+      toast.success('Đã xác nhận nhận tiền — hóa đơn hoàn tất')
+    } catch (e) {
+      toast.error(errMsg(e, 'Không xác nhận được thanh toán'))
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   async function printPdf() {
     setPrinting(true)
@@ -91,7 +110,17 @@ export default function PaymentResultModal({ invoice, onClose }) {
             <div className="small text-muted mt-1">
               Nội dung CK: <b>{invoice.payment?.transferContent}</b>
             </div>
-            {payStatus !== 'PAID' && <Spinner size="sm" className="mt-2" />}
+            {payStatus !== 'PAID' && (
+              <div className="mt-3">
+                <div className="small text-muted2 mb-2">
+                  <Spinner size="sm" className="me-1" />Đang chờ tiền về (tự đối soát WEB2M)…
+                </div>
+                <Button variant="success" size="sm" onClick={confirmPaid} disabled={confirming}>
+                  {confirming ? <Spinner size="sm" /> : <><i className="bi bi-check2-circle me-1"></i>Xác nhận đã nhận tiền</>}
+                </Button>
+                <div className="small text-muted2 mt-1">Bấm khi đã thấy tiền vào tài khoản (hoặc đợi hệ thống tự xác nhận).</div>
+              </div>
+            )}
           </div>
         )}
       </Modal.Body>

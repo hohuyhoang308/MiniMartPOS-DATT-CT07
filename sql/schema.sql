@@ -1,9 +1,14 @@
 -- =====================================================================
 --  HỆ THỐNG POS CHO CỬA HÀNG TIỆN LỢI
---  Script tạo CSDL MySQL 8 + dữ liệu mẫu
+--  Script tạo CSDL MySQL 8 + dữ liệu mẫu  (BẢN CÀI TAY ĐỘC LẬP / TÀI LIỆU)
 --  Thiết kế chuẩn hóa 3NF, toàn vẹn tham chiếu đầy đủ, không bảng/cột dư thừa.
 --  Xem docs/04_Thiet_ke_CSDL_ERD.md
 --  Cách chạy:  mysql -u root -p < sql/schema.sql   (hoặc Import qua phpMyAdmin)
+--
+--  ⚠️ LƯU Ý: Khi CHẠY ỨNG DỤNG, backend KHÔNG dùng file này. App tự dựng cấu trúc + VIEW
+--     từ 'backend/src/main/resources/db/schema.sql' (spring.sql.init) rồi seed dữ liệu nền
+--     bằng các *DataInitializer trong code. File này chỉ để cài tay/đọc tài liệu —
+--     nếu sửa cấu trúc, phải đồng bộ CẢ HAI file để khỏi lệch.
 -- =====================================================================
 
 DROP DATABASE IF EXISTS pos_convenience_store;
@@ -178,7 +183,7 @@ CREATE TABLE invoices (
     change_amount   DECIMAL(14,2),                         -- tiền thừa
     points_earned   INT NOT NULL DEFAULT 0,                -- điểm tích cho khách ở HĐ này
     points_used     INT NOT NULL DEFAULT 0,                -- điểm khách dùng để giảm trừ ở HĐ này
-    status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    status          ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED',
     tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,       -- phan VAT trong tong
     cancelled_by    BIGINT,                                -- ai hủy (audit)
     cancelled_at    DATETIME,                              -- khi nào hủy
@@ -429,11 +434,11 @@ SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
         (b.quantity_in  - b.transferred) AS in_warehouse
 FROM (
     SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
-            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id LIMIT 1) AS shelf_id,
+            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id ORDER BY st.id LIMIT 1) AS shelf_id,
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id
-                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0)
+                WHERE iib.batch_id = gri.id AND i.status <> 'CANCELLED'), 0)
               - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
                 WHERE rti.batch_id = gri.id), 0) AS sold,
             COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st

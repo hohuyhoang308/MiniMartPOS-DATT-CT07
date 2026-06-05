@@ -105,7 +105,36 @@ public class InvoiceService {
         CustomUserDetails me = SecurityUtils.currentUser();
         if (me != null) inv.setCancelledBy(me.getId());
 
-        // Hoàn điểm cho khách: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng (không để âm) + ghi sổ cái.
+        reverseLoyaltyAndPromo(inv, "CANCEL_REVERSAL");
+
+        Invoice saved = invoiceRepository.save(inv);
+        auditService.log("CANCEL_INVOICE", "INVOICE", saved.getId(),
+                "Hủy HĐ " + saved.getCode() + " (tổng " + saved.getTotalAmount() + "đ). Lý do: " + reason.trim());
+        return InvoiceResponse.from(saved);
+    }
+
+    /**
+     * Tự HỦY hóa đơn QR CHỜ THANH TOÁN khi quá hạn (gọi từ job dọn QR quá hạn).
+     * HĐ chưa từng COMPLETED nên không thể có phiếu trả hàng → an toàn hoàn điểm/KM + tự hoàn tồn (view).
+     * Chỉ tác động lên HĐ đang ở PENDING_PAYMENT (idempotent: bỏ qua nếu đã chuyển trạng thái khác).
+     */
+    @Transactional
+    public void voidUnpaidInvoice(Invoice inv) {
+        if (inv.getStatus() != InvoiceStatus.PENDING_PAYMENT) return;
+        inv.setStatus(InvoiceStatus.CANCELLED);
+        inv.setCancelReason("QR quá hạn — tự hủy (chưa nhận được thanh toán)");
+        inv.setCancelledAt(LocalDateTime.now());
+        reverseLoyaltyAndPromo(inv, "EXPIRE_REVERSAL");
+        invoiceRepository.save(inv);
+        auditService.log("EXPIRE_INVOICE", "INVOICE", inv.getId(),
+                "Tự hủy HĐ " + inv.getCode() + " do QR quá hạn (chưa nhận tiền).");
+    }
+
+    /**
+     * Đảo chiều ảnh hưởng phi-tồn-kho của một hóa đơn khi hủy: gỡ điểm đã tích + TRẢ LẠI điểm đã dùng
+     * (không để âm), ghi sổ cái, và giảm lượt dùng khuyến mãi. Tồn kho tự hoàn qua view (HĐ CANCELLED).
+     */
+    private void reverseLoyaltyAndPromo(Invoice inv, String ledgerReason) {
         Customer customer = inv.getCustomer();
         if (customer != null) {
             int earned = inv.getPointsEarned() != null ? inv.getPointsEarned() : 0;
@@ -114,20 +143,13 @@ public class InvoiceService {
             customer.setLoyaltyPoints(restored);
             int netDelta = used - earned; // đảo chiều: trả lại điểm đã dùng, gỡ điểm đã tích
             if (netDelta != 0) {
-                loyaltyService.record(customer.getId(), inv.getId(), netDelta, "CANCEL_REVERSAL", restored);
+                loyaltyService.record(customer.getId(), inv.getId(), netDelta, ledgerReason, restored);
             }
         }
-
-        // Giảm lượt dùng khuyến mãi (không để âm)
         Promotion promo = inv.getPromotion();
         if (promo != null && promo.getUsedCount() != null && promo.getUsedCount() > 0) {
             promo.setUsedCount(promo.getUsedCount() - 1);
         }
-
-        Invoice saved = invoiceRepository.save(inv);
-        auditService.log("CANCEL_INVOICE", "INVOICE", saved.getId(),
-                "Hủy HĐ " + saved.getCode() + " (tổng " + saved.getTotalAmount() + "đ). Lý do: " + reason.trim());
-        return InvoiceResponse.from(saved);
     }
 
     private Invoice getOrThrow(Long id) {

@@ -152,7 +152,9 @@ CREATE TABLE IF NOT EXISTS invoices (
     change_amount   DECIMAL(14,2),
     points_earned   INT NOT NULL DEFAULT 0,
     points_used     INT NOT NULL DEFAULT 0,
-    status          ENUM('COMPLETED','CANCELLED') NOT NULL DEFAULT 'COMPLETED',
+    -- PENDING_PAYMENT: HĐ QR đã tạo, đang CHỜ xác nhận tiền về (giữ chỗ tồn nhưng CHƯA tính doanh thu).
+    --   QR trả tiền (WEB2M/xác nhận tay) ⇒ COMPLETED; quá hạn ⇒ CANCELLED (tự hoàn tồn + điểm).
+    status          ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED',
     tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,      -- phần VAT trong tổng (giá đã gồm VAT)
     idempotency_key VARCHAR(64) UNIQUE,                    -- chống tạo HĐ trùng khi FE gửi lại do mất phản hồi
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -407,6 +409,11 @@ SET @add_pack := (SELECT IF(
     'ALTER TABLE products ADD COLUMN pack_size INT NOT NULL DEFAULT 1 AFTER tax_rate, ADD COLUMN pack_unit_id BIGINT NULL AFTER pack_size'));
 PREPARE stmt_pk FROM @add_pack; EXECUTE stmt_pk; DEALLOCATE PREPARE stmt_pk;
 
+-- Mở rộng enum trạng thái hóa đơn: thêm PENDING_PAYMENT (HĐ QR chờ xác nhận tiền) cho CSDL cũ.
+-- MODIFY COLUMN an toàn chạy lại nhiều lần (idempotent về kết quả).
+ALTER TABLE invoices
+    MODIFY COLUMN status ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED';
+
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng)
 -- =====================================================================
@@ -422,12 +429,15 @@ SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
         (b.quantity_in  - b.transferred) AS in_warehouse
 FROM (
     SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
-            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id LIMIT 1) AS shelf_id,
-            -- đã bán = phân bổ bán (HĐ COMPLETED) − đã TRẢ HÀNG (trả thì coi như chưa bán)
+            -- shelf_id của lô: theo quy ước "1 lô 1 kệ", lấy phiếu lên kệ ĐẦU TIÊN (ORDER BY st.id)
+            -- để kết quả XÁC ĐỊNH (không phụ thuộc thứ tự lưu của engine).
+            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id ORDER BY st.id LIMIT 1) AS shelf_id,
+            -- đã bán = phân bổ bán (HĐ chưa hủy: COMPLETED hoặc PENDING_PAYMENT giữ chỗ tồn)
+            --          − đã TRẢ HÀNG (trả thì coi như chưa bán)
             COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
                 JOIN invoice_items ii ON ii.id = iib.invoice_item_id
                 JOIN invoices      i  ON i.id  = ii.invoice_id
-                WHERE iib.batch_id = gri.id AND i.status = 'COMPLETED'), 0)
+                WHERE iib.batch_id = gri.id AND i.status <> 'CANCELLED'), 0)
               - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
                 WHERE rti.batch_id = gri.id), 0) AS sold,
             -- lên kệ ròng = lên kệ − lấy về kho − TRẢ HÀNG (hàng trả về KHO, không về kệ)

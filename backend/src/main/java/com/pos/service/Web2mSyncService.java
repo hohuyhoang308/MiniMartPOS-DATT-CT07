@@ -2,10 +2,13 @@ package com.pos.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pos.entity.Invoice;
 import com.pos.entity.PaymentTransaction;
 import com.pos.entity.StoreConfig;
+import com.pos.entity.enums.InvoiceStatus;
 import com.pos.entity.enums.PaymentStatus;
 import com.pos.exception.BadRequestException;
+import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.repository.StoreConfigRepository;
 import org.slf4j.Logger;
@@ -34,6 +37,7 @@ public class Web2mSyncService {
 
     private final StoreConfigRepository storeConfigRepository;
     private final PaymentTransactionRepository paymentRepository;
+    private final InvoiceRepository invoiceRepository;
     private final TelegramService telegramService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -41,10 +45,12 @@ public class Web2mSyncService {
 
     public Web2mSyncService(StoreConfigRepository storeConfigRepository,
                             PaymentTransactionRepository paymentRepository,
+                            InvoiceRepository invoiceRepository,
                             TelegramService telegramService,
                             ObjectMapper objectMapper) {
         this.storeConfigRepository = storeConfigRepository;
         this.paymentRepository = paymentRepository;
+        this.invoiceRepository = invoiceRepository;
         this.telegramService = telegramService;
         this.objectMapper = objectMapper;
     }
@@ -70,6 +76,12 @@ public class Web2mSyncService {
                     pt.setBankReference(extractReference(tx));
                     pt.setPaidAt(LocalDateTime.now());
                     paymentRepository.save(pt);
+                    // Tiền đã về → chuyển HĐ từ CHỜ THANH TOÁN sang HOÀN TẤT (giờ mới tính doanh thu).
+                    Invoice inv = pt.getInvoice();
+                    if (inv.getStatus() == InvoiceStatus.PENDING_PAYMENT) {
+                        inv.setStatus(InvoiceStatus.COMPLETED);
+                        invoiceRepository.save(inv);
+                    }
                     matched++;
                     notifyPaid(pt);
                     break;

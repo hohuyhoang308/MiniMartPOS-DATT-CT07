@@ -8,6 +8,7 @@ import com.pos.entity.enums.InvoiceStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
+import com.pos.repository.ProductRepository;
 import com.pos.repository.SalesReturnItemRepository;
 import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.UserRepository;
@@ -19,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +35,7 @@ public class ReturnService {
     private final SalesReturnRepository returnRepository;
     private final SalesReturnItemRepository returnItemRepository;
     private final UserRepository userRepository;
+    private final ProductRepository productRepository;
     private final AuditService auditService;
     private final LoyaltyService loyaltyService;
 
@@ -40,12 +43,14 @@ public class ReturnService {
                          SalesReturnRepository returnRepository,
                          SalesReturnItemRepository returnItemRepository,
                          UserRepository userRepository,
+                         ProductRepository productRepository,
                          AuditService auditService,
                          LoyaltyService loyaltyService) {
         this.invoiceRepository = invoiceRepository;
         this.returnRepository = returnRepository;
         this.returnItemRepository = returnItemRepository;
         this.userRepository = userRepository;
+        this.productRepository = productRepository;
         this.auditService = auditService;
         this.loyaltyService = loyaltyService;
     }
@@ -81,6 +86,16 @@ public class ReturnService {
 
         Map<Long, InvoiceItem> itemMap = inv.getItems().stream()
                 .collect(Collectors.toMap(InvoiceItem::getId, it -> it));
+
+        // Khóa tồn các sản phẩm bị ảnh hưởng (id TĂNG DẦN để tránh deadlock) TRƯỚC khi ghi phiếu trả:
+        // trả hàng làm THAY ĐỔI tồn (view cộng hàng trả về kho) nên phải tuần tự hóa như bán/lên kệ.
+        req.items().stream()
+                .map(l -> itemMap.get(l.invoiceItemId()))
+                .filter(Objects::nonNull)
+                .map(it -> it.getProduct().getId())
+                .distinct().sorted()
+                .forEach(productRepository::findByIdForUpdate);
+
         Map<Long, Long> returnedPerItem = returnedPerItem(inv.getId());
 
         User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);

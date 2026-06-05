@@ -19,7 +19,9 @@ spring:
 
   jpa:
     hibernate:
-      # none: CSDL đã tạo sẵn bằng sql/schema.sql (gồm cả VIEW) — không để JPA đụng vào.
+      # none: KHÔNG để JPA tự sinh/đụng schema. Cấu trúc + VIEW do spring.sql.init chạy file
+      # 'classpath:db/schema.sql' bên dưới (đây mới là schema CHÍNH THỨC mà app dùng).
+      # File 'sql/schema.sql' ở gốc repo chỉ là bản DDL độc lập để cài tay/đọc tài liệu — app KHÔNG dùng.
       # Có thể đổi sang 'validate' nếu muốn JPA kiểm tra entity khớp bảng (lưu ý: validate
       # đôi khi khó tính với kiểu cột của VIEW như SUM()→DECIMAL/BIGINT).
       ddl-auto: none

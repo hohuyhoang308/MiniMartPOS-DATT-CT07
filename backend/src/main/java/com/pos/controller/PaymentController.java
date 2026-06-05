@@ -34,6 +34,12 @@ public class PaymentController {
         return ApiResponse.ok(paymentService.getStatus(invoiceId));
     }
 
+    /** Thu ngân xác nhận ĐÃ NHẬN tiền QR (khi chưa khớp tự động qua WEB2M) → hoàn tất hóa đơn. */
+    @PostMapping("/{invoiceId}/confirm")
+    public ApiResponse<PaymentInfoResponse> confirm(@PathVariable Long invoiceId) {
+        return ApiResponse.ok("Đã xác nhận thanh toán", paymentService.confirmPaid(invoiceId));
+    }
+
     /** Kích hoạt đối soát WEB2M thủ công (bình thường chạy job nền). */
     @PostMapping("/web2m/sync")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
