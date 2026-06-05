@@ -128,8 +128,10 @@ public class InventoryService {
             if ("C".equals(abc) && "Z".equals(xyz)) needReorder = current <= min;
             if (!needReorder) continue;
 
-            // Tồn mục tiêu: đủ bán theo kỳ dự trữ (C đặt thưa → kỳ dài hơn), không dưới 2× ngưỡng cảnh báo.
-            double targetStock = Math.max(min * 2.0, avgDaily * coverageDays(abc));
+            // Tồn mục tiêu: đủ bán theo kỳ dự trữ (C đặt thưa → kỳ dài hơn). Sàn theo nhóm: A/B giữ 2×
+            // ngưỡng để chắc còn hàng; C chỉ về TỚI ngưỡng (giảm tồn, tránh ôm hàng chậm luân chuyển).
+            double floor = "C".equals(abc) ? min : min * 2.0;
+            double targetStock = Math.max(floor, avgDaily * coverageDays(abc));
             int suggestedQty = (int) Math.max(0, Math.ceil(targetStock - current));
             if (suggestedQty == 0) suggestedQty = Math.max(min, 1); // vẫn nên nhập tối thiểu
 
