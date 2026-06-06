@@ -9,12 +9,17 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.view.ProductStockView;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
+import com.pos.entity.Shelf;
 import com.pos.repository.CategoryRepository;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.repository.ShelfRepository;
 import com.pos.repository.UnitRepository;
 import com.pos.repository.projection.ProductCountRow;
+import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
+
+import java.util.HashMap;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +39,8 @@ public class ProductService {
     private final UnitRepository unitRepository;
     private final ProductStockViewRepository stockRepository;
     private final InvoiceItemRepository invoiceItemRepository;
+    private final BatchStockViewRepository batchStockRepository;
+    private final ShelfRepository shelfRepository;
     private final AuditService auditService;
 
     public ProductService(ProductRepository productRepository,
@@ -41,13 +48,30 @@ public class ProductService {
                           UnitRepository unitRepository,
                           ProductStockViewRepository stockRepository,
                           InvoiceItemRepository invoiceItemRepository,
+                          BatchStockViewRepository batchStockRepository,
+                          ShelfRepository shelfRepository,
                           AuditService auditService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.stockRepository = stockRepository;
         this.invoiceItemRepository = invoiceItemRepository;
+        this.batchStockRepository = batchStockRepository;
+        this.shelfRepository = shelfRepository;
         this.auditService = auditService;
+    }
+
+    /** Bản đồ sản phẩm → mã kệ đang bày (kệ có tồn &gt; 0) — để danh sách/POS biết hàng ở kệ nào. */
+    private Map<Long, String> productShelfCode() {
+        Map<Long, String> byId = shelfRepository.findAll().stream()
+                .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
+        Map<Long, String> byProduct = new HashMap<>();
+        for (var b : batchStockRepository.findAll()) {
+            if (b.getShelfId() != null && b.getOnShelf() != null && b.getOnShelf() > 0) {
+                byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
+            }
+        }
+        return byProduct;
     }
 
     /** Hỗ trợ tối thiểu: cần đồng xuất hiện ≥ ngần này HĐ mới coi là liên kết thật (lọc nhiễu đơn lẻ). */
@@ -103,8 +127,9 @@ public class ProductService {
         List<Product> products = productRepository.search(emptyToNull(keyword), categoryId);
         Map<Long, ProductStockView> stockMap = stockRepository.findAll().stream()
                 .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
+        Map<Long, String> shelfByProduct = productShelfCode();
         return products.stream()
-                .map(p -> ProductResponse.from(p, stockMap.get(p.getId())))
+                .map(p -> ProductResponse.from(p, stockMap.get(p.getId()), shelfByProduct.get(p.getId())))
                 .toList();
     }
 

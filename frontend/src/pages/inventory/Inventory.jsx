@@ -138,7 +138,7 @@ export default function Inventory() {
           ) : (
             <Table hover className="mb-0 align-middle">
               <thead><tr>
-                <th>Sản phẩm</th><th className="text-center">Kệ</th><th className="text-center">Kho</th>
+                <th>Sản phẩm</th><th className="text-center">Tồn kệ</th><th className="text-center">Tồn kho</th>
                 <th className="text-center">Tổng / Min</th><th className="text-center">Trạng thái</th>
               </tr></thead>
               <tbody>
@@ -146,7 +146,12 @@ export default function Inventory() {
                   <tr key={s.productId}>
                     <td className="fw-semibold cursor-pointer" onClick={() => setBatchTarget(s)} title="Xem các lô & HSD">
                       {s.name} <i className="bi bi-card-list text-muted2"></i>
-                      <div className="text-muted2 small">{s.barcode}</div>
+                      <div className="text-muted2 small">
+                        {s.barcode}
+                        {s.shelfCode
+                          ? <> · <i className="bi bi-grid-3x3-gap-fill"></i> Kệ {s.shelfCode}</>
+                          : (s.warehouseStock > 0 ? <> · <span className="text-warning">chưa lên kệ</span></> : '')}
+                      </div>
                     </td>
                     <td className="text-center num"><ShelfCell s={s} /></td>
                     <td className="text-center num">{s.warehouseStock ?? 0}</td>
@@ -192,18 +197,19 @@ function BatchDetailModal({ product, onHide }) {
         <div className="small text-muted2 mb-2">Bán theo <b>FIFO</b> — lô cận hạn (trên cùng) xuất trước.</div>
         {loading ? <Loading /> : (
           <Table size="sm" hover className="mb-0">
-            <thead><tr><th>HSD</th><th className="text-center">Nhập</th><th className="text-center">Kho</th><th className="text-center">Kệ</th><th className="text-center">Còn</th></tr></thead>
+            <thead><tr><th>HSD</th><th className="text-center">Ở kệ</th><th className="text-center">Nhập</th><th className="text-center">Kho</th><th className="text-center">Trên kệ</th><th className="text-center">Còn</th></tr></thead>
             <tbody>
               {batches.map((b) => (
                 <tr key={b.batchId}>
                   <td><ExpiryPill days={b.daysLeft} date={b.expiryDate} /></td>
+                  <td className="text-center">{b.shelfCode ? <span className="pill pill-info">{b.shelfCode}</span> : <span className="text-muted2">—</span>}</td>
                   <td className="text-center num text-muted2">{b.quantityIn}</td>
                   <td className="text-center num">{b.inWarehouse}</td>
                   <td className="text-center num text-success fw-semibold">{b.onShelf}</td>
                   <td className="text-center num fw-semibold">{b.quantityRemaining}</td>
                 </tr>
               ))}
-              {batches.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-box" title="Sản phẩm không còn lô tồn" /></td></tr>}
+              {batches.length === 0 && <tr><td colSpan={6}><EmptyState icon="bi-box" title="Sản phẩm không còn lô tồn" /></td></tr>}
             </tbody>
           </Table>
         )}

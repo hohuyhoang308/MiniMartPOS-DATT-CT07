@@ -235,19 +235,28 @@ function PosBoard({ shift, onShiftClosed }) {
             <div className="soft-card"><EmptyState icon="bi-search" title="Không tìm thấy sản phẩm" /></div>
           ) : (
             <div className="pos-products">
-              {filtered.map((p) => (
-                <div key={p.id} className={`product-tile ${(p.shelfStock ?? 0) <= 0 ? 'disabled' : ''}`} onClick={() => add(p)}>
-                  <div className="pt-thumb">{p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box"></i>}</div>
-                  <div className="pt-name">{p.name}</div>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <span className="pt-price">{formatMoney(p.salePrice)}</span>
-                    <span className={`pill ${(p.shelfStock ?? 0) <= 0 ? 'pill-danger' : (p.shelfStock ?? 0) <= p.minStock ? 'pill-warning' : 'pill-muted'}`}
-                      style={{ fontSize: '.66rem' }} title={`Tồn kệ: ${p.shelfStock ?? 0} (bán được) · Tồn kho: ${p.warehouseStock ?? 0}`}>
-                      {(p.shelfStock ?? 0) <= 0 ? 'Hết kệ' : `Còn ${p.shelfStock}`}
-                    </span>
+              {filtered.map((p) => {
+                const shelf = p.shelfStock ?? 0
+                const out = shelf <= 0
+                const low = !out && shelf <= (p.minStock ?? 0)
+                return (
+                  <div key={p.id} className={`product-tile ${out ? 'disabled' : ''}`} onClick={() => add(p)}
+                    title={`Kệ ${p.shelfCode ?? '—'} · Tồn kệ ${shelf} (bán được) · Tồn kho ${p.warehouseStock ?? 0}`}>
+                    <div className="pt-thumb">
+                      {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box-seam"></i>}
+                      {p.shelfCode && !out && <span className="pt-shelf"><i className="bi bi-geo-alt-fill"></i>{p.shelfCode}</span>}
+                      <span className={`pt-stock ${out ? 'out' : low ? 'low' : ''}`}>
+                        {out ? 'Hết kệ' : <><span className="dot"></span>{shelf}</>}
+                      </span>
+                    </div>
+                    <div className="pt-name">{p.name}</div>
+                    <div className="pt-foot">
+                      <span className="pt-price">{formatMoney(p.salePrice)}</span>
+                      <span className="pt-add" aria-hidden="true"><i className="bi bi-plus-lg"></i></span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

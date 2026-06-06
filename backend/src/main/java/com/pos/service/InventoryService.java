@@ -5,8 +5,10 @@ import com.pos.dto.inventory.ExpiringBatchResponse;
 import com.pos.dto.inventory.ReorderSuggestionResponse;
 import com.pos.dto.inventory.StockResponse;
 import com.pos.entity.Product;
+import com.pos.entity.Shelf;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.repository.ShelfRepository;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ExpiringBatchViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
@@ -46,31 +48,58 @@ public class InventoryService {
     private final InvoiceItemRepository invoiceItemRepository;
     private final ProductRepository productRepository;
     private final BatchStockViewRepository batchStockRepository;
+    private final ShelfRepository shelfRepository;
 
     public InventoryService(ProductStockViewRepository stockRepository,
                             ExpiringBatchViewRepository expiringRepository,
                             InvoiceItemRepository invoiceItemRepository,
                             ProductRepository productRepository,
-                            BatchStockViewRepository batchStockRepository) {
+                            BatchStockViewRepository batchStockRepository,
+                            ShelfRepository shelfRepository) {
         this.stockRepository = stockRepository;
         this.expiringRepository = expiringRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.productRepository = productRepository;
         this.batchStockRepository = batchStockRepository;
+        this.shelfRepository = shelfRepository;
     }
 
-    /** Chi tiết các LÔ còn hàng của 1 sản phẩm (HSD + tồn kho/kệ theo lô). */
+    /** Bản đồ id kệ → mã kệ (vd 6 → "K06"). */
+    private Map<Long, String> shelfCodeById() {
+        return shelfRepository.findAll().stream()
+                .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
+    }
+
+    /** Bản đồ sản phẩm → mã kệ đang bày (kệ có tồn &gt; 0). Mỗi SP thường nằm 1 kệ theo quy ước. */
+    private Map<Long, String> productShelfCode() {
+        Map<Long, String> byId = shelfCodeById();
+        Map<Long, String> byProduct = new HashMap<>();
+        for (var b : batchStockRepository.findAll()) {
+            if (b.getShelfId() != null && b.getOnShelf() != null && b.getOnShelf() > 0) {
+                byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
+            }
+        }
+        return byProduct;
+    }
+
+    /** Chi tiết các LÔ còn hàng của 1 sản phẩm (HSD + tồn kho/kệ + Ở KỆ NÀO theo lô). */
     public List<BatchDetailResponse> productBatches(Long productId) {
+        Map<Long, String> shelfById = shelfCodeById();
         return batchStockRepository.findProductBatches(productId).stream()
-                .map(BatchDetailResponse::from).toList();
+                .map(v -> BatchDetailResponse.from(v, v.getShelfId() != null ? shelfById.get(v.getShelfId()) : null))
+                .toList();
     }
 
     public List<StockResponse> currentStock() {
-        return stockRepository.findAll().stream().map(StockResponse::from).toList();
+        Map<Long, String> byProduct = productShelfCode();
+        return stockRepository.findAll().stream()
+                .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }
 
     public List<StockResponse> lowStock() {
-        return stockRepository.findLowStock().stream().map(StockResponse::from).toList();
+        Map<Long, String> byProduct = productShelfCode();
+        return stockRepository.findLowStock().stream()
+                .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }
 
     public List<ExpiringBatchResponse> expiringBatches() {
