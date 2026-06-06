@@ -38,6 +38,8 @@ public class InventoryService {
     private static final double ORDER_COST = 50_000;
     /** Tỷ lệ chi phí lưu kho/năm trên giá vốn (H) — giả định 20%/năm. */
     private static final double HOLDING_RATE = 0.20;
+    /** Trần EOQ: không đặt quá số ngày bán này trong một lần (tránh EOQ phình cho hàng rẻ/bán chậm). */
+    private static final int EOQ_MAX_COVER_DAYS = 60;
 
     private final ProductStockViewRepository stockRepository;
     private final ExpiringBatchViewRepository expiringRepository;
@@ -144,10 +146,13 @@ public class InventoryService {
             int eoq = (annualDemand > 0 && holding > 0)
                     ? (int) Math.round(Math.sqrt(2 * annualDemand * ORDER_COST / holding))
                     : suggestedQty;
+            // Chặn EOQ phi thực tế cho hàng rẻ/bán chậm (H nhỏ → EOQ phình): không quá ~2 tháng bán.
+            eoq = Math.min(eoq, Math.max(suggestedQty, (int) Math.ceil(avgDaily * EOQ_MAX_COVER_DAYS)));
 
+            // Độ khẩn theo THỜI GIAN còn bán, không theo "dưới ngưỡng": dưới min mà còn nhiều ngày bán → chỉ REORDER.
             String urgency;
             if (current <= 0) urgency = "OUT";
-            else if (current <= min || (daysLeft != null && daysLeft <= LEAD_DAYS)) urgency = "URGENT";
+            else if (daysLeft != null && daysLeft <= LEAD_DAYS) urgency = "URGENT"; // sắp hết trong thời gian giao hàng
             else urgency = "REORDER";
 
             result.add(new ReorderSuggestionResponse(

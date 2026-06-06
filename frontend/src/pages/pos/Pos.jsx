@@ -242,8 +242,8 @@ function PosBoard({ shift, onShiftClosed }) {
                   <div className="d-flex justify-content-between align-items-center">
                     <span className="pt-price">{formatMoney(p.salePrice)}</span>
                     <span className={`pill ${(p.shelfStock ?? 0) <= 0 ? 'pill-danger' : (p.shelfStock ?? 0) <= p.minStock ? 'pill-warning' : 'pill-muted'}`}
-                      style={{ fontSize: '.66rem' }} title={`Kệ ${p.shelfStock ?? 0} · Kho ${p.warehouseStock ?? 0}`}>
-                      {(p.shelfStock ?? 0) <= 0 ? 'Hết kệ' : `Kệ ${p.shelfStock}`}
+                      style={{ fontSize: '.66rem' }} title={`Tồn kệ: ${p.shelfStock ?? 0} (bán được) · Tồn kho: ${p.warehouseStock ?? 0}`}>
+                      {(p.shelfStock ?? 0) <= 0 ? 'Hết kệ' : `Còn ${p.shelfStock}`}
                     </span>
                   </div>
                 </div>
