@@ -8,6 +8,7 @@ import Loading from '../../components/ui/Loading'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import ShelfContentModal from '../../components/inventory/ShelfContentModal'
 import { shelfApi } from '../../api/misc'
+import { categoryApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 
@@ -16,6 +17,7 @@ const EMPTY = { code: '', name: '', capacity: 200, status: 'ACTIVE' }
 export default function ShelfManage() {
   const toast = useToast()
   const [shelves, setShelves] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -26,7 +28,10 @@ export default function ShelfManage() {
     setLoading(true)
     shelfApi.list().then(setShelves).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    categoryApi.list().then(setCategories).catch(() => {}) // để gợi ý "khu vực" theo nhóm hàng
+  }, [])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)
@@ -101,8 +106,16 @@ export default function ShelfManage() {
           <Modal.Body>
             <Form.Group className="mb-3"><Form.Label>Mã kệ *</Form.Label>
               <Form.Control required value={form?.code || ''} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="ví dụ: K01, A1" /></Form.Group>
-            <Form.Group className="mb-3"><Form.Label>Tên khu vực</Form.Label>
-              <Form.Control value={form?.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="ví dụ: Nước giải khát" /></Form.Group>
+            <Form.Group className="mb-3"><Form.Label>Khu vực (nhóm hàng)</Form.Label>
+              <Form.Select value={form?.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })}>
+                <option value="">— Chọn nhóm hàng cho kệ —</option>
+                {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                {form?.name && !categories.some((c) => c.name === form.name) && (
+                  <option value={form.name}>{form.name}</option>
+                )}
+              </Form.Select>
+              <Form.Text className="text-muted2">Lấy từ Danh mục sản phẩm — chọn nhóm hàng mà kệ này sẽ trưng bày.</Form.Text>
+            </Form.Group>
             <Form.Group className="mb-3"><Form.Label>Sức chứa tối đa (nhập 0 nếu không giới hạn)</Form.Label>
               <Form.Control type="number" min={0} value={form?.capacity ?? 0} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} /></Form.Group>
             <Form.Group><Form.Label>Trạng thái</Form.Label>
