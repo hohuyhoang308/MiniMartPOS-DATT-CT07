@@ -88,6 +88,15 @@ public class ShelfService {
                 && shelfRepository.existsByCodeIgnoreCase(req.code().trim())) {
             throw new BadRequestException("Mã kệ đã tồn tại: " + req.code());
         }
+        // NGỪNG DÙNG kệ: chỉ cho phép khi kệ đã hết hàng. Tránh tình trạng "ngừng" mà POS vẫn bán
+        // được hàng còn trên kệ — phải lấy về kho hoặc bán hết trước.
+        if (req.status() == CommonStatus.INACTIVE && s.getStatus() == CommonStatus.ACTIVE) {
+            boolean hasStock = batchStockRepository.findByShelf(id).stream()
+                    .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
+            if (hasStock) {
+                throw new BadRequestException("Kệ còn hàng — hãy lấy hết hàng về kho hoặc bán hết trước khi ngừng dùng kệ.");
+            }
+        }
         apply(s, req);
         return ShelfResponse.from(shelfRepository.save(s), 0, 0);
     }
@@ -130,6 +139,9 @@ public class ShelfService {
         // Khoá tồn sản phẩm TRƯỚC khi đọc tồn kho từ view → không lên kệ vượt tồn kho khi chạy đồng thời.
         productRepository.findByIdForUpdate(productId).orElseThrow(() -> NotFoundException.of("sản phẩm", productId));
         Shelf shelf = getOrThrow(shelfId);
+        if (shelf.getStatus() != CommonStatus.ACTIVE) {
+            throw new BadRequestException("Kệ " + shelf.getCode() + " đang ngừng dùng — không thể lên hàng. Hãy chọn kệ khác.");
+        }
         User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);
 
         // Giới hạn theo SỨC CHỨA của kệ (0 = không giới hạn)
