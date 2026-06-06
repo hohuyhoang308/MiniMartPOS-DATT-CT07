@@ -13,15 +13,15 @@ import { formatMoney } from '../../utils/format'
 const ABC_COLOR = { A: 'success', B: 'warning', C: 'secondary' }
 const XYZ_COLOR = { X: 'primary', Y: 'info', Z: 'danger' }
 const ADVICE = {
-  A: 'Doanh thu chủ lực — kiểm soát chặt, không để hết hàng.',
-  B: 'Quan trọng vừa — theo dõi định kỳ.',
-  C: 'Đuôi dài — nới lỏng, gom đơn để tiết kiệm chi phí đặt.',
+  A: 'Nhóm bán chạy, mang về phần lớn doanh thu. Luôn giữ đủ hàng, đừng để hết.',
+  B: 'Nhóm trung bình. Thỉnh thoảng xem lại để nhập cho hợp lý.',
+  C: 'Nhóm bán ít. Nhập ít thôi và gom đơn cho đỡ tốn.',
 }
 /** Ý nghĩa dễ hiểu của nhóm XYZ (hiện khi rê chuột vào nhãn). */
 const XYZ_MEAN = {
-  X: 'Bán ĐỀU đặn mỗi tuần — dễ dự báo, ít cần tồn dự phòng.',
-  Y: 'Bán DAO ĐỘNG vừa phải theo tuần — cần theo dõi.',
-  Z: 'Bán THẤT THƯỜNG (lúc nhiều lúc ít) — khó dự báo, cần dự phòng nhiều hơn.',
+  X: 'Bán đều đặn mỗi tuần. Dễ đoán, ít cần hàng dự phòng.',
+  Y: 'Bán lúc nhiều lúc ít. Nên theo dõi thường xuyên.',
+  Z: 'Bán thất thường, khó đoán. Cần để nhiều hàng dự phòng hơn.',
 }
 
 export default function AbcXyz() {
@@ -40,29 +40,28 @@ export default function AbcXyz() {
 
   return (
     <div className="page-fill">
-      <PageHeader title="Phân tích ABC / XYZ" subtitle="Phân loại sản phẩm theo doanh thu (Pareto) × độ biến động nhu cầu (90 ngày)" />
+      <PageHeader title="Phân loại hàng bán chạy" subtitle="Xếp hàng theo mức doanh thu và theo bán đều hay thất thường (90 ngày gần nhất)" />
 
-      <InfoBanner id="abcxyz" title="ABC/XYZ là gì? Đọc bảng thế nào?">
+      <InfoBanner id="abcxyz" title="Bảng này nói gì?">
         <div className="mb-2">
-          <b>ABC — xếp theo DOANH THU</b> (quy tắc Pareto 80/20): <b>A</b> = nhóm tạo ~80% doanh thu
-          (ít mặt hàng nhưng quan trọng nhất), <b>B</b> = phần kế tiếp (80–95%), <b>C</b> = phần đuôi còn lại.
+          <b>Cột ABC xếp theo tiền bán được.</b> <b>A</b> là nhóm bán chạy, mang về phần lớn doanh thu.
+          <b> B</b> là nhóm trung bình. <b>C</b> là nhóm bán ít.
         </div>
         <div className="mb-2">
-          <b>XYZ — xếp theo ĐỘ ỔN ĐỊNH nhu cầu.</b> Đo bằng <b>CV = độ lệch chuẩn ÷ trung bình</b> lượng bán
-          <b> mỗi TUẦN</b> (gộp theo tuần để bỏ nhiễu những ngày không phát sinh bán). <b>CV càng nhỏ → bán càng đều</b>:
-          <span className="badge bg-primary mx-1">X</span> đều đặn (CV &lt; 0,5),
-          <span className="badge bg-info mx-1">Y</span> dao động vừa (0,5–1,0),
-          <span className="badge bg-danger mx-1">Z</span> thất thường (≥ 1,0).
+          <b>Cột XYZ cho biết hàng bán đều hay thất thường.</b>
+          <span className="badge bg-primary mx-1">X</span> bán đều đặn,
+          <span className="badge bg-info mx-1">Y</span> bán lúc nhiều lúc ít,
+          <span className="badge bg-danger mx-1">Z</span> bán thất thường, khó đoán.
         </div>
         <div>
-          <b>Phối hợp để quyết định:</b> <b>A·X</b> (bán chạy &amp; đều) → luôn giữ đủ hàng, kiểm soát chặt;
-          <b> C·Z</b> (ít &amp; thất thường) → đặt thưa, gom đơn, giảm tồn để đỡ đọng vốn.
+          <b>Cách dùng đơn giản:</b> hàng vừa bán chạy vừa bán đều thì luôn giữ đủ hàng.
+          Hàng bán ít và thất thường thì nhập ít thôi cho đỡ tồn đọng.
         </div>
       </InfoBanner>
 
       <div className="d-flex justify-content-end mb-3">
         <Button size="sm" onClick={() => navigate('/inventory', { state: { tab: 'suggest' } })}>
-          <i className="bi bi-cart-plus me-1"></i>Đề xuất nhập theo phân loại này
+          <i className="bi bi-cart-plus me-1"></i>Gợi ý nhập hàng theo bảng này
         </Button>
       </div>
 
@@ -82,12 +81,12 @@ export default function AbcXyz() {
         <div className="table-responsive fill-scroll">
           <Table hover className="mb-0 align-middle">
             <thead><tr>
-              <th>Sản phẩm</th><th className="text-end">Doanh thu (90n)</th>
-              <th className="text-end" title="Phần trăm doanh thu của mặt hàng trên tổng">% DT</th>
-              <th className="text-end" title="Doanh thu luỹ kế cộng dồn — dùng để chia nhóm A/B/C">Luỹ kế</th>
+              <th>Sản phẩm</th><th className="text-end">Doanh thu (90 ngày)</th>
+              <th className="text-end" title="Mặt hàng này chiếm bao nhiêu phần trăm trong tổng doanh thu">% doanh thu</th>
+              <th className="text-end" title="Cộng dồn phần trăm doanh thu từ trên xuống, dùng để chia nhóm A/B/C">Cộng dồn</th>
               <th className="text-center">ABC</th>
               <th className="text-end">Đã bán</th>
-              <th className="text-end" title="Hệ số biến động THEO TUẦN (σ/μ): càng nhỏ thì bán càng đều">CV/tuần</th>
+              <th className="text-end" title="Số này càng nhỏ thì hàng bán càng đều, càng lớn thì càng thất thường">Mức đều</th>
               <th className="text-center">XYZ</th>
             </tr></thead>
             <tbody>
@@ -105,7 +104,7 @@ export default function AbcXyz() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-bar-chart" title="Chưa đủ dữ liệu bán hàng để phân tích" /></td></tr>}
+              {rows.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-bar-chart" title="Chưa đủ dữ liệu bán hàng để xếp loại" /></td></tr>}
             </tbody>
           </Table>
         </div>

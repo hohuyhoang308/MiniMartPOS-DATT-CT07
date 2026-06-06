@@ -45,14 +45,14 @@ export default function Suppliers() {
 
   return (
     <div>
-      <PageHeader title="Nhà cung cấp" subtitle="Đối tác nhập hàng cho cửa hàng">
+      <PageHeader title="Nhà cung cấp" subtitle="Nơi cửa hàng lấy hàng về bán">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
       </PageHeader>
 
       <div className="mb-3" style={{ maxWidth: 340 }}>
         <div className="input-group">
           <span className="input-group-text"><i className="bi bi-search"></i></span>
-          <Form.Control placeholder="Tìm theo tên / SĐT…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Form.Control placeholder="Tìm theo tên hoặc số điện thoại…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
 
@@ -82,7 +82,7 @@ export default function Suppliers() {
             </tbody>
           )}
         </Table>
-        {!loading && filtered.length === 0 && <EmptyState icon="bi-truck" title="Chưa có nhà cung cấp" />}
+        {!loading && filtered.length === 0 && <EmptyState icon="bi-truck" title="Chưa có nhà cung cấp nào" />}
       </div>
 
       <Modal show={!!form} onHide={() => setForm(null)} centered>

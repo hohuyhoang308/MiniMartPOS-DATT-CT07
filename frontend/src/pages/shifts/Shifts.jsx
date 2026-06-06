@@ -68,20 +68,21 @@ export default function Shifts() {
 
   return (
     <div>
-      <PageHeader title="Quản lý ca làm việc" subtitle="Theo dõi ca của thu ngân, đối soát quỹ và đóng ca" />
+      <PageHeader title="Quản lý ca làm việc" subtitle="Theo dõi ca của thu ngân, kiểm tiền và đóng ca." />
 
       <InfoBanner id="shifts" title="Cách quản lý ca">
-        Mỗi thu ngân <b>mở 1 ca</b> khi bắt đầu (nhập tiền đầu ca) và <b>đóng ca</b> khi hết phiên — gợi ý chia
-        <b> Ca sáng / chiều / tối</b> theo giờ. <b>Tiền mặt</b> nằm trong két nên cần đối soát; <b>tiền QR/CK</b> vào
-        tài khoản ngân hàng (không tính vào két). Khi đóng ca, hệ thống <b>điền sẵn số tiền dự kiến</b> — nếu khớp chỉ
-        cần bấm <b>Khớp quỹ</b>, không phải đếm lại. Quản lý/chủ có thể <b>đóng hộ</b> ca của thu ngân.
+        Khi bắt đầu làm, mỗi thu ngân <b>mở một ca</b> và nhập số tiền có sẵn trong két. Khi xong việc thì
+        <b> đóng ca</b>. Hệ thống tự chia thành <b>Ca sáng, Ca chiều, Ca tối</b> theo giờ mở ca. <b>Tiền mặt</b> nằm
+        trong két nên cuối ca cần đếm lại cho khớp. Còn <b>tiền chuyển khoản và QR</b> đã vào ngân hàng rồi nên
+        không tính vào két. Khi đóng ca, hệ thống đã <b>điền sẵn số tiền dự kiến</b>. Nếu đếm thấy khớp thì chỉ cần
+        bấm <b>Khớp quỹ</b>, không phải đếm lại. Quản lý hoặc chủ cửa hàng có thể <b>đóng ca giúp</b> thu ngân.
       </InfoBanner>
 
       <Row className="g-3 mb-3 stagger">
         <Col md={3}><StatCard icon="bi-unlock-fill" chip="emerald" label="Ca đang mở" value={stats.open} /></Col>
         <Col md={3}><StatCard icon="bi-clock-history" chip="sky" label="Tổng số ca" value={stats.total} /></Col>
-        <Col md={3}><StatCard icon="bi-cash-stack" chip="violet" label="Doanh thu các ca" value={formatMoney(stats.sales)} /></Col>
-        <Col md={3}><StatCard icon="bi-scale" chip="amber" label="Chênh lệch quỹ (tổng)" value={formatMoney(stats.diff)} /></Col>
+        <Col md={3}><StatCard icon="bi-cash-stack" chip="violet" label="Tổng doanh thu các ca" value={formatMoney(stats.sales)} /></Col>
+        <Col md={3}><StatCard icon="bi-scale" chip="amber" label="Tổng tiền lệch két" value={formatMoney(stats.diff)} /></Col>
       </Row>
 
       <Card className="border-0">
@@ -92,14 +93,14 @@ export default function Shifts() {
         <div className="table-responsive">
           <Table hover className="mb-0 align-middle">
             <thead><tr>
-              <th>Ca</th><th>Thu ngân</th><th>Phiên</th>
-              <th>Mở · Đóng</th><th className="text-center">Thời lượng</th>
-              <th className="text-end">Tiền đầu</th>
+              <th>Ca</th><th>Thu ngân</th><th>Buổi</th>
+              <th>Mở · Đóng</th><th className="text-center">Thời gian làm</th>
+              <th className="text-end">Tiền đầu ca</th>
               <th className="text-end">Tiền mặt bán</th>
-              <th className="text-end">QR/CK</th>
-              <th className="text-end">Dự kiến két</th>
-              <th className="text-end">Đếm thực</th>
-              <th className="text-end">Chênh lệch</th>
+              <th className="text-end">Chuyển khoản / QR</th>
+              <th className="text-end">Dự kiến trong két</th>
+              <th className="text-end">Tiền đếm thực tế</th>
+              <th className="text-end">Tiền lệch</th>
               <th className="text-center">Trạng thái</th>
               <th></th>
             </tr></thead>
@@ -114,7 +115,7 @@ export default function Shifts() {
                     <td className="small text-muted2">{fmtTime(s.openedAt)}<br />{s.closedAt
                       ? fmtTime(s.closedAt)
                       : staleOpen(s)
-                        ? <span className="text-danger fw-semibold"><i className="bi bi-exclamation-triangle-fill me-1"></i>mở qua ngày — nên đóng</span>
+                        ? <span className="text-danger fw-semibold"><i className="bi bi-exclamation-triangle-fill me-1"></i>mở từ hôm trước, nên đóng ca</span>
                         : <span className="text-success">đang mở</span>}</td>
                     <td className="text-center num">{duration(s.openedAt, s.closedAt)}</td>
                     <td className="text-end num">{formatMoney(s.openingCash)}</td>
@@ -134,7 +135,7 @@ export default function Shifts() {
                   </tr>
                 )
               })}
-              {shifts.length === 0 && <tr><td colSpan={13}><EmptyState icon="bi-clock-history" title="Chưa có ca làm việc" /></td></tr>}
+              {shifts.length === 0 && <tr><td colSpan={13}><EmptyState icon="bi-clock-history" title="Chưa có ca làm việc nào" /></td></tr>}
             </tbody>
           </Table>
         </div>

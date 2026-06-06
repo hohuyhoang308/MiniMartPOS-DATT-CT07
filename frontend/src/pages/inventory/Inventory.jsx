@@ -49,29 +49,30 @@ export default function Inventory() {
 
   return (
     <div className="page-fill">
-      <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Tồn theo lô/HSD, đề xuất nhập (EOQ) — đưa hàng lên kệ ở trang Lên kệ" />
+      <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Xem tồn theo từng lô và hạn sử dụng, kèm gợi ý nhập hàng. Việc đưa hàng lên kệ làm ở trang Lên kệ." />
 
-      <InfoBanner id="inventory" title="Đọc bảng tồn kho">
-        Mỗi sản phẩm có tồn <b>KỆ</b> (bán được) và <b>KHO</b> (chưa lên kệ). Bấm <b>tên sản phẩm</b> để xem
-        các <b>lô + HSD</b>. <b>Cận HSD</b>: lô sắp/đã hết hạn — ưu tiên bán. <b>Đề xuất nhập</b> dùng luôn
-        kết quả <b>ABC/XYZ</b> (cột <b>Nhóm</b>): hàng <b>A</b> giữ kỹ hơn (mức phục vụ cao), hàng <b>C·Z</b>
-        đặt thưa & ít tồn; kèm <b>điểm tái đặt</b> và <b>EOQ</b>. Dòng có dấu <i className="bi bi-calendar-x-fill text-warning"></i>
-        là đang có lô <b>cận HSD</b> — nên đẩy bán trước khi nhập thêm. Việc <b>lên kệ</b> làm ở trang <b>"Lên kệ"</b>.
+      <InfoBanner id="inventory" title="Cách đọc bảng tồn kho">
+        Mỗi sản phẩm có hàng ở <b>KỆ</b> (bán được ngay) và ở <b>KHO</b> (chưa đưa lên kệ). Bấm vào
+        <b> tên sản phẩm</b> để xem các lô và hạn sử dụng (HSD). Tab <b>Sắp hết hạn</b> liệt kê những lô
+        sắp hoặc đã hết hạn, nên ưu tiên bán trước. Tab <b>Gợi ý nhập hàng</b> tự gợi ý nên nhập mặt hàng
+        nào dựa trên việc nó bán chạy hay bán ít, bán đều hay thất thường. Dòng có dấu
+        <i className="bi bi-calendar-x-fill text-warning"></i> nghĩa là đang có lô sắp hết hạn, nên đẩy bán
+        trước khi nhập thêm. Việc đưa hàng lên kệ làm ở trang <b>"Lên kệ"</b>.
       </InfoBanner>
 
       <Row className="g-3 mb-3 stagger">
         <Col md={3}><StatCard icon="bi-shop" chip="sky" label="Tổng mặt hàng" value={stock.length} /></Col>
         <Col md={3}><StatCard icon="bi-arrow-up-square-fill" chip="emerald" label="Cần lên kệ" value={shelfLow} /></Col>
         <Col md={3}><StatCard icon="bi-cart-plus" chip="violet" label="Cần nhập hàng" value={suggestions.length} /></Col>
-        <Col md={3}><StatCard icon="bi-calendar-x-fill" chip="rose" label="Lô cận/quá HSD (30 ngày)" value={expiring.length} /></Col>
+        <Col md={3}><StatCard icon="bi-calendar-x-fill" chip="rose" label="Lô sắp hoặc đã hết hạn (30 ngày)" value={expiring.length} /></Col>
       </Row>
 
       <Card className="border-0 fill-card">
         <Card.Body className="pb-0 d-flex justify-content-between align-items-start flex-wrap gap-2">
           <Nav variant="pills" activeKey={tab} onSelect={setTab} className="mb-3 gap-2">
             <Nav.Item><Nav.Link eventKey="all">Tất cả ({stock.length})</Nav.Link></Nav.Item>
-            <Nav.Item><Nav.Link eventKey="suggest">Đề xuất nhập ({suggestions.length})</Nav.Link></Nav.Item>
-            <Nav.Item><Nav.Link eventKey="expiring">Cận HSD ({expiring.length})</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="suggest">Gợi ý nhập hàng ({suggestions.length})</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="expiring">Sắp hết hạn ({expiring.length})</Nav.Link></Nav.Item>
           </Nav>
           {tab === 'all' && shelfLow > 0 && (
             <Button size="sm" variant="soft" onClick={() => navigate('/shelf')}><i className="bi bi-arrow-up me-1"></i>Lên kệ ({shelfLow})</Button>
@@ -85,7 +86,7 @@ export default function Inventory() {
         <div className="table-responsive fill-scroll">
           {tab === 'expiring' ? (
             <Table hover className="mb-0">
-              <thead><tr><th>Sản phẩm</th><th className="text-center">Tồn lô</th><th>HSD</th><th className="text-center">Còn lại</th></tr></thead>
+              <thead><tr><th>Sản phẩm</th><th className="text-center">Còn trong lô</th><th>Hạn sử dụng</th><th className="text-center">Còn mấy ngày</th></tr></thead>
               <tbody>
                 {expiring.map((b) => (
                   <tr key={b.batchId}>
@@ -99,14 +100,16 @@ export default function Inventory() {
                     </td>
                   </tr>
                 ))}
-                {expiring.length === 0 && <tr><td colSpan={4}><EmptyState icon="bi-calendar-check" title="Không có lô cận hạn" /></td></tr>}
+                {expiring.length === 0 && <tr><td colSpan={4}><EmptyState icon="bi-calendar-check" title="Không có lô nào sắp hết hạn" /></td></tr>}
               </tbody>
             </Table>
           ) : tab === 'suggest' ? (
             <Table hover className="mb-0 align-middle">
               <thead><tr>
-                <th>Sản phẩm</th><th className="text-center">Nhóm</th><th className="text-center">Tồn / Min</th><th className="text-center">Bán 30 ngày</th>
-                <th className="text-center">Tái đặt</th><th className="text-center">EOQ</th><th className="text-center">Đề xuất</th><th className="text-center">Độ khẩn</th>
+                <th>Sản phẩm</th><th className="text-center">Nhóm</th><th className="text-center">Tồn / Tối thiểu</th><th className="text-center">Còn bán được</th>
+                <th className="text-center" title="Khi hàng còn xuống tới mức này thì nên nhập thêm">Nên nhập khi còn</th>
+                <th className="text-center" title="Số lượng nên nhập mỗi lần cho tiết kiệm">Nhập mỗi lần</th>
+                <th className="text-center">Nên nhập thêm</th><th className="text-center">Mức cần gấp</th>
               </tr></thead>
               <tbody>
                 {suggestions.map((s) => {
@@ -114,37 +117,37 @@ export default function Inventory() {
                   return (
                     <tr key={s.productId}>
                       <td className="fw-semibold">{s.name}
-                        {s.hasExpiringStock && <i className="bi bi-calendar-x-fill text-warning ms-1" title="Có lô cận/quá HSD — nên đẩy bán trước khi nhập thêm"></i>}
-                        <div className="text-muted2 small">{s.soldLast30} bán · {s.avgDailySold}/ngày</div>
+                        {s.hasExpiringStock && <i className="bi bi-calendar-x-fill text-warning ms-1" title="Đang có lô sắp hết hạn, nên đẩy bán trước khi nhập thêm"></i>}
+                        <div className="text-muted2 small">Đã bán {s.soldLast30} trong 30 ngày · {s.avgDailySold}/ngày</div>
                       </td>
                       <td className="text-center">
                         <span className={`pill ${ABC_CLS[s.abcClass] || 'pill-muted'}`}
-                          title="ABC theo doanh thu · XYZ theo độ ổn định nhu cầu — quyết định mức giữ hàng">
+                          title="Chữ trước cho biết hàng bán chạy hay bán ít, chữ sau cho biết bán đều hay thất thường. Dùng để quyết định nên giữ nhiều hay ít hàng.">
                           {s.abcClass}·{s.xyzClass}
                         </span>
                       </td>
                       <td className="text-center num">{s.currentStock} / {s.minStock}</td>
                       <td className="text-center num">{s.daysUntilStockout != null ? `${s.daysUntilStockout} ngày` : '—'}</td>
-                      <td className="text-center num" title="Điểm tái đặt hàng (đã tính theo mức phục vụ của nhóm ABC)">{s.reorderPoint}</td>
-                      <td className="text-center num text-primary fw-semibold" title="Lượng đặt kinh tế (EOQ)">{s.eoq}</td>
+                      <td className="text-center num" title="Khi hàng còn xuống tới mức này thì nên nhập thêm. Mức này đã tính cao hơn cho nhóm hàng bán chạy.">{s.reorderPoint}</td>
+                      <td className="text-center num text-primary fw-semibold" title="Số lượng nên nhập mỗi lần cho tiết kiệm">{s.eoq}</td>
                       <td className="text-center num fw-bold text-success">+{s.suggestedQty}</td>
                       <td className="text-center"><span className={`pill ${u.cls}`}><i className={`bi ${u.icon}`}></i>{u.label}</span></td>
                     </tr>
                   )
                 })}
-                {suggestions.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-check2-circle" title="Tồn kho ổn — chưa cần nhập thêm" /></td></tr>}
+                {suggestions.length === 0 && <tr><td colSpan={8}><EmptyState icon="bi-check2-circle" title="Hàng còn đủ, chưa cần nhập thêm" /></td></tr>}
               </tbody>
             </Table>
           ) : (
             <Table hover className="mb-0 align-middle">
               <thead><tr>
-                <th>Sản phẩm</th><th className="text-center">Tồn kệ</th><th className="text-center">Tồn kho</th>
-                <th className="text-center">Tổng / Min</th><th className="text-center">Trạng thái</th>
+                <th>Sản phẩm</th><th className="text-center">Ở kệ</th><th className="text-center">Trong kho</th>
+                <th className="text-center">Tổng / Tối thiểu</th><th className="text-center">Trạng thái</th>
               </tr></thead>
               <tbody>
                 {stock.map((s) => (
                   <tr key={s.productId}>
-                    <td className="fw-semibold cursor-pointer" onClick={() => setBatchTarget(s)} title="Xem các lô & HSD">
+                    <td className="fw-semibold cursor-pointer" onClick={() => setBatchTarget(s)} title="Xem các lô và hạn sử dụng">
                       {s.name} <i className="bi bi-card-list text-muted2"></i>
                       <div className="text-muted2 small">
                         {s.barcode}
@@ -164,7 +167,7 @@ export default function Inventory() {
                     </td>
                   </tr>
                 ))}
-                {stock.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-clipboard-check" title="Không có mặt hàng" /></td></tr>}
+                {stock.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-clipboard-check" title="Chưa có mặt hàng nào" /></td></tr>}
               </tbody>
             </Table>
           )}
@@ -194,10 +197,10 @@ function BatchDetailModal({ product, onHide }) {
     <Modal show={!!product} onHide={onHide} centered>
       <Modal.Header closeButton><Modal.Title>Lô hàng · {product.name}</Modal.Title></Modal.Header>
       <Modal.Body>
-        <div className="small text-muted2 mb-2">Bán theo <b>FIFO</b> — lô cận hạn (trên cùng) xuất trước.</div>
+        <div className="small text-muted2 mb-2">Bán lô gần hết hạn trước. Lô ở trên cùng sắp hết hạn nhất, nên bán trước.</div>
         {loading ? <Loading /> : (
           <Table size="sm" hover className="mb-0">
-            <thead><tr><th>HSD</th><th className="text-center">Ở kệ</th><th className="text-center">Nhập</th><th className="text-center">Kho</th><th className="text-center">Trên kệ</th><th className="text-center">Còn</th></tr></thead>
+            <thead><tr><th>Hạn sử dụng</th><th className="text-center">Ở kệ</th><th className="text-center">Đã nhập</th><th className="text-center">Trong kho</th><th className="text-center">Trên kệ</th><th className="text-center">Còn lại</th></tr></thead>
             <tbody>
               {batches.map((b) => (
                 <tr key={b.batchId}>
@@ -209,7 +212,7 @@ function BatchDetailModal({ product, onHide }) {
                   <td className="text-center num fw-semibold">{b.quantityRemaining}</td>
                 </tr>
               ))}
-              {batches.length === 0 && <tr><td colSpan={6}><EmptyState icon="bi-box" title="Sản phẩm không còn lô tồn" /></td></tr>}
+              {batches.length === 0 && <tr><td colSpan={6}><EmptyState icon="bi-box" title="Sản phẩm này không còn lô nào" /></td></tr>}
             </tbody>
           </Table>
         )}

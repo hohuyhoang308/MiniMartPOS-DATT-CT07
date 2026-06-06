@@ -45,14 +45,15 @@ export default function ShelfManage() {
 
   return (
     <div>
-      <PageHeader title="Cấu hình kệ" subtitle="Thiết lập kệ trưng bày vật lý của cửa hàng (việc của quản lý)">
+      <PageHeader title="Cấu hình kệ" subtitle="Khai báo các kệ trưng bày trong cửa hàng. Đây là việc của quản lý.">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
       </PageHeader>
 
-      <InfoBanner id="shelfmanage" title="Cấu hình kệ (quản lý)">
-        Đây là nơi <b>quản lý</b> <b>thêm / sửa / xoá kệ</b> và đặt <b>sức chứa</b> (mã K01, khu vực…). Bấm vào một kệ để
-        xem nó <b>chứa sản phẩm gì</b>, <b>lô/HSD</b> nào và lấy <b>"Về kho"</b> nếu cần. Còn <b>lên kệ / về kho hằng ngày</b>
-        là thao tác của <b>thu ngân</b> ở trang <b>Kệ hàng (lên/về)</b>.
+      <InfoBanner id="shelfmanage" title="Cấu hình kệ (dành cho quản lý)">
+        Đây là nơi <b>quản lý</b> <b>thêm, sửa, xoá kệ</b> và đặt <b>sức chứa</b> cho từng kệ (đặt mã kệ như K01 và tên khu vực).
+        Bấm vào một kệ để xem kệ đang <b>chứa sản phẩm gì</b>, thuộc <b>lô nào, hạn dùng tới đâu</b>, và cất hàng
+        <b> "Về kho"</b> nếu cần. Còn việc <b>lên kệ và về kho mỗi ngày</b> là của <b>thu ngân</b>, làm ở trang
+        <b> Kệ hàng (lên kệ / về kho)</b>.
       </InfoBanner>
 
       <div className="table-wrap fade-up">
@@ -82,7 +83,7 @@ export default function ShelfManage() {
                 </td>
                 <td className="text-center"><StatusPill value={s.status} /></td>
                 <td className="text-end">
-                  <Button size="sm" variant="light" className="me-1" onClick={() => setDetail(s)} title="Xem kệ chứa gì"><i className="bi bi-eye"></i></Button>
+                  <Button size="sm" variant="light" className="me-1" onClick={() => setDetail(s)} title="Xem kệ đang chứa gì"><i className="bi bi-eye"></i></Button>
                   <Button size="sm" variant="light" className="me-1" onClick={() => setForm({ ...s })}><i className="bi bi-pencil"></i></Button>
                   <Button size="sm" variant="light" className="text-danger" onClick={() => setDel(s)}><i className="bi bi-trash"></i></Button>
                 </td>
@@ -99,10 +100,10 @@ export default function ShelfManage() {
           <Modal.Header closeButton><Modal.Title>{form?.id ? 'Sửa kệ' : 'Thêm kệ'}</Modal.Title></Modal.Header>
           <Modal.Body>
             <Form.Group className="mb-3"><Form.Label>Mã kệ *</Form.Label>
-              <Form.Control required value={form?.code || ''} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="vd: K01, A1" /></Form.Group>
-            <Form.Group className="mb-3"><Form.Label>Khu vực / tên</Form.Label>
-              <Form.Control value={form?.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="vd: Nước giải khát" /></Form.Group>
-            <Form.Group className="mb-3"><Form.Label>Sức chứa tối đa (0 = không giới hạn)</Form.Label>
+              <Form.Control required value={form?.code || ''} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="ví dụ: K01, A1" /></Form.Group>
+            <Form.Group className="mb-3"><Form.Label>Tên khu vực</Form.Label>
+              <Form.Control value={form?.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="ví dụ: Nước giải khát" /></Form.Group>
+            <Form.Group className="mb-3"><Form.Label>Sức chứa tối đa (nhập 0 nếu không giới hạn)</Form.Label>
               <Form.Control type="number" min={0} value={form?.capacity ?? 0} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} /></Form.Group>
             <Form.Group><Form.Label>Trạng thái</Form.Label>
               <Form.Select value={form?.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -119,7 +120,7 @@ export default function ShelfManage() {
       <ShelfContentModal shelf={detail} onHide={() => setDetail(null)} onChanged={load} />
 
       <ConfirmModal show={!!del} onHide={() => setDel(null)} onConfirm={remove}
-        title="Xóa kệ" message={`Xóa kệ "${del?.code}"? Không xóa được nếu kệ còn hàng.`} confirmText="Xóa" />
+        title="Xóa kệ" message={`Bạn có chắc muốn xóa kệ "${del?.code}" không? Lưu ý: kệ còn hàng thì không xóa được.`} confirmText="Xóa" />
     </div>
   )
 }

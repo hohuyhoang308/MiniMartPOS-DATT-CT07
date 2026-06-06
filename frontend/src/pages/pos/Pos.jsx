@@ -63,7 +63,7 @@ function OpenShiftPanel({ onOpened }) {
           <Card.Body className="p-4 text-center">
             <div className="login-logo mb-3" style={{ margin: '0 auto' }}><i className="bi bi-clock-history"></i></div>
             <h5 className="fw-bold">Mở ca làm việc</h5>
-            <p className="text-muted2">Tiền đầu ca được điền sẵn theo <b>tiền cuối ca trước</b> — chỉ cần xác nhận, không phải đếm lại.</p>
+            <p className="text-muted2">Tiền đầu ca đã được điền sẵn theo <b>tiền còn lại của ca trước</b>. Bạn chỉ cần xác nhận, không phải đếm lại tiền trong két.</p>
             <InputGroup className="mb-2">
               <InputGroup.Text>Tiền đầu ca</InputGroup.Text>
               <MoneyInput value={openingCash} onChange={setOpeningCash} />
@@ -74,7 +74,7 @@ function OpenShiftPanel({ onOpened }) {
                 {suggested > 0
                   ? <>Gợi ý từ ca trước: <b>{formatMoney(suggested)}</b>{Number(openingCash) !== suggested &&
                       <Button variant="link" size="sm" className="p-0 ms-1 align-baseline" onClick={() => setOpeningCash(String(suggested))}>dùng số này</Button>}</>
-                  : <>Chưa có ca trước — nhập tiền lẻ ban đầu trong két (vd 500.000đ).</>}
+                  : <>Chưa có ca trước. Bạn hãy nhập số tiền lẻ đang có sẵn trong két (ví dụ 500.000đ).</>}
               </div>
             )}
             <Button className="w-100" onClick={open} disabled={loading}>
@@ -128,7 +128,7 @@ function PosBoard({ shift, onShiftClosed }) {
   }, [products, search, selectedCat])
 
   function add(p) {
-    if ((p.shelfStock ?? 0) <= 0) { toast.warning(`"${p.name}" hết hàng trên kệ (cần lên hàng từ kho)`); return }
+    if ((p.shelfStock ?? 0) <= 0) { toast.warning(`"${p.name}" đã hết hàng trên kệ. Cần lấy thêm hàng từ kho ra kệ.`); return }
     cart.addProduct({ ...p, currentStock: p.shelfStock }) // POS chỉ bán phần trên kệ
     refreshRelated(p.id)
     searchRef.current?.focus() // giữ con trỏ ở ô quét để quét liên tục (kể cả khi bấm chuột vào sản phẩm)
@@ -155,12 +155,12 @@ function PosBoard({ shift, onShiftClosed }) {
   async function attachCustomer() {
     if (!phone.trim()) { cart.setCustomer(null); return }
     try { const c = await customerApi.byPhone(phone.trim()); cart.setCustomer(c); toast.success(`Khách: ${c.fullName} · ${c.loyaltyPoints} điểm`) }
-    catch (e) { toast.error(errMsg(e, 'Không tìm thấy khách')) }
+    catch (e) { toast.error(errMsg(e, 'Không tìm thấy khách với số điện thoại này')) }
   }
   async function applyPromo() {
     if (!promoCode.trim()) { cart.setPromo(null); return }
-    try { const r = await promotionApi.validate(promoCode.trim(), cart.subtotal); cart.setPromo({ code: r.code, name: r.name, discountAmount: r.discountAmount }); toast.success(`Áp mã ${r.code}: -${formatMoney(r.discountAmount)}`) }
-    catch (e) { cart.setPromo(null); toast.error(errMsg(e, 'Mã không hợp lệ')) }
+    try { const r = await promotionApi.validate(promoCode.trim(), cart.subtotal); cart.setPromo({ code: r.code, name: r.name, discountAmount: r.discountAmount }); toast.success(`Đã áp mã ${r.code}: giảm ${formatMoney(r.discountAmount)}`) }
+    catch (e) { cart.setPromo(null); toast.error(errMsg(e, 'Mã giảm giá không dùng được')) }
   }
 
   const change = paymentMethod === 'CASH' ? Math.max(0, Number(customerPaid || 0) - cart.total) : 0
@@ -170,7 +170,7 @@ function PosBoard({ shift, onShiftClosed }) {
 
   async function checkout() {
     if (cart.items.length === 0) return
-    if (cashShort) { toast.warning('Tiền khách đưa chưa đủ'); return }
+    if (cashShort) { toast.warning('Tiền khách đưa chưa đủ để thanh toán'); return }
     // Khóa chống trùng: dùng LẠI cùng key khi thử lại đơn này (mất mạng) → server không tạo HĐ thứ 2.
     if (!idemRef.current) idemRef.current = genIdemKey()
     setProcessing(true)
@@ -190,27 +190,25 @@ function PosBoard({ shift, onShiftClosed }) {
       loadProducts()
       shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {})
       toast.success(`Đã tạo hóa đơn ${inv.code}`)
-    } catch (e) { toast.error(errMsg(e, 'Thanh toán thất bại')) } // giữ idemRef để thử lại an toàn
+    } catch (e) { toast.error(errMsg(e, 'Thanh toán không thành công, vui lòng thử lại')) } // giữ idemRef để thử lại an toàn
     finally { setProcessing(false) }
   }
 
   return (
     <div>
       <div className="page-header">
-        <div><h1 className="ph-title">Bán hàng</h1><p className="ph-sub">Quét mã vạch hoặc chọn sản phẩm để thêm vào giỏ</p></div>
+        <div><h1 className="ph-title">Bán hàng</h1><p className="ph-sub">Quét mã vạch hoặc bấm vào sản phẩm để thêm vào giỏ.</p></div>
         <div className="d-flex align-items-center gap-2">
           <span className="pill pill-success"><i className="bi bi-unlock-fill"></i>Ca #{shift.id}</span>
-          <span className="pill pill-info"><i className="bi bi-cash-coin"></i>Doanh thu ca: {formatMoney(shiftInfo.totalSales)} · {shiftInfo.invoiceCount} HĐ</span>
+          <span className="pill pill-info"><i className="bi bi-cash-coin"></i>Doanh thu ca: {formatMoney(shiftInfo.totalSales)} · {shiftInfo.invoiceCount} hóa đơn</span>
           <Button size="sm" variant="light" onClick={() => setShowCalc(true)} title="Máy tính"><i className="bi bi-calculator"></i></Button>
           <Button size="sm" variant="light" onClick={() => setClosing(true)}><i className="bi bi-door-closed me-1"></i>Đóng ca</Button>
         </div>
       </div>
 
       <InfoBanner id="pos" title="Cách bán hàng">
-        <b>Quét mã vạch</b> (gõ rồi Enter) hoặc <b>bấm vào sản phẩm</b> để thêm vào giỏ. Có thể gắn
-        <b> khách thân thiết</b> để <b>tích điểm</b> (1 điểm mỗi 10.000đ) và <b>dùng điểm</b> giảm trừ
-        (1 điểm = 1.000đ), kèm <b>mã giảm giá</b>. Chọn <b>Tiền mặt</b> (dùng nút mệnh giá
-        nhanh để tính tiền thừa) hoặc <b>QR</b>. Cần máy tính tay? Bấm <i className="bi bi-calculator"></i> ở góc trên.
+        <b>Quét mã vạch</b> hoặc <b>bấm vào sản phẩm</b> để thêm vào giỏ. Bạn có thể <b>nhập số điện thoại khách</b> để
+        tích điểm và dùng điểm, và <b>nhập mã giảm giá</b> nếu có. Cuối cùng chọn trả <b>tiền mặt</b> hoặc <b>chuyển khoản (QR)</b>.
       </InfoBanner>
 
       <div className="pos-grid">
@@ -219,7 +217,7 @@ function PosBoard({ shift, onShiftClosed }) {
           <Form onSubmit={onSearchEnter} className="mb-3">
             <InputGroup size="lg">
               <InputGroup.Text><i className="bi bi-upc-scan"></i></InputGroup.Text>
-              <Form.Control ref={searchRef} placeholder="Quét mã vạch (Enter) hoặc tìm tên sản phẩm…"
+              <Form.Control ref={searchRef} placeholder="Quét mã vạch hoặc gõ tên sản phẩm để tìm…"
                 value={search} onChange={(e) => setSearch(e.target.value)} />
             </InputGroup>
           </Form>
@@ -241,7 +239,7 @@ function PosBoard({ shift, onShiftClosed }) {
                 const low = !out && shelf <= (p.minStock ?? 0)
                 return (
                   <div key={p.id} className={`product-tile ${out ? 'disabled' : ''}`} onClick={() => add(p)}
-                    title={`Kệ ${p.shelfCode ?? '—'} · Tồn kệ ${shelf} (bán được) · Tồn kho ${p.warehouseStock ?? 0}`}>
+                    title={`Vị trí kệ ${p.shelfCode ?? '—'} · Còn ${shelf} trên kệ (bán được ngay) · Còn ${p.warehouseStock ?? 0} trong kho`}>
                     <div className="pt-thumb">
                       {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box-seam"></i>}
                       {p.shelfCode && !out && <span className="pt-shelf"><i className="bi bi-geo-alt-fill"></i>{p.shelfCode}</span>}
@@ -294,7 +292,7 @@ function PosBoard({ shift, onShiftClosed }) {
 
               {relatedShow.length > 0 && (
                 <div className="mb-2">
-                  <div className="small text-muted2 mb-1"><i className="bi bi-magic me-1"></i>Thường mua kèm</div>
+                  <div className="small text-muted2 mb-1"><i className="bi bi-magic me-1"></i>Khách hay mua kèm</div>
                   <div className="d-flex flex-wrap gap-1">
                     {relatedShow.map((r) => (
                       <button key={r.id} type="button" className="btn btn-sm btn-soft d-flex align-items-center gap-1"
@@ -310,7 +308,7 @@ function PosBoard({ shift, onShiftClosed }) {
 
               <InputGroup size="sm" className="mb-2">
                 <InputGroup.Text><i className="bi bi-person"></i></InputGroup.Text>
-                <Form.Control placeholder="SĐT khách thân thiết" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Form.Control placeholder="Số điện thoại khách thân thiết" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 <Button variant="outline-primary" onClick={attachCustomer}>Tìm</Button>
               </InputGroup>
               {cart.customer && (
@@ -324,7 +322,7 @@ function PosBoard({ shift, onShiftClosed }) {
                       <Button variant="outline-primary" onClick={() => cart.setRedeemPoints(cart.maxRedeem)}>Tối đa</Button>
                     </InputGroup>
                   ) : (
-                    <div className="small text-muted2">1 điểm = {formatMoney(cart.POINT_VALUE)} — chưa đủ điểm/đơn để đổi.</div>
+                    <div className="small text-muted2">1 điểm = {formatMoney(cart.POINT_VALUE)}. Khách chưa đủ điểm hoặc đơn chưa đủ điều kiện để đổi.</div>
                   )}
                   {cart.effectiveRedeem > 0 && <div className="small text-success mt-1"><i className="bi bi-coin me-1"></i>Đổi {cart.effectiveRedeem} điểm = -{formatMoney(cart.redeemValue)}</div>}
                 </div>
@@ -349,7 +347,7 @@ function PosBoard({ shift, onShiftClosed }) {
               <div className="d-flex gap-2 mb-2">
                 {['CASH', 'QR'].map((m) => (
                   <button key={m} type="button" className={`btn flex-grow-1 ${paymentMethod === m ? 'btn-primary' : 'btn-light'}`} onClick={() => setPaymentMethod(m)}>
-                    <i className={`bi ${m === 'CASH' ? 'bi-cash-stack' : 'bi-qr-code'} me-1`}></i>{m === 'CASH' ? 'Tiền mặt' : 'QR'}
+                    <i className={`bi ${m === 'CASH' ? 'bi-cash-stack' : 'bi-qr-code'} me-1`}></i>{m === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản (QR)'}
                   </button>
                 ))}
               </div>
@@ -367,8 +365,8 @@ function PosBoard({ shift, onShiftClosed }) {
                       <button key={v} type="button" className="btn btn-sm btn-light" onClick={() => setCustomerPaid(String(v))}>{(v / 1000)}k</button>
                     ))}
                   </div>
-                  <div className="d-flex justify-content-between small mb-2"><span>Tiền thừa</span>
-                    <span className={cashShort ? 'text-danger fw-semibold' : 'text-success fw-semibold'}>{cashShort ? 'Chưa đủ' : formatMoney(change)}</span></div>
+                  <div className="d-flex justify-content-between small mb-2"><span>Tiền thừa trả khách</span>
+                    <span className={cashShort ? 'text-danger fw-semibold' : 'text-success fw-semibold'}>{cashShort ? 'Khách đưa chưa đủ' : formatMoney(change)}</span></div>
                 </>
               )}
 

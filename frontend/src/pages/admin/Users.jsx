@@ -52,16 +52,16 @@ export default function Users() {
 
   return (
     <div>
-      <PageHeader title="Quản lý tài khoản" subtitle="Nhân viên & phân quyền hệ thống">
+      <PageHeader title="Quản lý tài khoản" subtitle="Tài khoản nhân viên và quyền của từng người">
         <Button onClick={() => setForm({ username: '', password: '', fullName: '', role: 'CASHIER' })}>
           <i className="bi bi-person-plus me-1"></i>Thêm tài khoản
         </Button>
       </PageHeader>
 
-      <InfoBanner id="users" title="Phân quyền tài khoản">
-        <b>Chủ cửa hàng</b> toàn quyền · <b>Quản lý</b> lo sản phẩm/kho/báo cáo · <b>Thu ngân</b> chỉ bán hàng.
-        Dùng <i className="bi bi-key"></i> để đặt lại mật khẩu, <i className="bi bi-lock"></i> để khóa tài khoản
-        (không thể tự khóa chính mình). Tài khoản bị khóa sẽ không đăng nhập được.
+      <InfoBanner id="users" title="Các vai trò và quyền">
+        <b>Chủ cửa hàng</b>: toàn quyền. <b>Quản lý</b>: lo sản phẩm, kho và xem báo cáo. <b>Thu ngân</b>: chỉ bán hàng.
+        Bấm <i className="bi bi-key"></i> để đặt lại mật khẩu, bấm <i className="bi bi-lock"></i> để khóa tài khoản
+        (bạn không thể tự khóa chính mình). Tài khoản đã khóa sẽ không đăng nhập được.
       </InfoBanner>
 
       <div className="table-wrap fade-up">

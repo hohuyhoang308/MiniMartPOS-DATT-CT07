@@ -18,7 +18,7 @@ const EMPTY = {
 
 function StockBadge({ stock, min }) {
   if (stock <= 0) return <span className="pill pill-danger"><i className="bi bi-x-octagon-fill"></i>Hết hàng</span>
-  if (stock <= min) return <span className="pill pill-warning"><i className="bi bi-exclamation-triangle-fill"></i>{stock} · thấp</span>
+  if (stock <= min) return <span className="pill pill-warning"><i className="bi bi-exclamation-triangle-fill"></i>{stock} · sắp hết</span>
   return <span className="pill pill-success"><i className="bi bi-check-circle-fill"></i>{stock}</span>
 }
 
@@ -87,21 +87,21 @@ export default function Products() {
 
   return (
     <div>
-      <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán & mức tồn cảnh báo">
+      <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán và mức báo sắp hết">
         <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
       </PageHeader>
 
-      <InfoBanner id="products" title="Quản lý sản phẩm thế nào?">
-        Mỗi mặt hàng cần <b>mã vạch</b> (để quét nhanh ở POS), thuộc một <b>danh mục</b> và <b>đơn vị tính</b>.
-        Đặt <b>mức tồn tối thiểu</b> để hệ thống tự cảnh báo khi sắp hết. Cột <b>Tồn kho</b> được tính tự động
-        từ các phiếu nhập — muốn tăng tồn, hãy vào mục <b>Nhập kho</b>.
+      <InfoBanner id="products" title="Cách quản lý sản phẩm">
+        Mỗi mặt hàng cần có <b>mã vạch</b> (để quét nhanh khi bán), thuộc một <b>danh mục</b> và một <b>đơn vị tính</b>.
+        Hãy đặt <b>mức tồn tối thiểu</b> để máy tự báo cho bạn khi hàng sắp hết. Cột <b>Tồn kho</b> được máy tự tính
+        từ các lần nhập hàng. Muốn tăng tồn kho, bạn vào mục <b>Nhập kho</b>.
       </InfoBanner>
 
       <Row className="g-2 mb-3">
         <Col md={5}>
           <div className="input-group">
             <span className="input-group-text"><i className="bi bi-upc-scan"></i></span>
-            <Form.Control placeholder="Tìm theo tên hoặc mã vạch…" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+            <Form.Control placeholder="Tìm theo tên hàng hoặc mã vạch…" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
           </div>
         </Col>
         <Col md={3}>
@@ -152,7 +152,7 @@ export default function Products() {
             </tbody>
           )}
         </Table>
-        {!loading && list.length === 0 && <EmptyState icon="bi-box-seam" title="Không có sản phẩm" hint="Thử đổi từ khóa hoặc thêm sản phẩm mới" />}
+        {!loading && list.length === 0 && <EmptyState icon="bi-box-seam" title="Chưa có sản phẩm nào" hint="Thử tìm từ khác hoặc bấm Thêm sản phẩm" />}
       </div>
 
       <Modal show={!!form} onHide={() => setForm(null)} centered size="lg">
@@ -180,9 +180,9 @@ export default function Products() {
             <Row>
               <Col md={3}><Form.Group className="mb-3"><Form.Label>Giá vốn</Form.Label>
                 <Form.Control type="number" min={0} value={form?.costPrice} onChange={set('costPrice')} /></Form.Group></Col>
-              <Col md={3}><Form.Group className="mb-3"><Form.Label>Giá bán * <span className="text-muted2 small">(gồm VAT)</span></Form.Label>
+              <Col md={3}><Form.Group className="mb-3"><Form.Label>Giá bán * <span className="text-muted2 small">(đã gồm VAT)</span></Form.Label>
                 <Form.Control type="number" min={0} required value={form?.salePrice} onChange={set('salePrice')} /></Form.Group></Col>
-              <Col md={3}><Form.Group className="mb-3"><Form.Label>Thuế GTGT %</Form.Label>
+              <Col md={3}><Form.Group className="mb-3"><Form.Label>Thuế VAT %</Form.Label>
                 <Form.Select value={form?.taxRate} onChange={set('taxRate')}>
                   <option value={0}>0%</option><option value={8}>8%</option><option value={10}>10%</option>
                 </Form.Select></Form.Group></Col>
@@ -190,26 +190,26 @@ export default function Products() {
                 <Form.Control type="number" min={0} value={form?.minStock} onChange={set('minStock')} /></Form.Group></Col>
             </Row>
             <Row>
-              <Col md={6}><Form.Group className="mb-3"><Form.Label>Đơn vị mua (thùng/lốc)</Form.Label>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Đơn vị mua vào (thùng/lốc)</Form.Label>
                 <Form.Select value={form?.packUnitId} onChange={set('packUnitId')}>
                   <option value="">— chỉ bán lẻ —</option>
                   {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </Form.Select></Form.Group></Col>
-              <Col md={6}><Form.Group className="mb-3"><Form.Label>Quy cách: 1 đơn vị mua = ? đơn vị bán</Form.Label>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Quy đổi đơn vị: 1 thùng = mấy lon (cái)?</Form.Label>
                 <Form.Control type="number" min={1} value={form?.packSize} onChange={set('packSize')}
                   disabled={!form?.packUnitId} placeholder="vd: 24 (1 thùng = 24 lon)" /></Form.Group></Col>
             </Row>
             <Row className="align-items-end">
-              <Col md={8}><Form.Group className="mb-3"><Form.Label>Ảnh (URL)</Form.Label>
+              <Col md={8}><Form.Group className="mb-3"><Form.Label>Đường dẫn ảnh sản phẩm</Form.Label>
                 <Form.Control value={form?.imageUrl || ''} onChange={set('imageUrl')} placeholder="https://…" /></Form.Group></Col>
               <Col md={4}><Form.Group className="mb-3"><Form.Label>Trạng thái</Form.Label>
                 <Form.Select value={form?.status} onChange={set('status')}>
-                  <option value="ACTIVE">Đang kinh doanh</option><option value="INACTIVE">Ngừng</option>
+                  <option value="ACTIVE">Đang bán</option><option value="INACTIVE">Ngừng bán</option>
                 </Form.Select></Form.Group></Col>
             </Row>
             {form && (
               <div className="soft-card p-2 px-3 small text-muted2 d-flex justify-content-between">
-                <span>Lợi nhuận / sản phẩm:</span>
+                <span>Lãi mỗi sản phẩm:</span>
                 <span className={margin >= 0 ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>{formatMoney(margin)}</span>
               </div>
             )}
@@ -222,7 +222,7 @@ export default function Products() {
       </Modal>
 
       <ConfirmModal show={!!del} onHide={() => setDel(null)} onConfirm={remove}
-        title="Xóa sản phẩm" message={`Xóa "${del?.name}"? Không thể xóa nếu sản phẩm đã phát sinh giao dịch.`}
+        title="Xóa sản phẩm" message={`Xóa "${del?.name}"? Không xóa được nếu sản phẩm đã từng được bán.`}
         confirmText="Xóa" />
     </div>
   )

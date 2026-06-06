@@ -53,28 +53,28 @@ export default function CloseShiftModal({ shift, onHide, onClosed, refetchCurren
     <Modal show={!!shift} onHide={onHide} centered>
       <Form onSubmit={submit}>
         <Modal.Header closeButton>
-          <Modal.Title>Đóng ca #{info?.id}{info?.cashierName ? ` · ${info.cashierName}` : ''} — đối soát quỹ</Modal.Title>
+          <Modal.Title>Đóng ca #{info?.id}{info?.cashierName ? ` · ${info.cashierName}` : ''} — kiểm tiền cuối ca</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="soft-card p-3 mb-3">
-            <Recon label="Tiền đầu ca" value={info?.openingCash} />
-            <Recon label="Tiền mặt bán trong ca" value={info?.cashSales} icon="bi-plus-lg" />
+            <Recon label="Tiền có sẵn trong két đầu ca" value={info?.openingCash} />
+            <Recon label="Tiền mặt thu được trong ca" value={info?.cashSales} icon="bi-plus-lg" />
             {Number(info?.cashRefunds || 0) > 0 && (
-              <Recon label="Tiền hoàn trả hàng" value={info.cashRefunds} icon="bi-dash-lg" />
+              <Recon label="Tiền mặt trả lại khách (hoàn hàng)" value={info.cashRefunds} icon="bi-dash-lg" />
             )}
             <hr className="my-2" />
             <Recon label="Tiền mặt dự kiến trong két" value={expected} strong />
             <div className="d-flex justify-content-between text-muted2 small mt-2">
-              <span><i className="bi bi-qr-code me-1"></i>Tiền QR/CK (vào ngân hàng, không tính két)</span>
+              <span><i className="bi bi-qr-code me-1"></i>Tiền chuyển khoản / QR (đã vào ngân hàng, không tính vào két)</span>
               <span className="num">{formatMoney(info?.qrSales)}</span>
             </div>
             {info?.totalSales != null && (
-              <div className="text-muted2 small">Doanh thu ca: <b>{formatMoney(info.totalSales)}</b> · {info.invoiceCount} HĐ</div>
+              <div className="text-muted2 small">Tổng doanh thu cả ca: <b>{formatMoney(info.totalSales)}</b> · {info.invoiceCount} hóa đơn</div>
             )}
           </div>
 
           <div className="d-flex justify-content-between align-items-end mb-1">
-            <Form.Label className="mb-0">Tiền mặt đếm thực tế trong két</Form.Label>
+            <Form.Label className="mb-0">Tiền mặt đếm được thực tế trong két</Form.Label>
             <Button size="sm" variant="outline-primary" onClick={() => setCash(String(expected))}>
               <i className="bi bi-magic me-1"></i>Khớp quỹ
             </Button>
@@ -83,14 +83,14 @@ export default function CloseShiftModal({ shift, onHide, onClosed, refetchCurren
             <MoneyInput autoFocus value={cash} onChange={setCash} />
             <InputGroup.Text>đ</InputGroup.Text>
           </InputGroup>
-          <div className="small text-muted2 mt-1">Không cần đếm lại nếu khớp — bấm <b>Khớp quỹ</b> để dùng số dự kiến.</div>
+          <div className="small text-muted2 mt-1">Nếu tiền trong két đã khớp, bạn không cần đếm lại. Chỉ cần bấm <b>Khớp quỹ</b> để lấy đúng số tiền dự kiến.</div>
 
           <div className="d-flex justify-content-between align-items-center mt-3">
-            <span className="fw-semibold">Chênh lệch</span>
+            <span className="fw-semibold">Tiền lệch</span>
             {diff === 0
               ? <span className="pill pill-success"><i className="bi bi-check-circle-fill"></i>Khớp quỹ</span>
               : <span className={`fw-bold ${diff > 0 ? 'text-success' : 'text-danger'}`}>
-                  {diff > 0 ? `Thừa +${formatMoney(diff)}` : `Thiếu ${formatMoney(diff)}`}
+                  {diff > 0 ? `Dư +${formatMoney(diff)}` : `Thiếu ${formatMoney(diff)}`}
                 </span>}
           </div>
         </Modal.Body>

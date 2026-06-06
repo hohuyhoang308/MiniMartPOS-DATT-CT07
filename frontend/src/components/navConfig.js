@@ -13,7 +13,7 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/dashboard', icon: 'bi-grid-1x2-fill', label: 'Tổng quan', roles: ['ADMIN', 'MANAGER'] },
       { to: '/reports', icon: 'bi-bar-chart-line-fill', label: 'Báo cáo doanh thu', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/abc-xyz', icon: 'bi-bar-chart-steps', label: 'Phân tích ABC/XYZ', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/abc-xyz', icon: 'bi-bar-chart-steps', label: 'Phân loại mặt hàng (ABC/XYZ)', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -21,7 +21,7 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/pos', icon: 'bi-bag-check-fill', label: 'Bán hàng (POS)', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
       { to: '/invoices', icon: 'bi-receipt', label: 'Hóa đơn', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
-      { to: '/shelf', icon: 'bi-arrow-up-square-fill', label: 'Kệ hàng (lên/về)', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
+      { to: '/shelf', icon: 'bi-arrow-up-square-fill', label: 'Lên kệ / lấy về kho', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
       { to: '/customers', icon: 'bi-people-fill', label: 'Khách hàng', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
       { to: '/shifts', icon: 'bi-clock-history', label: 'Ca làm việc', roles: ['ADMIN', 'MANAGER'] },
     ],
@@ -39,14 +39,14 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/suppliers', icon: 'bi-truck', label: 'Nhà cung cấp', roles: ['ADMIN', 'MANAGER'] },
       { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & cảnh báo', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & hàng sắp hết', roles: ['ADMIN', 'MANAGER'] },
       { to: '/shelves', icon: 'bi-grid-3x3-gap-fill', label: 'Cấu hình kệ', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
     title: 'Hệ thống',
     items: [
-      { to: '/audit', icon: 'bi-shield-check', label: 'Nhật ký kiểm toán', roles: ['ADMIN'] },
+      { to: '/audit', icon: 'bi-shield-check', label: 'Nhật ký thao tác', roles: ['ADMIN'] },
       { to: '/users', icon: 'bi-person-badge-fill', label: 'Tài khoản', roles: ['ADMIN'] },
       { to: '/settings', icon: 'bi-gear-fill', label: 'Cấu hình', roles: ['ADMIN'] },
     ],

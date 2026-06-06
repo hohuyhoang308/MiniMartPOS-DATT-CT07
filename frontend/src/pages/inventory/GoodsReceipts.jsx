@@ -46,7 +46,7 @@ export default function GoodsReceipts() {
       const p = products.find((x) => x.id === pf.productId)
       return { productId: String(pf.productId), quantity: pf.quantity || 1, importPrice: p?.costPrice ?? 0, expiryDate: '' }
     })
-    setForm({ supplierId: '', note: 'Nhập theo đề xuất tồn kho', updateCostPrice: true, items: items.length ? items : [emptyLine()] })
+    setForm({ supplierId: '', note: 'Nhập hàng theo gợi ý của hệ thống', updateCostPrice: true, items: items.length ? items : [emptyLine()] })
     setCreating(true)
     navigate(location.pathname, { replace: true, state: null }) // tránh lặp khi back/refresh
   }, [products, location.state, location.pathname, navigate])
@@ -60,8 +60,8 @@ export default function GoodsReceipts() {
 
   async function submit(e) {
     e.preventDefault()
-    if (!form.supplierId) { toast.warning('Chọn nhà cung cấp'); return }
-    if (form.items.some((it) => !it.productId)) { toast.warning('Chọn sản phẩm cho mọi dòng'); return }
+    if (!form.supplierId) { toast.warning('Vui lòng chọn nhà cung cấp'); return }
+    if (form.items.some((it) => !it.productId)) { toast.warning('Vui lòng chọn sản phẩm cho tất cả các dòng'); return }
     setSaving(true)
     try {
       await receiptApi.create({
@@ -77,21 +77,22 @@ export default function GoodsReceipts() {
           }
         }),
       })
-      toast.success('Đã lập phiếu nhập, tồn kho đã tăng')
+      toast.success('Đã lập phiếu nhập. Hàng trong kho đã được cộng thêm.')
       setCreating(false); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }
 
   return (
     <div>
-      <PageHeader title="Nhập kho" subtitle="Lập phiếu nhập theo lô — tự động cộng tồn & ghi HSD">
+      <PageHeader title="Nhập kho" subtitle="Lập phiếu mỗi khi nhận hàng về. Hệ thống tự cộng hàng vào kho và ghi nhớ hạn sử dụng.">
         <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
       </PageHeader>
 
       <InfoBanner id="receipts" title="Nhập kho hoạt động ra sao?">
-        Mỗi phiếu nhập tạo các <b>lô hàng</b> với <b>giá nhập</b> và <b>hạn sử dụng</b> riêng; lưu phiếu là
-        <b> tồn kho tự động tăng</b>. Bật “Cập nhật giá vốn” để lấy giá nhập mới làm giá vốn của sản phẩm
-        (dùng tính lợi nhuận). Bấm vào một dòng để xem chi tiết phiếu.
+        Mỗi lần nhận hàng, bạn lập một phiếu nhập. Mỗi phiếu sẽ tạo ra các <b>lô hàng</b>, mỗi lô có
+        <b> giá nhập</b> và <b>hạn sử dụng</b> riêng. Khi bạn lưu phiếu, <b>hàng trong kho tự động tăng lên</b>.
+        Nếu bật ô <b>"Cập nhật giá vốn"</b>, hệ thống sẽ lấy giá nhập lần này làm giá vốn mới cho sản phẩm,
+        dùng để tính lãi sau này. Bấm vào một dòng để xem chi tiết phiếu.
       </InfoBanner>
 
       <div className="table-wrap fade-up">
@@ -113,7 +114,7 @@ export default function GoodsReceipts() {
             </tbody>
           )}
         </Table>
-        {!loading && list.length === 0 && <EmptyState icon="bi-box-arrow-in-down" title="Chưa có phiếu nhập" />}
+        {!loading && list.length === 0 && <EmptyState icon="bi-box-arrow-in-down" title="Chưa có phiếu nhập nào" />}
       </div>
 
       {/* Tạo phiếu */}
@@ -130,13 +131,13 @@ export default function GoodsReceipts() {
               <Col md={5}><Form.Label>Ghi chú</Form.Label>
                 <Form.Control value={form?.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Col>
               <Col md={2} className="d-flex align-items-end">
-                <Form.Check label="Cập nhật giá vốn" checked={form?.updateCostPrice}
+                <Form.Check label="Cập nhật giá vốn theo giá nhập này" checked={form?.updateCostPrice}
                   onChange={(e) => setForm({ ...form, updateCostPrice: e.target.checked })} />
               </Col>
             </Row>
 
             <Table size="sm" className="align-middle">
-              <thead><tr><th style={{ width: '34%' }}>Sản phẩm</th><th>Số lượng</th><th>ĐV nhập</th><th>Giá nhập</th><th>HSD</th><th className="text-end">Thành tiền</th><th></th></tr></thead>
+              <thead><tr><th style={{ width: '34%' }}>Sản phẩm</th><th>Số lượng</th><th>Đơn vị nhập</th><th>Giá nhập</th><th>HSD</th><th className="text-end">Thành tiền</th><th></th></tr></thead>
               <tbody>
                 {form?.items.map((it, idx) => {
                   const lp = products.find((x) => String(x.id) === String(it.productId))

@@ -152,16 +152,16 @@ export default function Reports() {
 
   return (
     <div>
-      <PageHeader title="Báo cáo doanh thu & lợi nhuận" subtitle="Phân tích theo ngày / tuần / tháng / năm & ca làm việc">
+      <PageHeader title="Báo cáo doanh thu & lợi nhuận" subtitle="Xem theo ngày, tuần, tháng, năm và theo từng ca làm việc">
         <Button variant="soft" onClick={exportExcel} disabled={exporting}>
           <i className="bi bi-file-earmark-excel me-1"></i>{exporting ? 'Đang xuất…' : 'Xuất Excel'}
         </Button>
       </PageHeader>
 
-      <InfoBanner id="reports" title="Xem báo cáo">
-        Chọn <b>khoảng thời gian</b> và <b>cách gộp</b> (ngày/tuần/tháng/năm) rồi bấm “Xem báo cáo”.
-        <b> Lợi nhuận</b> = doanh thu − giá vốn hàng đã bán. Bảng dưới thống kê doanh thu & <b>đối soát quỹ</b>
-        theo từng ca / thu ngân. Bấm <b>Xuất Excel</b> để tải báo cáo về máy.
+      <InfoBanner id="reports" title="Cách xem báo cáo">
+        Chọn <b>khoảng thời gian</b> và <b>cách xem</b> (theo ngày, tuần, tháng hay năm) rồi bấm "Xem báo cáo".
+        <b> Lợi nhuận</b> là tiền bán được trừ đi tiền vốn của số hàng đã bán. Bảng bên dưới cho biết doanh thu
+        và việc kiểm tiền của từng ca, từng thu ngân. Bấm <b>Xuất Excel</b> để tải báo cáo về máy.
       </InfoBanner>
 
       <Card className="border-0 mb-3">
@@ -170,7 +170,7 @@ export default function Reports() {
             <Col md={3}><Form.Label>Từ ngày</Form.Label><Form.Control type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Col>
             <Col md={3}><Form.Label>Đến ngày</Form.Label><Form.Control type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Col>
             <Col md={3}>
-              <Form.Label>Gộp theo</Form.Label>
+              <Form.Label>Xem theo</Form.Label>
               <Form.Select value={groupBy} onChange={(e) => changeGroup(e.target.value)}>
                 {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
               </Form.Select>
@@ -202,7 +202,7 @@ export default function Reports() {
           <Card className="border-0 mb-3">
             <Card.Body>
               <Card.Title className="fs-6 mb-3">Doanh thu & lợi nhuận theo {groupLabel.toLowerCase()}</Card.Title>
-              {chart.length === 0 ? <EmptyState title="Không có dữ liệu trong khoảng đã chọn" /> : (
+              {chart.length === 0 ? <EmptyState title="Chưa có dữ liệu trong khoảng thời gian đã chọn" /> : (
                 <ResponsiveContainer width="100%" height={340}>
                   <ComposedChart data={chart}>
                     <defs>
@@ -225,18 +225,18 @@ export default function Reports() {
           </Card>
 
           <Card className="border-0">
-            <Card.Body className="pb-0"><Card.Title className="fs-6">Báo cáo & đối soát quỹ theo ca / thu ngân</Card.Title></Card.Body>
+            <Card.Body className="pb-0"><Card.Title className="fs-6">Doanh thu & kiểm tiền theo từng ca, từng thu ngân</Card.Title></Card.Body>
             <div className="table-responsive">
               <Table hover className="mb-0">
                 <thead><tr>
                   <th>Ca</th><th>Thu ngân</th>
-                  <th className="text-end">Tiền đầu ca</th>
-                  <th className="text-end">Tiền mặt bán</th>
-                  <th className="text-end">Dự kiến két</th>
-                  <th className="text-end">Đếm thực</th>
-                  <th className="text-end">Chênh lệch</th>
+                  <th className="text-end" title="Tiền có sẵn trong két khi bắt đầu ca">Tiền đầu ca</th>
+                  <th className="text-end" title="Tiền mặt khách trả trong ca">Tiền mặt thu được</th>
+                  <th className="text-end" title="Số tiền đáng lẽ phải có trong két: tiền đầu ca cộng tiền mặt bán được">Đáng lẽ có</th>
+                  <th className="text-end" title="Số tiền đếm được thực tế khi đóng ca">Đếm thực tế</th>
+                  <th className="text-end" title="Chênh giữa tiền đếm thực tế và số đáng lẽ có">Thừa/Thiếu</th>
                   <th className="text-end">Doanh thu</th>
-                  <th className="text-center">Số HĐ</th>
+                  <th className="text-center">Số hóa đơn</th>
                   <th>Trạng thái</th>
                 </tr></thead>
                 <tbody>
@@ -254,7 +254,7 @@ export default function Reports() {
                       <td><StatusPill value={s.status} /></td>
                     </tr>
                   ))}
-                  {shifts.length === 0 && <tr><td colSpan={10}><EmptyState icon="bi-clock-history" title="Chưa có ca làm việc" /></td></tr>}
+                  {shifts.length === 0 && <tr><td colSpan={10}><EmptyState icon="bi-clock-history" title="Chưa có ca làm việc nào" /></td></tr>}
                 </tbody>
               </Table>
             </div>

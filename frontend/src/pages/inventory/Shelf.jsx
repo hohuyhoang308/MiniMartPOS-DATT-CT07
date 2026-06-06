@@ -45,26 +45,27 @@ export default function Shelf() {
 
   return (
     <div>
-      <PageHeader title="Kệ hàng (lên kệ / về kho)" subtitle="Thao tác kệ hằng ngày của thu ngân — đưa hàng ra kệ để bán hoặc lấy bớt về kho" />
+      <PageHeader title="Kệ hàng (lên kệ / về kho)" subtitle="Việc làm mỗi ngày của thu ngân. Đưa hàng từ kho ra kệ để bán, hoặc cất bớt hàng từ kệ về kho." />
 
-      <InfoBanner id="shelf" title="Lên kệ & Về kho">
-        Hàng nhập về nằm trong <b>KHO</b>; muốn bán phải đưa ra <b>KỆ</b>. Khi <b>kệ cạn</b> (≤ tối thiểu) mà
-        <b> kho còn</b> → bấm <b>"Lên kệ"</b> (tự lấy <b>lô cận hạn trước - FIFO</b>). Ngược lại, mở một <b>kệ</b> ở
-        mục <b>"Kệ trong cửa hàng"</b> bên dưới để xem kệ chứa gì và bấm <b>"Về kho"</b> (đặt xuống). Đây là thao
-        tác hằng ngày của <b>thu ngân</b>; còn <b>thêm/sửa/xoá kệ</b> là việc của <b>quản lý</b> (trang Cấu hình kệ).
+      <InfoBanner id="shelf" title="Lên kệ và về kho">
+        Hàng mới nhập về được để trong <b>KHO</b>. Muốn bán thì phải đưa ra <b>KỆ</b>. Khi hàng trên kệ
+        <b> sắp hết</b> mà <b>trong kho vẫn còn</b>, bạn bấm nút <b>"Lên kệ"</b>. Hệ thống tự lấy
+        <b> lô sắp hết hạn trước</b>. Muốn cất hàng từ kệ về kho thì mở một <b>kệ</b> ở mục
+        <b> "Kệ trong cửa hàng"</b> bên dưới, xem kệ đang chứa gì rồi bấm <b>"Về kho"</b>. Đây là việc của
+        <b> thu ngân</b>. Còn <b>thêm, sửa, xoá kệ</b> là việc của <b>quản lý</b> (ở trang Cấu hình kệ).
       </InfoBanner>
 
       <Row className="g-3 mb-3 stagger">
-        <Col md={4}><StatCard icon="bi-arrow-up-square-fill" chip="emerald" label="Mặt hàng cần lên kệ" value={needCount} /></Col>
+        <Col md={4}><StatCard icon="bi-arrow-up-square-fill" chip="emerald" label="Hàng cần lên kệ" value={needCount} /></Col>
         <Col md={4}><StatCard icon="bi-grid-3x3-gap-fill" chip="sky" label="Số kệ" value={shelves.length} /></Col>
-        <Col md={4}><StatCard icon="bi-box-seam" chip="violet" label="Tổng mặt hàng" value={products.length} /></Col>
+        <Col md={4}><StatCard icon="bi-box-seam" chip="violet" label="Tổng số mặt hàng" value={products.length} /></Col>
       </Row>
 
       <Card className="border-0">
         <Card.Body className="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div className="input-group" style={{ maxWidth: 320 }}>
             <span className="input-group-text"><i className="bi bi-search"></i></span>
-            <Form.Control placeholder="Tìm sản phẩm / mã vạch…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Form.Control placeholder="Tìm theo tên sản phẩm hoặc mã vạch…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <Form.Check type="switch" id="onlyNeed" label="Chỉ hiện hàng cần lên kệ" checked={onlyNeed} onChange={(e) => setOnlyNeed(e.target.checked)} />
         </Card.Body>
@@ -91,13 +92,13 @@ export default function Shelf() {
                   </tr>
                 )
               })}
-              {rows.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-check2-circle" title={onlyNeed ? 'Kệ đầy đủ — không có gì cần lên' : 'Không có hàng trong kho'} /></td></tr>}
+              {rows.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-check2-circle" title={onlyNeed ? 'Các kệ đang đủ hàng, không có gì cần lên kệ' : 'Trong kho không còn hàng'} /></td></tr>}
             </tbody>
           </Table>
         </div>
       </Card>
 
-      <h6 className="fw-bold mt-4 mb-2"><i className="bi bi-grid-3x3-gap me-2"></i>Kệ trong cửa hàng <span className="text-muted2 fw-normal small">— bấm để xem kệ chứa gì & lấy hàng về kho</span></h6>
+      <h6 className="fw-bold mt-4 mb-2"><i className="bi bi-grid-3x3-gap me-2"></i>Kệ trong cửa hàng <span className="text-muted2 fw-normal small">— bấm vào một kệ để xem kệ chứa gì và cất hàng về kho</span></h6>
       <Row className="g-2">
         {shelves.map((s) => {
           const cap = s.capacity ?? 0
@@ -121,7 +122,7 @@ export default function Shelf() {
             </Col>
           )
         })}
-        {shelves.length === 0 && <Col><EmptyState icon="bi-grid-3x3-gap" title="Chưa có kệ — nhờ quản lý tạo ở trang Cấu hình kệ" /></Col>}
+        {shelves.length === 0 && <Col><EmptyState icon="bi-grid-3x3-gap" title="Chưa có kệ nào. Nhờ quản lý tạo kệ ở trang Cấu hình kệ." /></Col>}
       </Row>
 
       <ShelfTransferModal product={target} shelves={shelves} onHide={() => setTarget(null)} onDone={() => { setTarget(null); load(false) }} />
@@ -168,8 +169,8 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
 
   async function submit(e) {
     e.preventDefault()
-    if (!shelfId) { toast.warning('Chọn kệ'); return }
-    if (qtyInvalid) { toast.warning(`Nhập số lượng từ 1 đến ${maxQty}`); return }
+    if (!shelfId) { toast.warning('Vui lòng chọn kệ'); return }
+    if (qtyInvalid) { toast.warning(`Vui lòng nhập số lượng từ 1 đến ${maxQty}`); return }
     setLoading(true)
     try {
       const moved = await shelfApi.transfer(product.id, Number(shelfId), Number(qty))
@@ -193,13 +194,13 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
             {shelves.map((s) => <option key={s.id} value={s.id}>{s.code}{s.name ? ` · ${s.name}` : ''}{s.capacity > 0 ? ` (còn trống ${s.freeSpace})` : ''}</option>)}
           </Form.Select>
           <div className="small text-muted2 mb-2">
-            {lockedShelf && <>Lô đã thuộc kệ này (1 lô chỉ ở 1 kệ). </>}
+            {lockedShelf && <>Lô hàng này đã nằm ở kệ trên. Mỗi lô chỉ để ở một kệ. </>}
             {chosen && (chosen.capacity > 0
               ? <>Kệ còn trống <b>{free}</b>/{chosen.capacity}.</>
-              : <>Kệ không giới hạn sức chứa.</>)}
+              : <>Kệ này không giới hạn sức chứa.</>)}
           </div>
 
-          <Form.Label>Số lượng đưa lên kệ <span className="text-muted2">(gợi ý {qtyNum || '—'}, tối đa {maxQty})</span></Form.Label>
+          <Form.Label>Số lượng đưa lên kệ <span className="text-muted2">(gợi ý {qtyNum || '—'}, nhiều nhất {maxQty})</span></Form.Label>
           <div className="input-group">
             <Form.Control type="number" min={1} max={maxQty} value={qty} isInvalid={qtyInvalid}
               onChange={(e) => { const v = e.target.value; setQty(v === '' ? '' : Math.min(Math.max(0, Math.floor(Number(v) || 0)), maxQty)) }}
@@ -207,15 +208,15 @@ function ShelfTransferModal({ product, shelves, onHide, onDone }) {
             <Button variant="outline-secondary" type="button" disabled={maxQty <= 0} onClick={() => setQty(maxQty)}>Tối đa</Button>
           </div>
           <Form.Text className={qtyInvalid ? 'text-danger' : 'text-muted2'}>
-            {maxQty <= 0 ? 'Kệ đã đầy hoặc kho hết hàng — không thể lên kệ.'
-              : qtyInvalid ? `Nhập từ 1 đến ${maxQty}.`
-              : 'Có thể sửa số lượng tuỳ ý.'}
+            {maxQty <= 0 ? 'Kệ đã đầy hoặc trong kho hết hàng nên không lên kệ được.'
+              : qtyInvalid ? `Hãy nhập một số từ 1 đến ${maxQty}.`
+              : 'Bạn có thể sửa lại số lượng nếu muốn.'}
           </Form.Text>
 
-          <div className="small text-muted2 mt-3 mb-1">Sẽ lấy từ lô (cận hạn trước):</div>
+          <div className="small text-muted2 mt-3 mb-1">Hàng sẽ được lấy từ lô sắp hết hạn trước:</div>
           {plan.length === 0 ? <div className="small text-muted2">—</div> : (
             <Table size="sm" className="mb-0">
-              <thead><tr><th>HSD</th><th className="text-center">Kho</th><th className="text-end">Lấy lên kệ</th></tr></thead>
+              <thead><tr><th>HSD</th><th className="text-center">Trong kho</th><th className="text-end">Lấy lên kệ</th></tr></thead>
               <tbody>
                 {plan.map((b) => (
                   <tr key={b.batchId}>

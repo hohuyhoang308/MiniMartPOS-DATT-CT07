@@ -35,9 +35,9 @@ export default function PaymentResultModal({ invoice, onClose, onPaid }) {
       await paymentApi.confirm(invoice.id)
       setPayStatus('PAID')
       onPaid?.()
-      toast.success('Đã xác nhận nhận tiền — hóa đơn hoàn tất')
+      toast.success('Đã xác nhận nhận tiền. Hóa đơn hoàn tất.')
     } catch (e) {
-      toast.error(errMsg(e, 'Không xác nhận được thanh toán'))
+      toast.error(errMsg(e, 'Không xác nhận được khoản thanh toán này'))
     } finally {
       setConfirming(false)
     }
@@ -105,20 +105,20 @@ export default function PaymentResultModal({ invoice, onClose, onPaid }) {
             {invoice.payment?.qrUrl ? (
               <img src={invoice.payment.qrUrl} alt="VietQR" style={{ maxWidth: 240 }} className="img-fluid" />
             ) : (
-              <p className="text-muted small">Chưa cấu hình ngân hàng để tạo QR (vào Cấu hình).</p>
+              <p className="text-muted small">Chưa khai báo tài khoản ngân hàng nên chưa tạo được mã QR. Bạn vào mục Cấu hình để khai báo.</p>
             )}
             <div className="small text-muted mt-1">
-              Nội dung CK: <b>{invoice.payment?.transferContent}</b>
+              Nội dung chuyển khoản: <b>{invoice.payment?.transferContent}</b>
             </div>
             {payStatus !== 'PAID' && (
               <div className="mt-3">
                 <div className="small text-muted2 mb-2">
-                  <Spinner size="sm" className="me-1" />Đang chờ tiền về (tự đối soát WEB2M)…
+                  <Spinner size="sm" className="me-1" />Hệ thống đang tự kiểm tra tiền về…
                 </div>
                 <Button variant="success" size="sm" onClick={confirmPaid} disabled={confirming}>
                   {confirming ? <Spinner size="sm" /> : <><i className="bi bi-check2-circle me-1"></i>Xác nhận đã nhận tiền</>}
                 </Button>
-                <div className="small text-muted2 mt-1">Bấm khi đã thấy tiền vào tài khoản (hoặc đợi hệ thống tự xác nhận).</div>
+                <div className="small text-muted2 mt-1">Bấm nút này khi bạn đã thấy tiền vào tài khoản, hoặc chờ hệ thống tự xác nhận.</div>
               </div>
             )}
           </div>

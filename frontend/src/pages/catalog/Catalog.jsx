@@ -15,7 +15,7 @@ const EMPTY_CAT = { name: '', description: '', status: 'ACTIVE' }
 export default function Catalog() {
   return (
     <div className="page-fill">
-      <PageHeader title="Danh mục & Đơn vị tính" subtitle="Dữ liệu nền phân loại sản phẩm — quản lý chung một nơi" />
+      <PageHeader title="Danh mục & Đơn vị tính" subtitle="Nhóm hàng và đơn vị tính để phân loại sản phẩm, quản lý chung tại đây" />
       <Row className="g-3 fill-row">
         <Col lg={7}><CategorySection /></Col>
         <Col lg={5}><UnitSection /></Col>
@@ -65,7 +65,7 @@ function CategorySection() {
 
         <div className="input-group mb-3">
           <span className="input-group-text"><i className="bi bi-search"></i></span>
-          <Form.Control placeholder="Tìm danh mục…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Form.Control placeholder="Tìm tên danh mục…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
 
         {loading ? <Loading /> : (
@@ -83,7 +83,7 @@ function CategorySection() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={4}><EmptyState icon="bi-tags" title="Chưa có danh mục" /></td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={4}><EmptyState icon="bi-tags" title="Chưa có danh mục nào" /></td></tr>}
             </tbody>
           </Table>
         )}
@@ -117,7 +117,7 @@ function CategorySection() {
       </Modal>
 
       <ConfirmModal show={!!del} onHide={() => setDel(null)} onConfirm={remove}
-        title="Xóa danh mục" message={`Xóa "${del?.name}"? Không thể xóa nếu còn sản phẩm thuộc danh mục.`} confirmText="Xóa" />
+        title="Xóa danh mục" message={`Xóa "${del?.name}"? Không xóa được nếu vẫn còn sản phẩm thuộc danh mục này.`} confirmText="Xóa" />
     </Card>
   )
 }
@@ -159,7 +159,7 @@ function UnitSection() {
         </div>
 
         {loading ? <Loading /> : list.length === 0 ? (
-          <EmptyState icon="bi-rulers" title="Chưa có đơn vị tính" />
+          <EmptyState icon="bi-rulers" title="Chưa có đơn vị tính nào" />
         ) : (
           <Row className="g-2">
             {list.map((u) => (

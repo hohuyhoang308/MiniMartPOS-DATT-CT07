@@ -20,7 +20,7 @@ export default function Login() {
       const session = await login(username.trim(), password)
       navigate(session.role === 'CASHIER' ? '/pos' : '/dashboard', { replace: true })
     } catch (err) {
-      setError(errMsg(err, 'Đăng nhập thất bại'))
+      setError(errMsg(err, 'Đăng nhập không thành công. Vui lòng kiểm tra lại tên đăng nhập và mật khẩu'))
     } finally {
       setLoading(false)
     }
@@ -35,7 +35,7 @@ export default function Login() {
           <div className="text-center mb-4">
             <div className="login-logo mb-3"><i className="bi bi-shop-window"></i></div>
             <h3 className="fw-bold mb-1" style={{ letterSpacing: '-.03em' }}>MiniMart POS</h3>
-            <p className="text-muted2 mb-0 small">Hệ thống quản lý cửa hàng tiện lợi</p>
+            <p className="text-muted2 mb-0 small">Phần mềm bán hàng cho cửa hàng tiện lợi</p>
           </div>
 
           {error && <Alert variant="danger" className="py-2 small">{error}</Alert>}

@@ -93,25 +93,25 @@ export default function Dashboard() {
   const tRev = trend(d.revenueToday, d.revenueYesterday)
   const hasRevenue = (d.revenueChart || []).length > 0
   const chart = build7DayChart(d.revenueChart)
-  const payData = (d.paymentBreakdown || []).map((p) => ({ name: p.method === 'CASH' ? 'Tiền mặt' : 'QR/CK', method: p.method, value: Number(p.amount || 0) }))
+  const payData = (d.paymentBreakdown || []).map((p) => ({ name: p.method === 'CASH' ? 'Tiền mặt' : 'QR/Chuyển khoản', method: p.method, value: Number(p.amount || 0) }))
   const hourData = (d.hourlySales || []).map((h) => ({ label: `${String(h.hour).padStart(2, '0')}h`, revenue: Number(h.revenue || 0) }))
   const catData = (d.categorySales || []).map((c) => ({ name: c.categoryName, value: Number(c.revenue || 0) }))
   const maxQty = Math.max(1, ...(d.topProducts || []).map((p) => p.quantitySold))
 
   return (
     <div>
-      <PageHeader title={`Xin chào, ${user?.fullName} 👋`} subtitle="Bức tranh kinh doanh của cửa hàng hôm nay" />
+      <PageHeader title={`Xin chào, ${user?.fullName} 👋`} subtitle="Tình hình buôn bán của cửa hàng hôm nay" />
 
       {/* KPI chính */}
       <Row className="g-3 mb-3 stagger">
         <Col xl={3} md={6}>
           <KpiCard icon="bi-cash-coin" chip="emerald" label="Doanh thu hôm nay" value={formatMoney(d.revenueToday)}
             sub={<span className={`pill ${tRev.up ? 'pill-success' : 'pill-danger'}`}>
-              <i className={`bi ${tRev.up ? 'bi-arrow-up-right' : 'bi-arrow-down-right'}`}></i>{tRev.pct}% vs hôm qua</span>} />
+              <i className={`bi ${tRev.up ? 'bi-arrow-up-right' : 'bi-arrow-down-right'}`}></i>{tRev.pct}% so với hôm qua</span>} />
         </Col>
         <Col xl={3} md={6}>
           <KpiCard icon="bi-graph-up-arrow" chip="violet" label="Lợi nhuận hôm nay" value={formatMoney(d.profitToday)}
-            sub={<span className="pill pill-muted">Tháng: {formatMoney(d.profitMonth)}</span>} />
+            sub={<span className="pill pill-muted">Cả tháng: {formatMoney(d.profitMonth)}</span>} />
         </Col>
         <Col xl={3} md={6}>
           <KpiCard icon="bi-receipt-cutoff" chip="sky" label="Hóa đơn hôm nay" value={d.invoiceCountToday}
@@ -119,15 +119,15 @@ export default function Dashboard() {
         </Col>
         <Col xl={3} md={6}>
           <KpiCard icon="bi-basket3" chip="amber" label="Trung bình / hóa đơn" value={formatMoney(d.avgOrderValue)}
-            sub={<span className="pill pill-muted">{d.customersToday} khách TT</span>} />
+            sub={<span className="pill pill-muted">{d.customersToday} lượt khách</span>} />
         </Col>
       </Row>
 
       {/* Cảnh báo nhanh */}
       <Row className="g-3 mb-3 stagger">
-        <Col md={4}><AlertCard icon="bi-exclamation-triangle-fill" color="#f59e0b" count={d.lowStockCount} label="Mặt hàng tồn thấp" onClick={() => navigate('/inventory')} /></Col>
-        <Col md={4}><AlertCard icon="bi-x-octagon-fill" color="#f43f5e" count={d.outOfStockCount} label="Mặt hàng hết hàng" onClick={() => navigate('/inventory')} /></Col>
-        <Col md={4}><AlertCard icon="bi-calendar-x-fill" color="#8b5cf6" count={d.expiringCount} label="Lô cận/quá hạn sử dụng" onClick={() => navigate('/inventory')} /></Col>
+        <Col md={4}><AlertCard icon="bi-exclamation-triangle-fill" color="#f59e0b" count={d.lowStockCount} label="Mặt hàng sắp hết, cần nhập thêm" onClick={() => navigate('/inventory')} /></Col>
+        <Col md={4}><AlertCard icon="bi-x-octagon-fill" color="#f43f5e" count={d.outOfStockCount} label="Mặt hàng đã hết hàng" onClick={() => navigate('/inventory')} /></Col>
+        <Col md={4}><AlertCard icon="bi-calendar-x-fill" color="#8b5cf6" count={d.expiringCount} label="Lô hàng sắp hoặc đã hết hạn" onClick={() => navigate('/inventory')} /></Col>
       </Row>
 
       {/* Doanh thu + cơ cấu thanh toán */}
@@ -136,7 +136,7 @@ export default function Dashboard() {
           <Card className="border-0 h-100">
             <Card.Body>
               <Card.Title className="fs-6 mb-3">Doanh thu 7 ngày gần nhất</Card.Title>
-              {!hasRevenue ? <EmptyState title="Chưa có giao dịch" /> : (
+              {!hasRevenue ? <EmptyState title="Chưa có giao dịch nào" /> : (
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chart} margin={{ top: 10, right: 8 }}>
                     <defs><linearGradient id="dRev" x1="0" y1="0" x2="0" y2="1">
@@ -155,8 +155,8 @@ export default function Dashboard() {
         <Col lg={4}>
           <Card className="border-0 h-100">
             <Card.Body>
-              <Card.Title className="fs-6 mb-3">Cơ cấu thanh toán hôm nay</Card.Title>
-              {payData.length === 0 ? <EmptyState title="Chưa có" /> : (
+              <Card.Title className="fs-6 mb-3">Khách trả tiền mặt hay chuyển khoản (hôm nay)</Card.Title>
+              {payData.length === 0 ? <EmptyState title="Chưa có dữ liệu" /> : (
                 <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie data={payData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
@@ -176,8 +176,8 @@ export default function Dashboard() {
         <Col lg={6}>
           <Card className="border-0 h-100">
             <Card.Body>
-              <Card.Title className="fs-6 mb-3">Doanh thu theo giờ (hôm nay)</Card.Title>
-              {hourData.length === 0 ? <EmptyState title="Chưa có giao dịch hôm nay" /> : (
+              <Card.Title className="fs-6 mb-3">Giờ nào bán được nhiều nhất (hôm nay)</Card.Title>
+              {hourData.length === 0 ? <EmptyState title="Hôm nay chưa có giao dịch nào" /> : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={hourData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -193,7 +193,7 @@ export default function Dashboard() {
         <Col lg={6}>
           <Card className="border-0 h-100">
             <Card.Body>
-              <Card.Title className="fs-6 mb-3">Doanh thu theo danh mục (tháng)</Card.Title>
+              <Card.Title className="fs-6 mb-3">Doanh thu theo nhóm hàng (trong tháng)</Card.Title>
               {catData.length === 0 ? <EmptyState title="Chưa có dữ liệu" /> : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={catData} layout="vertical" margin={{ left: 10 }}>
@@ -218,7 +218,7 @@ export default function Dashboard() {
           <Card className="border-0 h-100">
             <Card.Body className="pb-0"><Card.Title className="fs-6">Giao dịch gần đây</Card.Title></Card.Body>
             <Table hover className="mb-0">
-              <thead><tr><th>Mã HĐ</th><th>Thu ngân</th><th>TT</th><th className="text-end">Tổng</th><th>Giờ</th><th>Trạng thái</th></tr></thead>
+              <thead><tr><th>Mã hóa đơn</th><th>Thu ngân</th><th>Trả bằng</th><th className="text-end">Tổng tiền</th><th>Lúc</th><th>Trạng thái</th></tr></thead>
               <tbody>
                 {(d.recentInvoices || []).map((r, i) => (
                   <tr key={i}>
@@ -230,7 +230,7 @@ export default function Dashboard() {
                     <td><StatusPill value={r.status} /></td>
                   </tr>
                 ))}
-                {(d.recentInvoices || []).length === 0 && <tr><td colSpan={6}><EmptyState icon="bi-receipt" title="Chưa có giao dịch" /></td></tr>}
+                {(d.recentInvoices || []).length === 0 && <tr><td colSpan={6}><EmptyState icon="bi-receipt" title="Chưa có giao dịch nào" /></td></tr>}
               </tbody>
             </Table>
           </Card>
@@ -238,7 +238,7 @@ export default function Dashboard() {
         <Col lg={5}>
           <Card className="border-0 h-100">
             <Card.Body>
-              <Card.Title className="fs-6 mb-3">Top sản phẩm bán chạy (tháng)</Card.Title>
+              <Card.Title className="fs-6 mb-3">Sản phẩm bán chạy nhất (trong tháng)</Card.Title>
               {(d.topProducts || []).length === 0 ? <EmptyState title="Chưa có dữ liệu" /> : (
                 <div className="d-flex flex-column gap-3">
                   {d.topProducts.map((p, i) => (

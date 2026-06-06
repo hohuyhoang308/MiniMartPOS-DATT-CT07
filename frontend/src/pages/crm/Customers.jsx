@@ -35,13 +35,13 @@ export default function Customers() {
   async function save(e) {
     e.preventDefault(); setSaving(true)
     try {
-      if (form.id) { await customerApi.update(form.id, form); toast.success('Đã cập nhật') }
-      else { await customerApi.create(form); toast.success('Đã thêm khách hàng') }
+      if (form.id) { await customerApi.update(form.id, form); toast.success('Đã lưu thông tin khách hàng') }
+      else { await customerApi.create(form); toast.success('Đã thêm khách hàng mới') }
       setForm(null); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }
   async function remove() {
-    try { await customerApi.remove(del.id); toast.success('Đã xóa'); setDel(null); load() }
+    try { await customerApi.remove(del.id); toast.success('Đã xóa khách hàng'); setDel(null); load() }
     catch (e) { toast.error(errMsg(e)); setDel(null) }
   }
   async function openHistory(c) {
@@ -51,14 +51,14 @@ export default function Customers() {
 
   return (
     <div>
-      <PageHeader title="Khách hàng thân thiết" subtitle="Tích điểm & theo dõi lịch sử mua hàng">
+      <PageHeader title="Khách hàng thân thiết" subtitle="Tích điểm và xem lại lịch sử mua hàng của khách">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-person-plus me-1"></i>Thêm khách</Button>
       </PageHeader>
 
       <InfoBanner id="customers" title="Khách hàng thân thiết">
-        Mỗi khách định danh bằng <b>số điện thoại</b> (duy nhất). Khi bán hàng, thu ngân gắn khách để
-        <b> tự động tích điểm</b> theo giá trị mua (1 điểm / 10.000đ). Bấm <i className="bi bi-clock-history"></i>
-        để xem <b>lịch sử mua & tổng chi tiêu</b> của khách.
+        Mỗi khách được nhận biết bằng <b>số điện thoại</b> riêng (không trùng nhau). Khi bán hàng, thu ngân chọn khách thì
+        hệ thống sẽ <b>tự cộng điểm</b> theo số tiền mua (cứ 10.000đ được 1 điểm). Bấm <i className="bi bi-clock-history"></i>
+        để xem <b>các lần mua trước và tổng số tiền đã chi</b> của khách.
       </InfoBanner>
 
       <div className="mb-3" style={{ maxWidth: 340 }}>
@@ -122,7 +122,7 @@ export default function Customers() {
 
       {/* Lịch sử */}
       <Modal show={!!history} onHide={() => setHistory(null)} centered size="lg">
-        <Modal.Header closeButton><Modal.Title>Lịch sử mua — {history?.fullName}</Modal.Title></Modal.Header>
+        <Modal.Header closeButton><Modal.Title>Lịch sử mua hàng — {history?.fullName}</Modal.Title></Modal.Header>
         <Modal.Body>
           <Row className="g-3 mb-3">
             <Col xs={4}><div className="soft-card p-3 text-center"><div className="text-muted2 small">Tổng chi tiêu</div>
@@ -133,7 +133,7 @@ export default function Customers() {
               <div className="num fw-bold fs-5 text-warning">{history?.loyaltyPoints}</div></div></Col>
           </Row>
           <Table size="sm" hover>
-            <thead><tr><th>Mã HĐ</th><th>Thời gian</th><th className="text-end">Tổng tiền</th></tr></thead>
+            <thead><tr><th>Mã hóa đơn</th><th>Thời gian</th><th className="text-end">Tổng tiền</th></tr></thead>
             <tbody>
               {(history?.invoices || []).map((i) => (
                 <tr key={i.id}><td className="fw-semibold">{i.code}</td><td className="text-muted2 small">{i.createdAt}</td>

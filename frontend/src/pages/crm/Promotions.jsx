@@ -48,13 +48,13 @@ export default function Promotions() {
         minOrderAmount: Number(form.minOrderAmount || 0),
         usageLimit: form.usageLimit === '' ? null : Number(form.usageLimit),
       }
-      if (form.id) { await promotionApi.update(form.id, body); toast.success('Đã cập nhật') }
-      else { await promotionApi.create(body); toast.success('Đã thêm khuyến mãi') }
+      if (form.id) { await promotionApi.update(form.id, body); toast.success('Đã lưu khuyến mãi') }
+      else { await promotionApi.create(body); toast.success('Đã thêm khuyến mãi mới') }
       setForm(null); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }
   async function remove() {
-    try { await promotionApi.remove(del.id); toast.success('Đã xóa'); setDel(null); load() }
+    try { await promotionApi.remove(del.id); toast.success('Đã xóa khuyến mãi'); setDel(null); load() }
     catch (e) { toast.error(errMsg(e)); setDel(null) }
   }
   function openEdit(p) {
@@ -69,20 +69,20 @@ export default function Promotions() {
 
   return (
     <div>
-      <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá áp dụng tại quầy POS">
+      <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá dùng khi tính tiền cho khách">
         <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
       </PageHeader>
 
       <InfoBanner id="promotions" title="Tạo mã giảm giá">
-        Chọn <b>loại giảm</b>: theo phần trăm (%) hoặc số tiền cố định. Đặt <b>đơn tối thiểu</b> để áp mã,
-        <b> thời gian hiệu lực</b> và <b>giới hạn lượt dùng</b> (để trống = không giới hạn). Thu ngân nhập mã
-        này ở màn hình POS để giảm giá. Cột <b>Hiệu lực</b> cho biết mã đang áp dụng / hết hạn / hết lượt.
+        Chọn <b>cách giảm</b>: giảm theo phần trăm (%) hoặc giảm một số tiền cố định. Bạn có thể đặt <b>mức mua tối thiểu</b> mới được dùng mã,
+        chọn <b>thời gian áp dụng</b> và <b>số lần được dùng</b> (để trống là dùng không giới hạn). Khi tính tiền, thu ngân nhập mã
+        này để giảm cho khách. Cột <b>Hiệu lực</b> cho biết mã đang dùng được, đã hết hạn hay đã hết lượt.
       </InfoBanner>
 
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">
           <thead>
-            <tr><th>Mã / Tên</th><th>Giảm</th><th className="text-end">Đơn tối thiểu</th><th className="text-center">Lượt dùng</th><th>Hiệu lực</th><th className="text-end">Thao tác</th></tr>
+            <tr><th>Mã / Tên</th><th>Mức giảm</th><th className="text-end">Mua tối thiểu</th><th className="text-center">Số lần đã dùng</th><th>Hiệu lực</th><th className="text-end">Thao tác</th></tr>
           </thead>
           {loading ? <SkeletonRows cols={6} /> : (
             <tbody>
@@ -121,13 +121,13 @@ export default function Promotions() {
                 <Form.Control required value={form?.name || ''} onChange={set('name')} /></Form.Group></Col>
             </Row>
             <Row>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Loại giảm</Form.Label>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Cách giảm</Form.Label>
                 <Form.Select value={form?.discountType} onChange={set('discountType')}>
-                  <option value="PERCENT">Phần trăm (%)</option><option value="AMOUNT">Số tiền (đ)</option>
+                  <option value="PERCENT">Giảm theo phần trăm (%)</option><option value="AMOUNT">Giảm số tiền (đ)</option>
                 </Form.Select></Form.Group></Col>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Giá trị giảm *</Form.Label>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Mức giảm *</Form.Label>
                 <Form.Control type="number" min={0} required value={form?.discountValue} onChange={set('discountValue')} /></Form.Group></Col>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Đơn tối thiểu</Form.Label>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Mua tối thiểu</Form.Label>
                 <Form.Control type="number" min={0} value={form?.minOrderAmount} onChange={set('minOrderAmount')} /></Form.Group></Col>
             </Row>
             <Row>
@@ -135,8 +135,8 @@ export default function Promotions() {
                 <Form.Control type="datetime-local" required value={form?.startDate || ''} onChange={set('startDate')} /></Form.Group></Col>
               <Col md={4}><Form.Group className="mb-3"><Form.Label>Kết thúc *</Form.Label>
                 <Form.Control type="datetime-local" required value={form?.endDate || ''} onChange={set('endDate')} /></Form.Group></Col>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Giới hạn lượt</Form.Label>
-                <Form.Control type="number" min={1} value={form?.usageLimit} onChange={set('usageLimit')} placeholder="Trống = không giới hạn" /></Form.Group></Col>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Số lần được dùng</Form.Label>
+                <Form.Control type="number" min={1} value={form?.usageLimit} onChange={set('usageLimit')} placeholder="Để trống là không giới hạn" /></Form.Group></Col>
             </Row>
             <Form.Group><Form.Label>Trạng thái</Form.Label>
               <Form.Select value={form?.status} onChange={set('status')}>

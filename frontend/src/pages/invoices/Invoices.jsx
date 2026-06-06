@@ -41,11 +41,11 @@ export default function Invoices() {
     try { setDetail(await invoiceApi.get(id)) } catch (e) { toast.error(errMsg(e)) }
   }
   async function doCancel() {
-    if (cancelReason.trim().length < 3) { toast.warning('Nhập lý do hủy (tối thiểu 3 ký tự)'); return }
+    if (cancelReason.trim().length < 3) { toast.warning('Vui lòng nhập lý do hủy (ít nhất 3 ký tự)'); return }
     setCancelling(true)
     try {
       await invoiceApi.cancel(cancelTarget.id, cancelReason.trim())
-      toast.success('Đã hủy hóa đơn — tồn kho hoàn tự động')
+      toast.success('Đã hủy hóa đơn. Số hàng đã được trả lại vào kho.')
       setCancelTarget(null); setCancelReason(''); setDetail(null); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setCancelling(false) }
   }
@@ -58,12 +58,12 @@ export default function Invoices() {
 
   return (
     <div>
-      <PageHeader title="Hóa đơn" subtitle="Tra cứu, in lại & hủy hóa đơn" />
+      <PageHeader title="Hóa đơn" subtitle="Tra cứu, in lại và hủy hóa đơn" />
 
       <InfoBanner id="invoices" title="Quản lý hóa đơn">
-        Lọc theo <b>ngày</b> và <b>trạng thái</b>. Bấm mã HĐ hoặc <i className="bi bi-eye"></i> để xem chi tiết,
-        <i className="bi bi-printer"></i> để in PDF. <b>Hủy hóa đơn</b> (Quản lý/Chủ cửa hàng) sẽ
-        <b> tự động hoàn trả tồn kho</b> và trừ lại điểm đã tích — dùng khi khách trả hàng hoặc lập sai.
+        Lọc hóa đơn theo <b>ngày</b> và <b>trạng thái</b>. Bấm vào mã hóa đơn hoặc <i className="bi bi-eye"></i> để xem chi tiết,
+        bấm <i className="bi bi-printer"></i> để in. Khi <b>hủy hóa đơn</b> (chỉ Quản lý và Chủ cửa hàng làm được),
+        hệ thống sẽ <b>tự trả lại số hàng vào kho</b> và trừ lại số điểm đã tích cho khách. Dùng khi khách trả hàng hoặc bạn lập nhầm hóa đơn.
       </InfoBanner>
 
       <Row className="g-2 mb-3">
@@ -84,7 +84,7 @@ export default function Invoices() {
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">
           <thead>
-            <tr><th>Mã HĐ</th><th>Thời gian</th><th>Thu ngân</th><th>Khách</th><th>Thanh toán</th>
+            <tr><th>Mã hóa đơn</th><th>Thời gian</th><th>Thu ngân</th><th>Khách</th><th>Thanh toán</th>
               <th className="text-end">Tổng tiền</th><th>Trạng thái</th><th className="text-end">Thao tác</th></tr>
           </thead>
           {loading ? <SkeletonRows cols={8} /> : (
@@ -99,10 +99,10 @@ export default function Invoices() {
                   <td className="text-end num fw-semibold">{formatMoney(i.totalAmount)}</td>
                   <td><StatusPill value={i.status} /></td>
                   <td className="text-end">
-                    <Button size="sm" variant="light" className="me-1" onClick={() => openDetail(i.id)} title="Chi tiết"><i className="bi bi-eye"></i></Button>
-                    <Button size="sm" variant="light" className="me-1" onClick={() => openPdf(i.id)} title="In PDF"><i className="bi bi-printer"></i></Button>
+                    <Button size="sm" variant="light" className="me-1" onClick={() => openDetail(i.id)} title="Xem chi tiết"><i className="bi bi-eye"></i></Button>
+                    <Button size="sm" variant="light" className="me-1" onClick={() => openPdf(i.id)} title="In hóa đơn"><i className="bi bi-printer"></i></Button>
                     {canCancel && i.status === 'COMPLETED' && (
-                      <Button size="sm" variant="light" className="text-danger" onClick={() => setCancelTarget(i)} title="Hủy"><i className="bi bi-x-circle"></i></Button>
+                      <Button size="sm" variant="light" className="text-danger" onClick={() => setCancelTarget(i)} title="Hủy hóa đơn"><i className="bi bi-x-circle"></i></Button>
                     )}
                   </td>
                 </tr>
@@ -139,7 +139,7 @@ export default function Invoices() {
               <div className="d-flex justify-content-between small text-success"><span>Giảm giá</span><span className="num">-{formatMoney(detail?.discountAmount)}</span></div>
               <div className="d-flex justify-content-between fw-bold fs-6 mt-1"><span>Tổng cộng</span><span className="num text-primary">{formatMoney(detail?.totalAmount)}</span></div>
               {detail?.taxAmount > 0 && (
-                <div className="d-flex justify-content-between small text-muted2"><span>Trong đó thuế GTGT</span><span className="num">{formatMoney(detail?.taxAmount)}</span></div>
+                <div className="d-flex justify-content-between small text-muted2"><span>Trong đó tiền thuế VAT</span><span className="num">{formatMoney(detail?.taxAmount)}</span></div>
               )}
               {detail?.paymentMethod === 'CASH' && (
                 <div className="d-flex justify-content-between small mt-1"><span className="text-muted2">Tiền thừa</span><span className="num">{formatMoney(detail?.changeAmount)}</span></div>
@@ -150,14 +150,14 @@ export default function Invoices() {
             <div className="soft-card p-3 mt-3 d-flex align-items-center gap-3">
               {detail.payment.qrUrl && <img src={detail.payment.qrUrl} alt="QR" style={{ width: 90 }} />}
               <div className="small">
-                <div>Thanh toán QR · <StatusPill value={detail.payment.status} /></div>
-                <div className="text-muted2">Nội dung CK: <b>{detail.payment.transferContent}</b></div>
+                <div>Thanh toán chuyển khoản (QR) · <StatusPill value={detail.payment.status} /></div>
+                <div className="text-muted2">Nội dung chuyển khoản: <b>{detail.payment.transferContent}</b></div>
               </div>
             </div>
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="light" onClick={() => openPdf(detail.id)}><i className="bi bi-printer me-1"></i>In PDF</Button>
+          <Button variant="light" onClick={() => openPdf(detail.id)}><i className="bi bi-printer me-1"></i>In hóa đơn</Button>
           {canCancel && detail?.status === 'COMPLETED' && <>
             <Button variant="outline-primary" onClick={() => setReturnTarget(detail)}><i className="bi bi-arrow-return-left me-1"></i>Trả hàng</Button>
             <Button variant="danger" onClick={() => setCancelTarget(detail)}><i className="bi bi-x-circle me-1"></i>Hủy hóa đơn</Button>
@@ -171,10 +171,10 @@ export default function Invoices() {
       <Modal show={!!cancelTarget} onHide={() => { setCancelTarget(null); setCancelReason('') }} centered>
         <Modal.Header closeButton><Modal.Title>Hủy hóa đơn {cancelTarget?.code}</Modal.Title></Modal.Header>
         <Modal.Body>
-          <p className="text-muted2 small mb-2">Tồn kho sẽ được hoàn lại tự động. Hành động này được ghi nhật ký (ai hủy, khi nào, lý do).</p>
+          <p className="text-muted2 small mb-2">Số hàng trong hóa đơn sẽ được trả lại vào kho. Việc hủy này được lưu lại đầy đủ: ai hủy, vào lúc nào và vì lý do gì.</p>
           <Form.Label>Lý do hủy <span className="text-danger">*</span></Form.Label>
           <Form.Control as="textarea" rows={2} value={cancelReason} autoFocus
-            onChange={(e) => setCancelReason(e.target.value)} placeholder="vd: khách đổi ý, bấm nhầm, sai số lượng…" />
+            onChange={(e) => setCancelReason(e.target.value)} placeholder="Ví dụ: khách đổi ý, bấm nhầm, sai số lượng…" />
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={() => { setCancelTarget(null); setCancelReason('') }}>Đóng</Button>
@@ -209,25 +209,25 @@ function ReturnModal({ invoice, onHide, onDone }) {
   const picked = lines.filter((l) => Number(qty[l.invoiceItemId]) > 0)
 
   async function submit() {
-    if (picked.length === 0) { toast.warning('Chọn ít nhất 1 sản phẩm để trả'); return }
-    if (reason.trim().length < 3) { toast.warning('Nhập lý do trả (≥ 3 ký tự)'); return }
+    if (picked.length === 0) { toast.warning('Hãy chọn ít nhất 1 sản phẩm để trả'); return }
+    if (reason.trim().length < 3) { toast.warning('Vui lòng nhập lý do trả hàng (ít nhất 3 ký tự)'); return }
     setSaving(true)
     try {
       const body = { invoiceId: invoice.id, reason: reason.trim(),
         items: picked.map((l) => ({ invoiceItemId: l.invoiceItemId, quantity: Number(qty[l.invoiceItemId]) })) }
       const r = await returnApi.create(body)
-      toast.success(`Đã trả hàng — hoàn ${formatMoney(r.refundAmount)}`)
+      toast.success(`Đã trả hàng. Hoàn lại cho khách ${formatMoney(r.refundAmount)}.`)
       onDone()
     } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }
 
   return (
     <Modal show={!!invoice} onHide={onHide} centered size="lg">
-      <Modal.Header closeButton><Modal.Title>Trả hàng · HĐ {invoice.code}</Modal.Title></Modal.Header>
+      <Modal.Header closeButton><Modal.Title>Trả hàng · Hóa đơn {invoice.code}</Modal.Title></Modal.Header>
       <Modal.Body>
-        <p className="text-muted2 small">Chọn số lượng trả cho từng sản phẩm (tối đa phần chưa trả). Hàng trả về <b>kho</b>, hoàn tiền theo đơn giá bán. Ghi nhật ký.</p>
+        <p className="text-muted2 small">Nhập số lượng muốn trả cho từng sản phẩm (không quá phần khách chưa trả). Hàng trả sẽ được nhập lại vào <b>kho</b> và hoàn tiền cho khách theo giá đã bán. Việc trả hàng được lưu lại đầy đủ.</p>
         {loading ? <div className="text-center py-3">Đang tải…</div> : lines.length === 0 ? (
-          <div className="text-muted2 text-center py-3">Hóa đơn này không còn gì để trả.</div>
+          <div className="text-muted2 text-center py-3">Hóa đơn này không còn sản phẩm nào để trả.</div>
         ) : (
           <Table size="sm" className="align-middle">
             <thead><tr><th>Sản phẩm</th><th className="text-center">Đã bán</th><th className="text-center">Đã trả</th><th className="text-center">Trả lần này</th><th className="text-end">Hoàn</th></tr></thead>
@@ -250,7 +250,7 @@ function ReturnModal({ invoice, onHide, onDone }) {
         )}
         <Form.Label className="mt-2">Lý do trả <span className="text-danger">*</span></Form.Label>
         <Form.Control as="textarea" rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
-          placeholder="vd: hàng lỗi, khách đổi ý, mua nhầm…" />
+          placeholder="Ví dụ: hàng lỗi, khách đổi ý, mua nhầm…" />
         <div className="d-flex justify-content-end mt-3">
           <div className="fw-bold fs-6">Tổng hoàn: <span className="text-primary num">{formatMoney(refund)}</span></div>
         </div>

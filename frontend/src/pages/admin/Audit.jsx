@@ -10,7 +10,7 @@ import { errMsg } from '../../api/client'
 
 const ACTION = {
   CANCEL_INVOICE: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Hủy hóa đơn' },
-  EXPIRE_INVOICE: { cls: 'pill-muted', icon: 'bi-clock-history', label: 'HĐ QR quá hạn' },
+  EXPIRE_INVOICE: { cls: 'pill-muted', icon: 'bi-clock-history', label: 'Hóa đơn QR quá hạn' },
   RETURN: { cls: 'pill-warning', icon: 'bi-arrow-return-left', label: 'Trả hàng' },
   CHANGE_PRICE: { cls: 'pill-info', icon: 'bi-tag-fill', label: 'Đổi giá' },
   CONFIRM_PAYMENT: { cls: 'pill-success', icon: 'bi-check2-circle', label: 'Xác nhận thanh toán' },
@@ -48,18 +48,18 @@ export default function Audit() {
 
   return (
     <div className="page-fill">
-      <PageHeader title="Nhật ký kiểm toán" subtitle="Vết ai làm gì, khi nào — cho các thao tác nhạy cảm (200 vết mới nhất)" />
+      <PageHeader title="Nhật ký thao tác" subtitle="Lịch sử ai làm gì, lúc nào với những thao tác quan trọng (200 mục mới nhất)" />
 
-      <InfoBanner id="audit" title="Nhật ký kiểm toán là gì?">
-        Ghi lại <b>người thực hiện</b>, <b>thời điểm</b> và <b>chi tiết</b> của các thao tác nhạy cảm:
-        <b> hủy/quá hạn hóa đơn</b>, <b>trả hàng</b>, <b>đổi giá</b>, <b>xác nhận thanh toán</b>, <b>nhập kho</b>,
-        <b> lên kệ / lấy về kho</b>, <b>đóng ca</b>, <b>tài khoản & mật khẩu</b>, <b>đổi cấu hình</b>.
-        Giúp truy vết & chống gian lận (vd void-rồi-thủ-tiền). Nhật ký là <b>chỉ thêm</b> (không sửa/xóa được).
+      <InfoBanner id="audit" title="Trang này dùng để làm gì?">
+        Ghi lại <b>ai làm</b>, <b>vào lúc nào</b> và <b>chi tiết</b> của những thao tác quan trọng:
+        <b> hủy hóa đơn / hóa đơn quá hạn</b>, <b>trả hàng</b>, <b>đổi giá</b>, <b>xác nhận thanh toán</b>, <b>nhập kho</b>,
+        <b> lên kệ / lấy về kho</b>, <b>đóng ca</b>, <b>tài khoản và mật khẩu</b>, <b>đổi cấu hình</b>.
+        Giúp bạn kiểm tra lại và tránh gian lận. Nhật ký này <b>chỉ ghi thêm, không sửa hay xóa được</b>.
       </InfoBanner>
 
       <Card className="border-0 fill-card">
         <Card.Body className="d-flex align-items-center gap-2 flex-wrap">
-          <span className="text-muted2 small">Lọc theo hành động:</span>
+          <span className="text-muted2 small">Lọc theo loại thao tác:</span>
           <Form.Select size="sm" style={{ maxWidth: 220 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">— Tất cả ({rows.length}) —</option>
             {actions.map((a) => <option key={a} value={a}>{ACTION[a]?.label || a}</option>)}
@@ -68,7 +68,7 @@ export default function Audit() {
         <div className="table-responsive fill-scroll">
           <Table hover className="mb-0 align-middle">
             <thead><tr>
-              <th>Thời điểm</th><th>Người thực hiện</th><th className="text-center">Hành động</th>
+              <th>Thời điểm</th><th>Người làm</th><th className="text-center">Thao tác</th>
               <th>Đối tượng</th><th>Chi tiết</th>
             </tr></thead>
             <tbody>
@@ -84,7 +84,7 @@ export default function Audit() {
                   </tr>
                 )
               })}
-              {list.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-shield-check" title="Chưa có vết kiểm toán nào" /></td></tr>}
+              {list.length === 0 && <tr><td colSpan={5}><EmptyState icon="bi-shield-check" title="Chưa có thao tác nào được ghi lại" /></td></tr>}
             </tbody>
           </Table>
         </div>
