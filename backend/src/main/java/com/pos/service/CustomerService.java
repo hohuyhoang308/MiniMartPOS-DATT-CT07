@@ -29,13 +29,16 @@ public class CustomerService {
     private final CustomerRepository repository;
     private final InvoiceRepository invoiceRepository;
     private final CustomerSpendingViewRepository spendingRepository;
+    private final AuditService auditService;
 
     public CustomerService(CustomerRepository repository,
                            InvoiceRepository invoiceRepository,
-                           CustomerSpendingViewRepository spendingRepository) {
+                           CustomerSpendingViewRepository spendingRepository,
+                           AuditService auditService) {
         this.repository = repository;
         this.invoiceRepository = invoiceRepository;
         this.spendingRepository = spendingRepository;
+        this.auditService = auditService;
     }
 
     /** Tối đa số khách trả về khi không lọc (giới hạn payload khi dữ liệu lớn). */
@@ -64,7 +67,10 @@ public class CustomerService {
         c.setPhone(req.phone());
         c.setEmail(req.email());
         c.setLoyaltyPoints(0);
-        return CustomerResponse.from(repository.save(c));
+        Customer saved = repository.save(c);
+        auditService.log("CREATE_CUSTOMER", "CUSTOMER", saved.getId(),
+                "Thêm khách hàng \"" + saved.getFullName() + "\" (SĐT " + saved.getPhone() + ")");
+        return CustomerResponse.from(saved);
     }
 
     @Transactional
@@ -76,12 +82,18 @@ public class CustomerService {
         c.setFullName(req.fullName());
         c.setPhone(req.phone());
         c.setEmail(req.email());
-        return CustomerResponse.from(repository.save(c));
+        Customer saved = repository.save(c);
+        auditService.log("UPDATE_CUSTOMER", "CUSTOMER", saved.getId(),
+                "Sửa khách hàng \"" + saved.getFullName() + "\" (SĐT " + saved.getPhone() + ")");
+        return CustomerResponse.from(saved);
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(getOrThrow(id));
+        Customer c = getOrThrow(id);
+        repository.delete(c);
+        auditService.log("DELETE_CUSTOMER", "CUSTOMER", c.getId(),
+                "Xóa khách hàng \"" + c.getFullName() + "\" (SĐT " + c.getPhone() + ")");
     }
 
     public CustomerHistoryResponse history(Long id) {

@@ -17,9 +17,11 @@ import java.util.List;
 public class CategoryService {
 
     private final CategoryRepository repository;
+    private final AuditService auditService;
 
-    public CategoryService(CategoryRepository repository) {
+    public CategoryService(CategoryRepository repository, AuditService auditService) {
         this.repository = repository;
+        this.auditService = auditService;
     }
 
     public List<CategoryResponse> findAll() {
@@ -36,7 +38,10 @@ public class CategoryService {
         c.setName(req.name());
         c.setDescription(req.description());
         c.setStatus(req.status() != null ? req.status() : CommonStatus.ACTIVE);
-        return CategoryResponse.from(repository.save(c));
+        Category saved = repository.save(c);
+        auditService.log("CREATE_CATEGORY", "CATEGORY", saved.getId(),
+                "Thêm danh mục \"" + saved.getName() + "\"");
+        return CategoryResponse.from(saved);
     }
 
     @Transactional
@@ -45,13 +50,19 @@ public class CategoryService {
         c.setName(req.name());
         c.setDescription(req.description());
         if (req.status() != null) c.setStatus(req.status());
-        return CategoryResponse.from(repository.save(c));
+        Category saved = repository.save(c);
+        auditService.log("UPDATE_CATEGORY", "CATEGORY", saved.getId(),
+                "Sửa danh mục \"" + saved.getName() + "\"");
+        return CategoryResponse.from(saved);
     }
 
     @Transactional
     public void delete(Long id) {
         Category c = getOrThrow(id);
+        String name = c.getName();
         repository.delete(c);
+        auditService.log("DELETE_CATEGORY", "CATEGORY", id,
+                "Xóa danh mục \"" + name + "\"");
     }
 
     private Category getOrThrow(Long id) {

@@ -23,6 +23,35 @@ const ACTION = {
   LOCK_USER: { cls: 'pill-danger', icon: 'bi-person-lock', label: 'Khóa tài khoản' },
   RESET_PASSWORD: { cls: 'pill-warning', icon: 'bi-key-fill', label: 'Đặt lại mật khẩu' },
   UPDATE_CONFIG: { cls: 'pill-muted', icon: 'bi-gear-fill', label: 'Đổi cấu hình' },
+  OPEN_SHIFT: { cls: 'pill-success', icon: 'bi-door-open-fill', label: 'Mở ca' },
+
+  CREATE_PRODUCT: { cls: 'pill-success', icon: 'bi-plus-square-fill', label: 'Thêm sản phẩm' },
+  UPDATE_PRODUCT: { cls: 'pill-info', icon: 'bi-pencil-square', label: 'Sửa sản phẩm' },
+  DELETE_PRODUCT: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa sản phẩm' },
+
+  CREATE_CATEGORY: { cls: 'pill-success', icon: 'bi-plus-square-fill', label: 'Thêm danh mục' },
+  UPDATE_CATEGORY: { cls: 'pill-info', icon: 'bi-pencil-square', label: 'Sửa danh mục' },
+  DELETE_CATEGORY: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa danh mục' },
+
+  CREATE_UNIT: { cls: 'pill-success', icon: 'bi-plus-square-fill', label: 'Thêm đơn vị tính' },
+  UPDATE_UNIT: { cls: 'pill-info', icon: 'bi-pencil-square', label: 'Sửa đơn vị tính' },
+  DELETE_UNIT: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa đơn vị tính' },
+
+  CREATE_SUPPLIER: { cls: 'pill-success', icon: 'bi-truck', label: 'Thêm nhà cung cấp' },
+  UPDATE_SUPPLIER: { cls: 'pill-info', icon: 'bi-truck', label: 'Sửa nhà cung cấp' },
+  DELETE_SUPPLIER: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa nhà cung cấp' },
+
+  CREATE_PROMOTION: { cls: 'pill-success', icon: 'bi-ticket-perforated-fill', label: 'Thêm khuyến mãi' },
+  UPDATE_PROMOTION: { cls: 'pill-info', icon: 'bi-ticket-perforated-fill', label: 'Sửa khuyến mãi' },
+  DELETE_PROMOTION: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa khuyến mãi' },
+
+  CREATE_CUSTOMER: { cls: 'pill-success', icon: 'bi-person-plus-fill', label: 'Thêm khách hàng' },
+  UPDATE_CUSTOMER: { cls: 'pill-info', icon: 'bi-person-lines-fill', label: 'Sửa khách hàng' },
+  DELETE_CUSTOMER: { cls: 'pill-danger', icon: 'bi-person-x-fill', label: 'Xóa khách hàng' },
+
+  CREATE_SHELF: { cls: 'pill-success', icon: 'bi-grid-3x3-gap-fill', label: 'Thêm kệ' },
+  UPDATE_SHELF: { cls: 'pill-info', icon: 'bi-grid-3x3-gap-fill', label: 'Sửa kệ' },
+  DELETE_SHELF: { cls: 'pill-danger', icon: 'bi-trash-fill', label: 'Xóa kệ' },
 }
 
 function fmtTime(t) {

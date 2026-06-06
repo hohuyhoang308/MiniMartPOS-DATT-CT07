@@ -78,7 +78,11 @@ public class ShelfService {
         }
         Shelf s = new Shelf();
         apply(s, req);
-        return ShelfResponse.from(shelfRepository.save(s), 0, 0);
+        Shelf saved = shelfRepository.save(s);
+        auditService.log("CREATE_SHELF", "SHELF", saved.getId(),
+                "Thêm kệ " + saved.getCode() + " (khu vực " + saved.getName()
+                        + ", sức chứa " + saved.getCapacity() + ")");
+        return ShelfResponse.from(saved, 0, 0);
     }
 
     @Transactional
@@ -98,12 +102,18 @@ public class ShelfService {
             }
         }
         apply(s, req);
-        return ShelfResponse.from(shelfRepository.save(s), 0, 0);
+        Shelf saved = shelfRepository.save(s);
+        auditService.log("UPDATE_SHELF", "SHELF", saved.getId(),
+                "Sửa kệ " + saved.getCode() + " (khu vực " + saved.getName()
+                        + ", sức chứa " + saved.getCapacity()
+                        + ", trạng thái " + statusLabel(saved.getStatus()) + ")");
+        return ShelfResponse.from(saved, 0, 0);
     }
 
     @Transactional
     public void delete(Long id) {
         Shelf s = getOrThrow(id);
+        String code = s.getCode();
         boolean hasStock = batchStockRepository.findByShelf(id).stream()
                 .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
         if (hasStock) {
@@ -114,6 +124,7 @@ public class ShelfService {
             throw new BadRequestException("Kệ đã có lịch sử lên kệ — không thể xoá. Hãy ngừng dùng (đặt trạng thái Ngừng) thay vì xoá.");
         }
         shelfRepository.delete(s);
+        auditService.log("DELETE_SHELF", "SHELF", id, "Xóa kệ " + code);
     }
 
     // ---------- Nội dung kệ ----------
@@ -173,8 +184,9 @@ public class ShelfService {
         if (moved == 0) {
             throw new BadRequestException("Không có lô phù hợp trong kho để lên kệ này (lô có thể đã thuộc kệ khác).");
         }
+        String productName = productRepository.findById(productId).map(Product::getName).orElse("#" + productId);
         auditService.log("SHELVE", "SHELF", shelfId,
-                "Lên kệ " + moved + " sản phẩm #" + productId + " lên kệ " + shelf.getCode());
+                "Lên kệ " + moved + " sản phẩm \"" + productName + "\" lên kệ " + shelf.getCode());
         return moved;
     }
 
@@ -207,8 +219,10 @@ public class ShelfService {
         r.setQuantity(quantity);
         r.setCreatedBy(user);
         shelfReturnRepository.save(r);
+        String productName = batch.getProduct() != null ? batch.getProduct().getName() : "#" + batchId;
         auditService.log("SHELF_RETURN", "SHELF", shelf.getId(),
-                "Lấy về kho " + quantity + " từ lô #" + batchId + " (kệ " + shelf.getCode() + ")");
+                "Lấy về kho " + quantity + " sản phẩm \"" + productName
+                        + "\" từ kệ " + shelf.getCode() + " (lô #" + batchId + ")");
         return quantity;
     }
 
@@ -235,5 +249,10 @@ public class ShelfService {
 
     private Shelf getOrThrow(Long id) {
         return shelfRepository.findById(id).orElseThrow(() -> NotFoundException.of("kệ", id));
+    }
+
+    /** CommonStatus → nhãn tiếng Việt cho nhật ký kiểm toán. */
+    private String statusLabel(CommonStatus status) {
+        return status == CommonStatus.INACTIVE ? "Ngừng" : "Đang dùng";
     }
 }

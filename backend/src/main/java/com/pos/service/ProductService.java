@@ -153,7 +153,11 @@ public class ProductService {
         Product p = new Product();
         apply(p, req);
         p.setStatus(req.status() != null ? req.status() : CommonStatus.ACTIVE);
-        return ProductResponse.from(productRepository.save(p), 0L, 0L, 0L);
+        Product saved = productRepository.save(p);
+        auditService.log("CREATE_PRODUCT", "PRODUCT", saved.getId(),
+                "Thêm sản phẩm \"" + saved.getName() + "\" (mã vạch " + saved.getBarcode()
+                        + ", giá bán " + saved.getSalePrice() + "đ, giá vốn " + saved.getCostPrice() + "đ)");
+        return ProductResponse.from(saved, 0L, 0L, 0L);
     }
 
     @Transactional
@@ -163,6 +167,12 @@ public class ProductService {
             throw new BadRequestException("Mã vạch đã tồn tại: " + req.barcode());
         }
         java.math.BigDecimal oldCost = p.getCostPrice(), oldSale = p.getSalePrice();
+        // Lưu lại giá trị cũ của các trường mô tả để so sánh và ghi nhật ký thay đổi.
+        String oldName = p.getName();
+        String oldBarcode = p.getBarcode();
+        String oldCategory = p.getCategory() != null ? p.getCategory().getName() : null;
+        String oldUnit = p.getUnit() != null ? p.getUnit().getName() : null;
+        Integer oldMinStock = p.getMinStock();
         apply(p, req);
         if (req.status() != null) p.setStatus(req.status());
         Product saved = productRepository.save(p);
@@ -173,12 +183,34 @@ public class ProductService {
                     saved.getName() + ": giá vốn " + oldCost + "→" + saved.getCostPrice()
                             + ", giá bán " + oldSale + "→" + saved.getSalePrice());
         }
+        // Audit chung cho việc sửa sản phẩm — liệt kê rõ những gì đã thay đổi.
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        if (oldName != null && !oldName.equals(saved.getName()))
+            changes.add("tên \"" + oldName + "\" → \"" + saved.getName() + "\"");
+        if (oldBarcode != null && !oldBarcode.equals(saved.getBarcode()))
+            changes.add("mã vạch " + oldBarcode + " → " + saved.getBarcode());
+        String newCategory = saved.getCategory() != null ? saved.getCategory().getName() : null;
+        if (oldCategory != null && !oldCategory.equals(newCategory))
+            changes.add("danh mục \"" + oldCategory + "\" → \"" + newCategory + "\"");
+        String newUnit = saved.getUnit() != null ? saved.getUnit().getName() : null;
+        if (oldUnit != null && !oldUnit.equals(newUnit))
+            changes.add("đơn vị tính \"" + oldUnit + "\" → \"" + newUnit + "\"");
+        if (oldMinStock != null && !oldMinStock.equals(saved.getMinStock()))
+            changes.add("mức tồn tối thiểu " + oldMinStock + " → " + saved.getMinStock());
+        String detail = "Sửa sản phẩm \"" + saved.getName() + "\"";
+        if (!changes.isEmpty()) detail += " (" + String.join("; ", changes) + ")";
+        auditService.log("UPDATE_PRODUCT", "PRODUCT", saved.getId(), detail);
         return ProductResponse.from(saved, stockView(id));
     }
 
     @Transactional
     public void delete(Long id) {
-        productRepository.delete(getOrThrow(id));
+        Product p = getOrThrow(id);
+        String name = p.getName();
+        String barcode = p.getBarcode();
+        productRepository.delete(p);
+        auditService.log("DELETE_PRODUCT", "PRODUCT", id,
+                "Xóa sản phẩm \"" + name + "\" (mã vạch " + barcode + ")");
     }
 
     // ----- helpers -----

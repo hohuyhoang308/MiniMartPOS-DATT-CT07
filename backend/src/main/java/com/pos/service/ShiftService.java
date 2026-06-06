@@ -59,7 +59,10 @@ public class ShiftService {
         shift.setUser(user);
         shift.setOpeningCash(req.openingCash());
         shift.setStatus(ShiftStatus.OPEN);
-        return toResponse(shiftRepository.save(shift));
+        WorkShift saved = shiftRepository.save(shift);
+        auditService.log("OPEN_SHIFT", "SHIFT", saved.getId(),
+                "Mở ca #" + saved.getId() + " (tiền đầu ca " + saved.getOpeningCash() + "đ)");
+        return toResponse(saved);
     }
 
     /** 200 ca gần nhất (mới nhất trước) — màn Quản lý ca. */
@@ -95,10 +98,11 @@ public class ShiftService {
         shift.setClosedAt(LocalDateTime.now());
         shift.setStatus(ShiftStatus.CLOSED);
         ShiftResponse resp = toResponse(shiftRepository.save(shift));
+        boolean onBehalf = !shift.getUser().getId().equals(me.getId());
         auditService.log("CLOSE_SHIFT", "SHIFT", shift.getId(),
-                "Đóng ca #" + shift.getId() + " (" + shift.getUser().getFullName() + "), đếm "
-                        + closingCash + "đ, chênh lệch quỹ " + resp.cashDifference() + "đ"
-                        + (isManager && !shift.getUser().getId().equals(me.getId()) ? " [đóng hộ]" : ""));
+                "Đóng ca #" + shift.getId() + " của " + shift.getUser().getFullName()
+                        + ", đếm tiền cuối ca " + closingCash + "đ, chênh lệch quỹ " + resp.cashDifference() + "đ"
+                        + (onBehalf ? " (đóng hộ bởi " + me.getFullName() + ")" : ""));
         return resp;
     }
 

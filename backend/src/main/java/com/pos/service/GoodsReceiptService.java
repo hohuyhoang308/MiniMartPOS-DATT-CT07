@@ -92,9 +92,9 @@ public class GoodsReceiptService {
         // Lưu phiếu + các lô (cascade). Tồn kho tự tăng vì view tính từ lô mới.
         GoodsReceipt saved = receiptRepository.save(receipt);
         auditService.log("CREATE_RECEIPT", "GOODS_RECEIPT", saved.getId(),
-                "Nhập kho " + saved.getCode() + " từ NCC " + supplier.getName()
-                        + " — " + req.items().size() + " mặt hàng, tổng " + total + "đ"
-                        + (updateCost ? " (cập nhật giá vốn)" : ""));
+                "Lập phiếu nhập kho " + saved.getCode() + " từ nhà cung cấp \"" + supplier.getName()
+                        + "\" — " + req.items().size() + " mặt hàng, tổng tiền " + total + "đ"
+                        + (updateCost ? " (có cập nhật giá vốn sản phẩm)" : " (không cập nhật giá vốn)"));
         return GoodsReceiptResponse.from(saved);
     }
 

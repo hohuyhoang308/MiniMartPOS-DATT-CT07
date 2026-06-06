@@ -17,9 +17,11 @@ import java.util.List;
 public class SupplierService {
 
     private final SupplierRepository repository;
+    private final AuditService auditService;
 
-    public SupplierService(SupplierRepository repository) {
+    public SupplierService(SupplierRepository repository, AuditService auditService) {
         this.repository = repository;
+        this.auditService = auditService;
     }
 
     public List<SupplierResponse> findAll() {
@@ -35,7 +37,10 @@ public class SupplierService {
         Supplier s = new Supplier();
         apply(s, req);
         s.setStatus(req.status() != null ? req.status() : CommonStatus.ACTIVE);
-        return SupplierResponse.from(repository.save(s));
+        Supplier saved = repository.save(s);
+        auditService.log("CREATE_SUPPLIER", "SUPPLIER", saved.getId(),
+                "Thêm nhà cung cấp \"" + saved.getName() + "\" (SĐT " + saved.getPhone() + ")");
+        return SupplierResponse.from(saved);
     }
 
     @Transactional
@@ -43,12 +48,18 @@ public class SupplierService {
         Supplier s = getOrThrow(id);
         apply(s, req);
         if (req.status() != null) s.setStatus(req.status());
-        return SupplierResponse.from(repository.save(s));
+        Supplier saved = repository.save(s);
+        auditService.log("UPDATE_SUPPLIER", "SUPPLIER", saved.getId(),
+                "Sửa nhà cung cấp \"" + saved.getName() + "\" (SĐT " + saved.getPhone() + ")");
+        return SupplierResponse.from(saved);
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(getOrThrow(id));
+        Supplier s = getOrThrow(id);
+        repository.delete(s);
+        auditService.log("DELETE_SUPPLIER", "SUPPLIER", s.getId(),
+                "Xóa nhà cung cấp \"" + s.getName() + "\" (SĐT " + s.getPhone() + ")");
     }
 
     private void apply(Supplier s, SupplierRequest req) {

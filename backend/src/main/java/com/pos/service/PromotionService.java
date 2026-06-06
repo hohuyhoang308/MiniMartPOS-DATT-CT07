@@ -23,9 +23,11 @@ import java.util.List;
 public class PromotionService {
 
     private final PromotionRepository repository;
+    private final AuditService auditService;
 
-    public PromotionService(PromotionRepository repository) {
+    public PromotionService(PromotionRepository repository, AuditService auditService) {
         this.repository = repository;
+        this.auditService = auditService;
     }
 
     /** Kết quả áp mã dùng nội bộ cho SaleService (entity + số tiền giảm). */
@@ -47,7 +49,12 @@ public class PromotionService {
         apply(p, req);
         p.setUsedCount(0);
         p.setStatus(req.status() != null ? req.status() : CommonStatus.ACTIVE);
-        return PromotionResponse.from(repository.save(p));
+        Promotion saved = repository.save(p);
+        auditService.log("CREATE_PROMOTION", "PROMOTION", saved.getId(),
+                "Thêm khuyến mãi " + saved.getCode() + " \"" + saved.getName() + "\" ("
+                        + describeDiscount(saved) + ", đơn tối thiểu "
+                        + saved.getMinOrderAmount().toPlainString() + "đ)");
+        return PromotionResponse.from(saved);
     }
 
     @Transactional
@@ -61,12 +68,28 @@ public class PromotionService {
         }
         apply(p, req);
         if (req.status() != null) p.setStatus(req.status());
-        return PromotionResponse.from(repository.save(p));
+        Promotion saved = repository.save(p);
+        auditService.log("UPDATE_PROMOTION", "PROMOTION", saved.getId(),
+                "Sửa khuyến mãi " + saved.getCode() + " \"" + saved.getName() + "\" ("
+                        + describeDiscount(saved) + ", đơn tối thiểu "
+                        + saved.getMinOrderAmount().toPlainString() + "đ)");
+        return PromotionResponse.from(saved);
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(getOrThrow(id));
+        Promotion p = getOrThrow(id);
+        repository.delete(p);
+        auditService.log("DELETE_PROMOTION", "PROMOTION", p.getId(),
+                "Xóa khuyến mãi " + p.getCode() + " \"" + p.getName() + "\"");
+    }
+
+    /** Diễn đạt mức giảm cho dễ hiểu: "giảm 10%" hoặc "giảm 20000đ". */
+    private String describeDiscount(Promotion p) {
+        if (p.getDiscountType() == DiscountType.PERCENT) {
+            return "giảm " + p.getDiscountValue().stripTrailingZeros().toPlainString() + "%";
+        }
+        return "giảm " + p.getDiscountValue().toPlainString() + "đ";
     }
 
     /** Endpoint kiểm tra mã khi thu ngân áp dụng (UC11). */
