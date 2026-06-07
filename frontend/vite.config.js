@@ -14,4 +14,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Tách vendor nặng/ổn định ra chunk riêng để cache tốt & giảm bundle chính.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          ui: ['react-bootstrap', 'bootstrap'],
+        },
+      },
+    },
+  },
 })

@@ -3,7 +3,7 @@
 Giao diện SPA cho hệ thống POS cửa hàng tiện lợi, gọi REST API của backend Spring Boot.
 
 ## Công nghệ
-- **React 18** + **Vite 5**, chạy bằng **Bun** (HMR / hot-reload sẵn)
+- **React 19** + **Vite 5**, chạy bằng **Bun** (HMR / hot-reload sẵn)
 - **React Router 6**, **Axios** (interceptor đính JWT + xử lý 401)
 - **React-Bootstrap** + design system tùy biến (`src/index.css`)
 - **Recharts** (biểu đồ doanh thu, tồn kho)

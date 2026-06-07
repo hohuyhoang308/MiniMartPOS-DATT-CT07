@@ -427,28 +427,38 @@ CREATE TABLE loyalty_point_ledger (
 -- Tồn còn lại của từng LÔ = số nhập - tổng đã bán (chỉ HĐ COMPLETED).
 -- Hủy HĐ (CANCELLED) => phân bổ không được tính => tồn tự hoàn.
 -- Tồn từng LÔ tách KHO/KỆ: on_shelf (kệ, POS bán) + in_warehouse (kho)
+-- TỐI ƯU PERF: gộp sẵn (pre-aggregate) từng nguồn biến động theo batch_id rồi LEFT JOIN
+-- MỘT lần — thay cho 4 subquery TƯƠNG QUAN chạy lại cho TỪNG lô (cũ: ~O(lô × dòng bán)).
+-- Tất cả khóa JOIN (batch_id) đều đã có index. Cột & ngữ nghĩa giữ NGUYÊN 100%.
+--   sold (A) = phân bổ bán HĐ chưa hủy ; returned (R) = đã trả về kho
+--   transferred (T) = đã lên kệ ; shelf_returned (SR) = đã lấy từ kệ về kho
+--   quantity_remaining = nhập − (A−R) ; on_shelf = (T−SR−R) − (A−R) ; in_warehouse = nhập − (T−SR−R)
 CREATE OR REPLACE VIEW v_batch_stock AS
-SELECT  b.batch_id, b.product_id, b.expiry_date, b.quantity_in, b.shelf_id,
-        (b.quantity_in  - b.sold)        AS quantity_remaining,
-        (b.transferred  - b.sold)        AS on_shelf,
-        (b.quantity_in  - b.transferred) AS in_warehouse
-FROM (
-    SELECT  gri.id AS batch_id, gri.product_id, gri.expiry_date, gri.quantity AS quantity_in,
-            (SELECT st.shelf_id FROM shelf_transfers st WHERE st.batch_id = gri.id ORDER BY st.id LIMIT 1) AS shelf_id,
-            COALESCE((SELECT SUM(iib.quantity) FROM invoice_item_batches iib
-                JOIN invoice_items ii ON ii.id = iib.invoice_item_id
-                JOIN invoices      i  ON i.id  = ii.invoice_id
-                WHERE iib.batch_id = gri.id AND i.status <> 'CANCELLED'), 0)
-              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
-                WHERE rti.batch_id = gri.id), 0) AS sold,
-            COALESCE((SELECT SUM(st.quantity) FROM shelf_transfers st
-                WHERE st.batch_id = gri.id), 0)
-              - COALESCE((SELECT SUM(sr.quantity) FROM shelf_returns sr
-                WHERE sr.batch_id = gri.id), 0)
-              - COALESCE((SELECT SUM(rti.quantity) FROM sales_return_items rti
-                WHERE rti.batch_id = gri.id), 0) AS transferred
-    FROM goods_receipt_items gri
-) b;
+SELECT  gri.id        AS batch_id,
+        gri.product_id,
+        gri.expiry_date,
+        gri.quantity  AS quantity_in,
+        fs.shelf_id,
+        (gri.quantity - (COALESCE(sa.sold,0) - COALESCE(ret.returned,0)))                                      AS quantity_remaining,
+        ((COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0) - COALESCE(ret.returned,0))
+            - (COALESCE(sa.sold,0) - COALESCE(ret.returned,0)))                                                AS on_shelf,
+        (gri.quantity - (COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0) - COALESCE(ret.returned,0))) AS in_warehouse
+FROM goods_receipt_items gri
+LEFT JOIN ( SELECT iib.batch_id, SUM(iib.quantity) AS sold
+            FROM invoice_item_batches iib
+            JOIN invoice_items ii ON ii.id = iib.invoice_item_id
+            JOIN invoices      i  ON i.id  = ii.invoice_id
+            WHERE i.status <> 'CANCELLED'
+            GROUP BY iib.batch_id )                       sa   ON sa.batch_id   = gri.id
+LEFT JOIN ( SELECT batch_id, SUM(quantity) AS returned
+            FROM sales_return_items GROUP BY batch_id )   ret  ON ret.batch_id  = gri.id
+LEFT JOIN ( SELECT batch_id, SUM(quantity) AS transferred
+            FROM shelf_transfers GROUP BY batch_id )      tr   ON tr.batch_id   = gri.id
+LEFT JOIN ( SELECT batch_id, SUM(quantity) AS shelf_returned
+            FROM shelf_returns GROUP BY batch_id )        sret ON sret.batch_id = gri.id
+LEFT JOIN ( SELECT batch_id, MIN(id) AS first_id
+            FROM shelf_transfers GROUP BY batch_id )      fmin ON fmin.batch_id = gri.id
+LEFT JOIN shelf_transfers fs ON fs.id = fmin.first_id;
 
 -- Tồn hiện tại từng sản phẩm = tổng tồn các lô (kèm tách kho/kệ)
 CREATE OR REPLACE VIEW v_product_stock AS
