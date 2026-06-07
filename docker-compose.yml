@@ -1,0 +1,65 @@
+# =====================================================================
+#  POS Cửa hàng tiện lợi — chạy TOÀN BỘ hệ thống bằng 1 lệnh:
+#     docker compose up -d --build
+#
+#  Dịch vụ:
+#   - mysql    : CSDL MySQL 8 (dữ liệu lưu ở volume, không mất khi tắt máy)
+#   - backend  : Spring Boot API (tự tạo schema + view + seed dữ liệu demo khi khởi động)
+#   - frontend : React build tĩnh, nginx phục vụ + proxy /api sang backend
+#
+#  Sau khi chạy:  http://localhost:8088   (tài khoản demo: admin / 123456)
+#  Secrets thật khi deploy: đặt qua file .env (xem .env.example), KHÔNG commit.
+# =====================================================================
+
+# Tên project Docker (image/volume/network mang tiền tố này thay vì lấy theo tên thư mục).
+# Bắt buộc chữ thường — tương ứng "MiniMartPOS-DATT-CT07".
+name: minimartpos-datt-ct07
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: minimartpos-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: pos_convenience_store
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "3307:3306"            # 3307 ngoài để không đụng MySQL local (ServBay) ở 3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    container_name: minimartpos-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy   # chờ MySQL sẵn sàng mới khởi động backend
+    environment:
+      # Trỏ datasource sang service mysql (Spring nhận SPRING_DATASOURCE_URL qua relaxed binding)
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/pos_convenience_store?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false"
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:-doi-secret-nay-trong-production-toi-thieu-256-bit-de-an-pos-convenience-store-2026}
+      CORS_ORIGINS: "http://localhost:8088,http://localhost"
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8080:8080"            # mở cổng API để test trực tiếp (tuỳ chọn)
+
+  frontend:
+    build: ./frontend
+    container_name: minimartpos-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8088:80"             # truy cập ứng dụng tại http://localhost:8088
+
+volumes:
+  mysql_data:
