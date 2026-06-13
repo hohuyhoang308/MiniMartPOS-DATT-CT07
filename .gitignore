@@ -19,6 +19,9 @@ frontend/dist-ssr/
 # ===== Công cụ Claude / skill (không thuộc mã nguồn đồ án) =====
 .claude/
 
+# ===== Báo cáo Word (folder docs/Báo Cáo — không commit) =====
+docs/Báo Cáo/
+
 # ===== OS =====
 .DS_Store
 Thumbs.db
