@@ -3,7 +3,7 @@ import { Button, Card, Col, Form, Row, Spinner, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import Loading from '../../components/ui/Loading'
-import { storeConfigApi, integrationApi } from '../../api/misc'
+import { storeConfigApi, integrationApi, storeApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 
@@ -23,6 +23,8 @@ function SectionCard({ icon, title, desc, children, chip = 'emerald' }) {
 
 export default function Settings() {
   const toast = useToast()
+  const [stores, setStores] = useState([])
+  const [storeId, setStoreId] = useState(null)   // cửa hàng đang cấu hình
   const [cfg, setCfg] = useState(null)
   const [recipients, setRecipients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -31,50 +33,67 @@ export default function Settings() {
   const [newRcp, setNewRcp] = useState({ chatId: '', label: '' })
   const [busy, setBusy] = useState('')
 
-  async function loadAll() {
+  // Tải danh sách cửa hàng, chọn cửa hàng đầu tiên để cấu hình.
+  useEffect(() => {
+    storeApi.list().then((rs) => {
+      setStores(rs)
+      if (rs.length > 0) setStoreId(rs[0].id)
+      else setLoading(false)
+    }).catch((e) => { toast.error(errMsg(e)); setLoading(false) })
+  }, [])
+
+  async function loadAll(sid) {
+    if (!sid) return
     setLoading(true)
     try {
-      const c = await storeConfigApi.get()
+      const c = await storeConfigApi.get(sid)
       setCfg({ ...c, web2mApiUrl: '', telegramBotToken: '' })
-      setRecipients(await integrationApi.recipients())
+      setRecipients(await integrationApi.recipients(sid))
     } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
   }
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { if (storeId) loadAll(storeId) }, [storeId])
 
   const set = (k) => (e) => setCfg({ ...cfg, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
 
   async function save() {
     setSaving(true)
-    try { await storeConfigApi.update(cfg); toast.success('Đã lưu cấu hình'); loadAll() }
+    try { await storeConfigApi.update(storeId, cfg); toast.success('Đã lưu cấu hình'); loadAll(storeId) }
     catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }
   async function testWeb2m() {
     setBusy('web2m')
-    try { const r = await integrationApi.web2mTest(cfg.web2mApiUrl || undefined); r.connected ? toast.success('Kết nối WEB2M thành công') : toast.error('Chưa kết nối được WEB2M') }
+    try { const r = await integrationApi.web2mTest(storeId, cfg.web2mApiUrl || undefined); r.connected ? toast.success('Kết nối WEB2M thành công') : toast.error('Chưa kết nối được WEB2M') }
     catch (e) { toast.error(errMsg(e)) } finally { setBusy('') }
   }
   async function testTelegram() {
     if (!testChat.trim()) { toast.warning('Nhập Chat ID để gửi thử'); return }
     setBusy('tele')
-    try { const r = await integrationApi.telegramTest(testChat.trim(), '🔔 Tin nhắn thử từ POS'); r.sent ? toast.success('Đã gửi tin nhắn thử') : toast.error('Gửi không thành công. Hãy kiểm tra lại Bot Token và Chat ID') }
+    try { const r = await integrationApi.telegramTest(storeId, testChat.trim(), '🔔 Tin nhắn thử từ POS'); r.sent ? toast.success('Đã gửi tin nhắn thử') : toast.error('Gửi không thành công. Hãy kiểm tra lại Bot Token và Chat ID') }
     catch (e) { toast.error(errMsg(e)) } finally { setBusy('') }
   }
   async function addRecipient() {
     if (!newRcp.chatId.trim()) { toast.warning('Nhập Chat ID'); return }
-    try { await integrationApi.addRecipient(newRcp); toast.success('Đã thêm người nhận'); setNewRcp({ chatId: '', label: '' }); setRecipients(await integrationApi.recipients()) }
+    try { await integrationApi.addRecipient(storeId, newRcp); toast.success('Đã thêm người nhận'); setNewRcp({ chatId: '', label: '' }); setRecipients(await integrationApi.recipients(storeId)) }
     catch (e) { toast.error(errMsg(e)) }
   }
   async function removeRecipient(id) {
-    try { await integrationApi.removeRecipient(id); setRecipients(await integrationApi.recipients()) }
+    try { await integrationApi.removeRecipient(id); setRecipients(await integrationApi.recipients(storeId)) }
     catch (e) { toast.error(errMsg(e)) }
   }
 
-  if (loading) return <Loading />
+  if (loading || !cfg) return <Loading />
 
   return (
     <div>
-      <PageHeader title="Cấu hình cửa hàng" subtitle="Thông tin in trên hóa đơn, tài khoản ngân hàng và các kết nối">
-        <Button onClick={save} disabled={saving}>{saving ? <Spinner size="sm" /> : <><i className="bi bi-check-lg me-1"></i>Lưu cấu hình</>}</Button>
+      <PageHeader title="Cấu hình cửa hàng" subtitle="Thông tin hóa đơn, ngân hàng và kết nối — cấu hình RIÊNG cho từng cửa hàng">
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted2 small">Cấu hình cho cửa hàng:</span>
+          <Form.Select size="sm" style={{ minWidth: 220 }} value={storeId || ''}
+            onChange={(e) => setStoreId(Number(e.target.value))}>
+            {stores.map((s) => <option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}
+          </Form.Select>
+          <Button onClick={save} disabled={saving}>{saving ? <Spinner size="sm" /> : <><i className="bi bi-check-lg me-1"></i>Lưu cấu hình</>}</Button>
+        </div>
       </PageHeader>
 
       <InfoBanner id="settings" title="Trang này dùng để làm gì?">

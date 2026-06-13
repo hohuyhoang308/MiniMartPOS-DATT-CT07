@@ -8,7 +8,8 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Request: đính token từ localStorage
+// Request: đính token JWT. Phạm vi cửa hàng (đa cửa hàng) do BACKEND tự suy ra từ tài khoản:
+// MANAGER/STAFF → cửa hàng của họ; ADMIN → toàn chuỗi. Cấu hình theo cửa hàng truyền storeId tường minh.
 client.interceptors.request.use((config) => {
   const raw = localStorage.getItem(AUTH_KEY)
   if (raw) {

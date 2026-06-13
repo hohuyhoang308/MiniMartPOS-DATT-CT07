@@ -22,11 +22,12 @@ import Shifts from './pages/shifts/Shifts'
 import Users from './pages/admin/Users'
 import Settings from './pages/admin/Settings'
 import Audit from './pages/admin/Audit'
+import Stores from './pages/admin/Stores'
 
 /** Trang chủ theo vai trò: thu ngân → POS, còn lại → Dashboard. */
 function RoleHome() {
   const { user } = useAuth()
-  return <Navigate to={user?.role === 'CASHIER' ? '/pos' : '/dashboard'} replace />
+  return <Navigate to={user?.role === 'STAFF' ? '/pos' : '/dashboard'} replace />
 }
 
 export default function App() {
@@ -64,6 +65,11 @@ export default function App() {
             <Route path="audit" element={<Audit />} />
             <Route path="users" element={<Users />} />
             <Route path="settings" element={<Settings />} />
+          </Route>
+
+          {/* Quản trị viên toàn chuỗi (đa cửa hàng) */}
+          <Route element={<PrivateRoute roles={['ADMIN']} />}>
+            <Route path="stores" element={<Stores />} />
           </Route>
         </Route>
       </Route>

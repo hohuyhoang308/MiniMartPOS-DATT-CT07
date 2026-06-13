@@ -5,14 +5,17 @@ import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import { SkeletonRows } from '../../components/ui/Loading'
 import ConfirmModal from '../../components/ui/ConfirmModal'
-import { userApi } from '../../api/misc'
+import { userApi, storeApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
 import { formatDateTime } from '../../utils/format'
 
 export default function Users() {
   const toast = useToast()
+  const { isAdmin } = useAuth()
   const [list, setList] = useState([])
+  const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(null)         // create/edit
   const [pwd, setPwd] = useState(null)            // reset password target
@@ -24,16 +27,22 @@ export default function Users() {
     setLoading(true)
     try { setList(await userApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // ADMIN toàn chuỗi chọn cửa hàng khi tạo MANAGER/STAFF (gọi /stores).
+    if (isAdmin) storeApi.list().then(setStores).catch(() => {})
+  }, [isAdmin])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)
     try {
+      // ADMIN không gắn cửa hàng; MANAGER/STAFF phải có cửa hàng.
+      const storeId = form.role !== 'ADMIN' ? (form.storeId ? Number(form.storeId) : null) : null
       if (form.id) {
-        await userApi.update(form.id, { fullName: form.fullName, role: form.role, status: form.status })
+        await userApi.update(form.id, { fullName: form.fullName, role: form.role, storeId, status: form.status })
         toast.success('Đã cập nhật tài khoản')
       } else {
-        await userApi.create({ username: form.username, password: form.password, fullName: form.fullName, role: form.role })
+        await userApi.create({ username: form.username, password: form.password, fullName: form.fullName, role: form.role, storeId })
         toast.success('Đã tạo tài khoản')
       }
       setForm(null); load()
@@ -53,32 +62,33 @@ export default function Users() {
   return (
     <div>
       <PageHeader title="Quản lý tài khoản" subtitle="Tài khoản nhân viên và quyền của từng người">
-        <Button onClick={() => setForm({ username: '', password: '', fullName: '', role: 'CASHIER' })}>
+        <Button onClick={() => setForm({ username: '', password: '', fullName: '', role: 'STAFF', storeId: '' })}>
           <i className="bi bi-person-plus me-1"></i>Thêm tài khoản
         </Button>
       </PageHeader>
 
       <InfoBanner id="users" title="Các vai trò và quyền">
-        <b>Chủ cửa hàng</b>: toàn quyền. <b>Quản lý</b>: lo sản phẩm, kho và xem báo cáo. <b>Thu ngân</b>: chỉ bán hàng.
+        <b>Quản trị viên</b>: toàn quyền TOÀN CHUỖI (mọi cửa hàng), quản lý chi nhánh & tài khoản. <b>Quản lý cửa hàng</b>: điều hành một cửa hàng (sản phẩm, kho, báo cáo, ca). <b>Nhân viên</b>: bán hàng tại quầy.
         Bấm <i className="bi bi-key"></i> để đặt lại mật khẩu, bấm <i className="bi bi-lock"></i> để khóa tài khoản
         (bạn không thể tự khóa chính mình). Tài khoản đã khóa sẽ không đăng nhập được.
       </InfoBanner>
 
       <div className="table-wrap fade-up">
         <Table hover className="mb-0">
-          <thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày tạo</th><th className="text-end">Thao tác</th></tr></thead>
-          {loading ? <SkeletonRows cols={6} /> : (
+          <thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Vai trò</th><th>Chi nhánh</th><th>Trạng thái</th><th>Ngày tạo</th><th className="text-end">Thao tác</th></tr></thead>
+          {loading ? <SkeletonRows cols={7} /> : (
             <tbody>
               {list.map((u) => (
                 <tr key={u.id}>
                   <td className="fw-semibold">@{u.username}</td>
                   <td>{u.fullName}</td>
                   <td><StatusPill value={u.role} /></td>
+                  <td className="text-muted2 small">{u.storeName || (u.role === 'ADMIN' ? 'Toàn chuỗi' : '—')}</td>
                   <td><StatusPill value={u.status} /></td>
                   <td className="text-muted2 small">{formatDateTime(u.createdAt)}</td>
                   <td className="text-end">
                     <Button size="sm" variant="light" className="me-1" title="Sửa"
-                      onClick={() => setForm({ id: u.id, fullName: u.fullName, role: u.role, status: u.status })}><i className="bi bi-pencil"></i></Button>
+                      onClick={() => setForm({ id: u.id, fullName: u.fullName, role: u.role, storeId: u.storeId || '', status: u.status })}><i className="bi bi-pencil"></i></Button>
                     <Button size="sm" variant="light" className="me-1" title="Đặt lại mật khẩu" onClick={() => setPwd(u)}><i className="bi bi-key"></i></Button>
                     {u.status === 'ACTIVE' && <Button size="sm" variant="light" className="text-danger" title="Khóa" onClick={() => setLockTarget(u)}><i className="bi bi-lock"></i></Button>}
                   </td>
@@ -106,8 +116,18 @@ export default function Users() {
               <Form.Control required value={form?.fullName || ''} onChange={set('fullName')} /></Form.Group>
             <Form.Group className="mb-3"><Form.Label>Vai trò</Form.Label>
               <Form.Select value={form?.role} onChange={set('role')}>
-                <option value="CASHIER">Thu ngân</option><option value="MANAGER">Quản lý</option><option value="ADMIN">Chủ cửa hàng</option>
+                <option value="STAFF">Nhân viên</option>
+                <option value="MANAGER">Quản lý cửa hàng</option>
+                <option value="ADMIN">Quản trị viên (toàn chuỗi)</option>
               </Form.Select></Form.Group>
+            {/* MANAGER/STAFF phải gắn cửa hàng; ADMIN quản trị toàn chuỗi nên không gắn. */}
+            {form?.role !== 'ADMIN' && (
+              <Form.Group className="mb-3"><Form.Label>Cửa hàng trực thuộc *</Form.Label>
+                <Form.Select required value={form?.storeId || ''} onChange={set('storeId')}>
+                  <option value="">— Chọn cửa hàng —</option>
+                  {stores.map((s) => <option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}
+                </Form.Select></Form.Group>
+            )}
             {form?.id && (
               <Form.Group><Form.Label>Trạng thái</Form.Label>
                 <Form.Select value={form?.status} onChange={set('status')}>

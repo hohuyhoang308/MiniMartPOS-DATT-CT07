@@ -10,6 +10,7 @@ export default function PrivateRoute({ roles }) {
 
   if (loading) return null
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  // ADMIN luôn có mặt trong mọi danh sách roles cần thiết (phân tầng ADMIN>MANAGER>STAFF).
   if (roles && roles.length > 0 && !roles.includes(user.role)) {
     return <Navigate to="/" replace />
   }

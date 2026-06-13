@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true)
     try {
       const session = await login(username.trim(), password)
-      navigate(session.role === 'CASHIER' ? '/pos' : '/dashboard', { replace: true })
+      navigate(session.role === 'STAFF' ? '/pos' : '/dashboard', { replace: true })
     } catch (err) {
       setError(errMsg(err, 'Đăng nhập không thành công. Vui lòng kiểm tra lại tên đăng nhập và mật khẩu'))
     } finally {

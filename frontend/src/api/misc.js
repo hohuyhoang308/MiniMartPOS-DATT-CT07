@@ -65,16 +65,24 @@ export const userApi = {
   lock: (id) => client.delete(`/users/${id}`),
 }
 
+/** Cấu hình theo TỪNG cửa hàng — admin truyền storeId để chọn cửa hàng cần cấu hình. */
 export const storeConfigApi = {
-  get: () => client.get('/store-config').then(unwrap),
-  update: (body) => client.put('/store-config', body).then(unwrap),
+  get: (storeId) => client.get('/store-config', { params: { storeId } }).then(unwrap),
+  update: (storeId, body) => client.put('/store-config', body, { params: { storeId } }).then(unwrap),
 }
 
-/** Tích hợp WEB2M & Telegram (FR-A6). */
+/** Chi nhánh (đa chuỗi) — chỉ CHAIN_ADMIN. */
+export const storeApi = {
+  list: () => client.get('/stores').then(unwrap),
+  create: (body) => client.post('/stores', body).then(unwrap),
+  update: (id, body) => client.put(`/stores/${id}`, body).then(unwrap),
+}
+
+/** Tích hợp WEB2M & Telegram (FR-A6) — theo từng cửa hàng (storeId). */
 export const integrationApi = {
-  recipients: () => client.get('/integrations/telegram/recipients').then(unwrap),
-  addRecipient: (body) => client.post('/integrations/telegram/recipients', body).then(unwrap),
+  recipients: (storeId) => client.get('/integrations/telegram/recipients', { params: { storeId } }).then(unwrap),
+  addRecipient: (storeId, body) => client.post('/integrations/telegram/recipients', body, { params: { storeId } }).then(unwrap),
   removeRecipient: (id) => client.delete(`/integrations/telegram/recipients/${id}`),
-  telegramTest: (chatId, text) => client.post('/integrations/telegram/test', { chatId, text }).then(unwrap),
-  web2mTest: (apiUrl) => client.post('/integrations/web2m/test', { apiUrl }).then(unwrap),
+  telegramTest: (storeId, chatId, text) => client.post('/integrations/telegram/test', { chatId, text }, { params: { storeId } }).then(unwrap),
+  web2mTest: (storeId, apiUrl) => client.post('/integrations/web2m/test', { apiUrl }, { params: { storeId } }).then(unwrap),
 }

@@ -28,6 +28,8 @@ export function AuthProvider({ children }) {
       username: data.username,
       fullName: data.fullName,
       role: data.role,
+      storeId: data.storeId,       // null nếu là ADMIN toàn chuỗi
+      storeName: data.storeName,   // tên cửa hàng (MANAGER/STAFF); null nếu ADMIN
     }
     localStorage.setItem(AUTH_KEY, JSON.stringify(session))
     setUser(session)
@@ -44,6 +46,8 @@ export function AuthProvider({ children }) {
     loading,
     login,
     logout,
+    // ADMIN = quản trị viên toàn chuỗi (không gắn cửa hàng); MANAGER/STAFF gắn 1 cửa hàng (qua token).
+    isAdmin: user?.role === 'ADMIN',
     isAuthenticated: !!user,
     hasRole: (...roles) => !!user && roles.includes(user.role),
   }

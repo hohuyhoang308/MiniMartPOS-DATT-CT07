@@ -1,12 +1,24 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Badge, Dropdown } from 'react-bootstrap'
+import { Dropdown } from 'react-bootstrap'
 import Sidebar from './Sidebar'
 import { findNav } from './navConfig'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 
-const ROLE_LABEL = { ADMIN: 'Chủ cửa hàng', MANAGER: 'Quản lý', CASHIER: 'Thu ngân' }
-const ROLE_COLOR = { ADMIN: 'pill-violet', MANAGER: 'pill-info', CASHIER: 'pill-success' }
+const ROLE_LABEL = { ADMIN: 'Quản trị viên', MANAGER: 'Quản lý cửa hàng', STAFF: 'Nhân viên' }
+const ROLE_COLOR = { ADMIN: 'pill-violet', MANAGER: 'pill-info', STAFF: 'pill-success' }
+
+/**
+ * Phù hiệu PHẠM VI (đa cửa hàng) — chỉ hiển thị, KHÔNG phải bộ chọn:
+ *  - ADMIN: "Toàn chuỗi" (quản trị mọi cửa hàng; cấu hình từng cửa hàng ở trang Cấu hình).
+ *  - MANAGER/STAFF: tên cửa hàng trực thuộc (cố định theo tài khoản).
+ */
+function StoreBadge() {
+  const { isAdmin, user } = useAuth()
+  if (isAdmin) return <span className="pill pill-violet"><i className="bi bi-diagram-3-fill"></i>Toàn chuỗi</span>
+  if (!user?.storeName) return null
+  return <span className="pill pill-muted"><i className="bi bi-shop"></i>{user.storeName}</span>
+}
 
 export default function Layout() {
   const { user, logout } = useAuth()
@@ -34,6 +46,7 @@ export default function Layout() {
             <small>Hệ thống POS cửa hàng tiện lợi</small>
           </div>
           <div className="d-flex align-items-center gap-3">
+            <StoreBadge />
             <button type="button" className="theme-toggle" onClick={toggleTheme}
               title={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}>
               <i className={`bi ${theme === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill'}`}></i>

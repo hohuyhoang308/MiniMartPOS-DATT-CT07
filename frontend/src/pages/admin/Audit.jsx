@@ -11,8 +11,9 @@ import { errMsg } from '../../api/client'
 const ACTION = {
   CANCEL_INVOICE: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Hủy hóa đơn' },
   EXPIRE_INVOICE: { cls: 'pill-muted', icon: 'bi-clock-history', label: 'Hóa đơn QR quá hạn' },
-  RETURN: { cls: 'pill-warning', icon: 'bi-arrow-return-left', label: 'Trả hàng' },
   CHANGE_PRICE: { cls: 'pill-info', icon: 'bi-tag-fill', label: 'Đổi giá' },
+  CREATE_STORE: { cls: 'pill-success', icon: 'bi-shop', label: 'Thêm chi nhánh' },
+  UPDATE_STORE: { cls: 'pill-info', icon: 'bi-shop', label: 'Sửa chi nhánh' },
   CONFIRM_PAYMENT: { cls: 'pill-success', icon: 'bi-check2-circle', label: 'Xác nhận thanh toán' },
   CREATE_RECEIPT: { cls: 'pill-info', icon: 'bi-box-seam', label: 'Nhập kho' },
   SHELVE: { cls: 'pill-info', icon: 'bi-box-arrow-in-up', label: 'Lên kệ' },
@@ -81,7 +82,7 @@ export default function Audit() {
 
       <InfoBanner id="audit" title="Trang này dùng để làm gì?">
         Ghi lại <b>ai làm</b>, <b>vào lúc nào</b> và <b>chi tiết</b> của những thao tác quan trọng:
-        <b> hủy hóa đơn / hóa đơn quá hạn</b>, <b>trả hàng</b>, <b>đổi giá</b>, <b>xác nhận thanh toán</b>, <b>nhập kho</b>,
+        <b> hủy hóa đơn / hóa đơn quá hạn</b>, <b>đổi giá</b>, <b>xác nhận thanh toán</b>, <b>nhập kho</b>,
         <b> lên kệ / lấy về kho</b>, <b>đóng ca</b>, <b>tài khoản và mật khẩu</b>, <b>đổi cấu hình</b>.
         Giúp bạn kiểm tra lại và tránh gian lận. Nhật ký này <b>chỉ ghi thêm, không sửa hay xóa được</b>.
       </InfoBanner>

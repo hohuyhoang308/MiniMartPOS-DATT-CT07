@@ -23,8 +23,3 @@ export const paymentApi = {
   // Thu ngân xác nhận đã nhận tiền QR (khi chưa khớp tự động qua WEB2M) → hoàn tất hóa đơn.
   confirm: (invoiceId) => client.post(`/payments/${invoiceId}/confirm`).then(unwrap),
 }
-
-export const returnApi = {
-  returnable: (invoiceId) => client.get(`/returns/invoice/${invoiceId}/returnable`).then(unwrap),
-  create: (body) => client.post('/returns', body).then(unwrap),
-}

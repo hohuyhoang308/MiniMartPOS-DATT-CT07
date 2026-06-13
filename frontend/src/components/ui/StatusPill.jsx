@@ -14,9 +14,9 @@ const MAP = {
   FAILED: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Thất bại' },
   CASH: { cls: 'pill-info', icon: 'bi-cash-stack', label: 'Tiền mặt' },
   QR: { cls: 'pill-violet', icon: 'bi-qr-code', label: 'QR/CK' },
-  ADMIN: { cls: 'pill-violet', icon: 'bi-shield-lock-fill', label: 'Chủ cửa hàng' },
-  MANAGER: { cls: 'pill-info', icon: 'bi-person-gear', label: 'Quản lý' },
-  CASHIER: { cls: 'pill-success', icon: 'bi-person-fill', label: 'Thu ngân' },
+  ADMIN: { cls: 'pill-violet', icon: 'bi-shield-lock-fill', label: 'Quản trị viên' },
+  MANAGER: { cls: 'pill-info', icon: 'bi-person-gear', label: 'Quản lý cửa hàng' },
+  STAFF: { cls: 'pill-success', icon: 'bi-person-fill', label: 'Nhân viên' },
 }
 
 export default function StatusPill({ value }) {
