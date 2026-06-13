@@ -10,5 +10,7 @@ import jakarta.validation.constraints.Size;
 public record UpdateUserRequest(
         @NotBlank(message = "Họ tên không được để trống") @Size(max = 100) String fullName,
         @NotNull(message = "Phải chọn vai trò") Role role,
+        /** Chi nhánh trực thuộc — bắt buộc với ADMIN/MANAGER/CASHIER; bỏ trống nếu là CHAIN_ADMIN. */
+        Long storeId,
         @NotNull(message = "Phải chọn trạng thái") UserStatus status
 ) {}

@@ -5,6 +5,8 @@ import com.pos.entity.TelegramRecipient;
 import com.pos.exception.BadRequestException;
 import com.pos.repository.StoreConfigRepository;
 import com.pos.repository.TelegramRecipientRepository;
+import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 
-/** Gửi thông báo qua Telegram Bot (FR-A5). */
+/** Gửi thông báo qua Telegram Bot THEO CHI NHÁNH (FR-A5, đa chuỗi). */
 @Service
 public class TelegramService {
 
@@ -57,34 +59,36 @@ public class TelegramService {
         }
     }
 
-    /** Gửi tin thử (FR-A5 nút "gửi thử") tới 1 chat cụ thể bằng token đã cấu hình. */
-    public boolean testSend(String chatId, String text) {
-        StoreConfig cfg = config();
+    /** Gửi tin thử (FR-A5) tới 1 chat bằng token của CỬA HÀNG được chọn (ADMIN truyền storeId). */
+    public boolean testSend(Long storeId, String chatId, String text) {
+        Long sid = (storeId != null && SecurityUtils.isAdmin()) ? storeId : StoreContext.requireStoreId();
+        StoreConfig cfg = config(sid);
         return sendMessage(cfg.getTelegramBotToken(), chatId,
                 text != null ? text : "🔔 Tin nhắn thử từ hệ thống POS cửa hàng tiện lợi");
     }
 
-    /** Phát thông báo tới mọi người nhận đang bật (nếu telegram_enabled). */
-    public void broadcast(String text) {
-        StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+    /** Phát thông báo tới mọi người nhận đang bật của MỘT chi nhánh (nếu telegram_enabled). */
+    public void broadcast(Long storeId, String text) {
+        StoreConfig cfg = storeConfigRepository.findById(storeId).orElse(null);
         if (cfg == null || !Boolean.TRUE.equals(cfg.getTelegramEnabled())
                 || cfg.getTelegramBotToken() == null || cfg.getTelegramBotToken().isBlank()) {
             return;
         }
-        List<TelegramRecipient> recipients = recipientRepository.findByIsActiveTrue();
+        List<TelegramRecipient> recipients = recipientRepository.findByConfigIdAndIsActiveTrue(storeId);
         for (TelegramRecipient r : recipients) {
             sendMessage(cfg.getTelegramBotToken(), r.getChatId(), text);
         }
     }
 
-    public boolean notifyPaymentEnabled() {
-        StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+    /** Chi nhánh có bật thông báo "tiền về" không. */
+    public boolean notifyPaymentEnabled(Long storeId) {
+        StoreConfig cfg = storeConfigRepository.findById(storeId).orElse(null);
         return cfg != null && Boolean.TRUE.equals(cfg.getTelegramEnabled())
                 && Boolean.TRUE.equals(cfg.getNotifyPayment());
     }
 
-    private StoreConfig config() {
-        return storeConfigRepository.findById(StoreConfig.SINGLETON_ID)
-                .orElseThrow(() -> new BadRequestException("Chưa có cấu hình cửa hàng"));
+    private StoreConfig config(Long storeId) {
+        return storeConfigRepository.findById(storeId)
+                .orElseThrow(() -> new BadRequestException("Chưa có cấu hình cho chi nhánh"));
     }
 }

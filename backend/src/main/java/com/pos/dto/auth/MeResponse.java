@@ -5,5 +5,7 @@ public record MeResponse(
         Long userId,
         String username,
         String fullName,
-        String role
+        String role,
+        Long storeId,
+        String storeName
 ) {}

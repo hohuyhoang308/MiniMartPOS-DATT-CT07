@@ -1,6 +1,6 @@
 package com.pos.dto.auth;
 
-/** Phản hồi đăng nhập: JWT + thông tin hiển thị để FE điều hướng theo vai trò. */
+/** Phản hồi đăng nhập: JWT + thông tin hiển thị để FE điều hướng theo vai trò & chi nhánh. */
 public record LoginResponse(
         String token,
         String tokenType,
@@ -8,5 +8,7 @@ public record LoginResponse(
         Long userId,
         String username,
         String fullName,
-        String role
+        String role,
+        Long storeId,
+        String storeName
 ) {}

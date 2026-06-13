@@ -15,6 +15,7 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.*;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import com.pos.util.CodeGenerator;
 import com.pos.util.Money;
 import com.pos.util.VietQrUtil;
@@ -85,10 +86,11 @@ public class SaleService {
         if (idem != null) {
             Invoice existing = invoiceRepository.findByIdempotencyKey(idem).orElse(null);
             if (existing != null) {
+                StoreContext.assertSameStore(existing.getStore().getId());   // không trả HĐ của cửa hàng khác
                 PaymentTransaction pt = paymentRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(existing.getId()).orElse(null);
                 String qrUrl = null;
                 if (pt != null) {
-                    StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+                    StoreConfig cfg = storeConfigRepository.findById(existing.getStore().getId()).orElse(null);
                     qrUrl = VietQrUtil.buildQrUrl(cfg, pt.getAmount(), pt.getTransferContent());
                 }
                 return InvoiceResponse.from(existing, pt, qrUrl);
@@ -103,6 +105,7 @@ public class SaleService {
         // 2) Tạo các dòng hóa đơn (giá snapshot) + tính tổng tạm tính
         Invoice invoice = new Invoice();
         invoice.setShift(shift);
+        invoice.setStore(shift.getStore());   // ĐA CHUỖI: hóa đơn thuộc chi nhánh của ca
         invoice.setPaymentMethod(req.paymentMethod());
         // QR: chưa nhận tiền ngay → HĐ ở trạng thái CHỜ THANH TOÁN (giữ chỗ tồn nhưng chưa tính doanh thu).
         // Chỉ chuyển COMPLETED khi WEB2M khớp tiền hoặc thu ngân xác nhận tay. Tiền mặt: COMPLETED ngay.
@@ -201,8 +204,8 @@ public class SaleService {
         invoice.setCode(generateCode());
         invoice.setIdempotencyKey(idem);
 
-        // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô
-        allocateStockFifo(invoice, neededByProduct);
+        // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô CỦA CHI NHÁNH NÀY (đa chuỗi)
+        allocateStockFifo(invoice, neededByProduct, shift.getStore().getId());
 
         // 8) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
@@ -228,7 +231,7 @@ public class SaleService {
         PaymentTransaction pt = null;
         String qrUrl = null;
         if (req.paymentMethod() == PaymentMethod.QR) {
-            StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+            StoreConfig cfg = storeConfigRepository.findById(shift.getStore().getId()).orElse(null);
             String prefix = (cfg != null && cfg.getTransferPrefix() != null) ? cfg.getTransferPrefix() : "POS";
             pt = new PaymentTransaction();
             pt.setInvoice(saved);
@@ -243,8 +246,8 @@ public class SaleService {
         return InvoiceResponse.from(saved, pt, qrUrl);
     }
 
-    /** Phân bổ FIFO: với mỗi sản phẩm, rút tồn theo thứ tự HSD gần nhất. Thiếu tồn → Conflict (rollback). */
-    private void allocateStockFifo(Invoice invoice, Map<Long, Integer> neededByProduct) {
+    /** Phân bổ FIFO: với mỗi sản phẩm, rút tồn theo thứ tự HSD gần nhất TRONG CHI NHÁNH. Thiếu tồn → Conflict (rollback). */
+    private void allocateStockFifo(Invoice invoice, Map<Long, Integer> neededByProduct, Long storeId) {
         // Khoá tồn theo sản phẩm (id TĂNG DẦN để tránh deadlock) TRƯỚC khi đọc tồn từ view:
         // tuần tự hoá các giao dịch chạm cùng sản phẩm → không thể bán quá tồn kệ khi 2 quầy bán đồng thời.
         neededByProduct.keySet().stream().sorted().forEach(productRepository::findByIdForUpdate);
@@ -253,8 +256,8 @@ public class SaleService {
         Map<Long, Deque<long[]>> batchesByProduct = new HashMap<>(); // productId -> deque[ batchId, remaining ]
         for (Long productId : neededByProduct.keySet()) {
             Deque<long[]> deque = new ArrayDeque<>();
-            for (BatchStockView b : batchStockRepository.findAvailableBatchesFifo(productId)) {
-                deque.addLast(new long[]{b.getBatchId(), b.getOnShelf()}); // chỉ bán hàng TRÊN KỆ
+            for (BatchStockView b : batchStockRepository.findAvailableBatchesFifo(productId, storeId)) {
+                deque.addLast(new long[]{b.getBatchId(), b.getOnShelf()}); // chỉ bán hàng TRÊN KỆ của chi nhánh
             }
             batchesByProduct.put(productId, deque);
         }

@@ -65,10 +65,13 @@ public class AuthService {
                 user.getId(),
                 user.getUsername(),
                 user.getFullName(),
-                user.getRole());
+                user.getRole(),
+                user.getStoreId(),
+                user.getStoreName());
     }
 
     public MeResponse me(CustomUserDetails user) {
-        return new MeResponse(user.getId(), user.getUsername(), user.getFullName(), user.getRole());
+        return new MeResponse(user.getId(), user.getUsername(), user.getFullName(),
+                user.getRole(), user.getStoreId(), user.getStoreName());
     }
 }

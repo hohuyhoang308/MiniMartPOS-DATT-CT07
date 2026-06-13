@@ -2,40 +2,66 @@ package com.pos.service;
 
 import com.pos.dto.config.StoreConfigRequest;
 import com.pos.dto.config.StoreConfigResponse;
+import com.pos.entity.Store;
 import com.pos.entity.StoreConfig;
+import com.pos.exception.NotFoundException;
 import com.pos.repository.StoreConfigRepository;
+import com.pos.repository.StoreRepository;
+import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Cấu hình cửa hàng & tích hợp (FR10, FR-A6). Bảng 1 dòng (singleton id=1). */
+/** Cấu hình TỪNG CHI NHÁNH & tích hợp (FR10, FR-A6) — mỗi chi nhánh một dòng, khóa = stores.id. */
 @Service
 @Transactional(readOnly = true)
 public class StoreConfigService {
 
     private final StoreConfigRepository repository;
+    private final StoreRepository storeRepository;
     private final AuditService auditService;
 
-    public StoreConfigService(StoreConfigRepository repository, AuditService auditService) {
+    public StoreConfigService(StoreConfigRepository repository, StoreRepository storeRepository,
+                              AuditService auditService) {
         this.repository = repository;
+        this.storeRepository = storeRepository;
         this.auditService = auditService;
     }
 
-    public StoreConfig getEntity() {
-        return repository.findById(StoreConfig.SINGLETON_ID).orElseGet(() -> {
+    /** Cấu hình của một chi nhánh; tự tạo dòng mặc định (lấy tên từ chi nhánh) nếu chưa có. */
+    @Transactional
+    public StoreConfig getEntity(Long storeId) {
+        return repository.findById(storeId).orElseGet(() -> {
+            Store store = storeRepository.findById(storeId)
+                    .orElseThrow(() -> NotFoundException.of("chi nhánh", storeId));
             StoreConfig c = new StoreConfig();
-            c.setId(StoreConfig.SINGLETON_ID);
-            c.setName("Cửa hàng tiện lợi");
+            c.setId(storeId);
+            c.setName(store.getName());
+            c.setAddress(store.getAddress());
+            c.setPhone(store.getPhone());
             return repository.save(c);
         });
     }
 
-    public StoreConfigResponse get() {
-        return StoreConfigResponse.from(getEntity());
+    /**
+     * Cửa hàng cần cấu hình: ADMIN truyền {@code storeId} tường minh (chọn trên trang Cấu hình);
+     * MANAGER/STAFF bỏ trống → tự lấy cửa hàng của họ. ADMIN bỏ trống → lỗi (yêu cầu chọn cửa hàng).
+     */
+    private Long resolveConfigStoreId(Long storeId) {
+        if (storeId != null) {
+            if (SecurityUtils.isAdmin()) return storeId;             // admin cấu hình cửa hàng bất kỳ
+            return StoreContext.requireStoreId();                    // người gắn cửa hàng: chỉ cửa hàng của mình
+        }
+        return StoreContext.requireStoreId();
+    }
+
+    public StoreConfigResponse get(Long storeId) {
+        return StoreConfigResponse.from(getEntity(resolveConfigStoreId(storeId)));
     }
 
     @Transactional
-    public StoreConfigResponse update(StoreConfigRequest req) {
-        StoreConfig c = getEntity();
+    public StoreConfigResponse update(Long storeId, StoreConfigRequest req) {
+        StoreConfig c = getEntity(resolveConfigStoreId(storeId));
         c.setName(req.name());
         c.setAddress(req.address());
         c.setPhone(req.phone());
@@ -54,9 +80,8 @@ public class StoreConfigService {
         if (req.notifyLowStock() != null) c.setNotifyLowStock(req.notifyLowStock());
         if (req.notifyNewInvoice() != null) c.setNotifyNewInvoice(req.notifyNewInvoice());
         StoreConfig saved = repository.save(c);
-        auditService.log("UPDATE_CONFIG", "STORE_CONFIG",
-                saved.getId() != null ? saved.getId().longValue() : null,
-                "Cập nhật cấu hình cửa hàng / tích hợp");
+        auditService.log("UPDATE_CONFIG", "STORE_CONFIG", saved.getId(),
+                "Cập nhật cấu hình chi nhánh / tích hợp");
         return StoreConfigResponse.from(saved);
     }
 }

@@ -7,7 +7,11 @@ import java.util.List;
 
 public interface TelegramRecipientRepository extends JpaRepository<TelegramRecipient, Long> {
 
-    List<TelegramRecipient> findByIsActiveTrue();
+    /** Người nhận đang bật của MỘT chi nhánh (config_id = stores.id) — để phát thông báo đúng chi nhánh. */
+    List<TelegramRecipient> findByConfigIdAndIsActiveTrue(Long configId);
 
-    boolean existsByChatId(String chatId);
+    /** Danh sách người nhận của một chi nhánh (quản lý ở màn cấu hình). */
+    List<TelegramRecipient> findByConfigIdOrderById(Long configId);
+
+    boolean existsByConfigIdAndChatId(Long configId, String chatId);
 }

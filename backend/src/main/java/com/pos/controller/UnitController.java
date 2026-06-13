@@ -27,20 +27,20 @@ public class UnitController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ApiResponse<UnitResponse> create(@Valid @RequestBody UnitRequest req) {
         return ApiResponse.ok("Tạo đơn vị tính thành công", service.create(req));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<UnitResponse> update(@PathVariable Long id, @Valid @RequestBody UnitRequest req) {
         return ApiResponse.ok("Cập nhật thành công", service.update(id, req));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return ApiResponse.message("Xóa đơn vị tính thành công");

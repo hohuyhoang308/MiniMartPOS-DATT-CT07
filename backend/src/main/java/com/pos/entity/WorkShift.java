@@ -23,6 +23,11 @@ public class WorkShift {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Chi nhánh mở ca (đa chuỗi) — hóa đơn/phiếu trả của ca thuộc về chi nhánh đây. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
+
     /** Thu ngân của ca. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)

@@ -6,6 +6,7 @@ import com.pos.dto.report.ShiftReportResponse;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.view.ShiftSummaryViewRepository;
+import com.pos.security.StoreContext;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -25,50 +26,26 @@ public class ReportService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final ShiftSummaryViewRepository shiftSummaryRepository;
-    private final com.pos.repository.SalesReturnRepository returnRepository;
-    private final com.pos.repository.SalesReturnItemRepository returnItemRepository;
 
     public ReportService(InvoiceRepository invoiceRepository,
                          InvoiceItemRepository invoiceItemRepository,
-                         ShiftSummaryViewRepository shiftSummaryRepository,
-                         com.pos.repository.SalesReturnRepository returnRepository,
-                         com.pos.repository.SalesReturnItemRepository returnItemRepository) {
+                         ShiftSummaryViewRepository shiftSummaryRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.shiftSummaryRepository = shiftSummaryRepository;
-        this.returnRepository = returnRepository;
-        this.returnItemRepository = returnItemRepository;
     }
 
     public RevenueReportResponse revenue(LocalDate from, LocalDate to, ReportPeriod period) {
+        Long storeId = StoreContext.currentStoreId();   // null = toàn chuỗi
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(1).atStartOfDay();
         String fmt = period.sqlFormat();
 
-        // Hàng TRẢ theo kỳ → trừ doanh thu (tiền hoàn) & lợi nhuận (lãi hàng trả) cho RÒNG.
-        java.util.Map<String, BigDecimal> refundByBucket = new java.util.LinkedHashMap<>();
-        for (var r : returnRepository.refundByPeriod(start, end, fmt)) refundByBucket.put(r.getBucket(), nz(r.getAmount()));
-        java.util.Map<String, BigDecimal> retProfitByBucket = new java.util.LinkedHashMap<>();
-        for (var r : returnItemRepository.returnedProfitByPeriod(start, end, fmt)) retProfitByBucket.put(r.getBucket(), nz(r.getAmount()));
-
         java.util.List<RevenueReportResponse.PeriodPoint> points = new java.util.ArrayList<>(invoiceRepository
-                .revenueByPeriod(start, end, fmt).stream()
+                .revenueByPeriod(start, end, fmt, storeId).stream()
                 .map(r -> new RevenueReportResponse.PeriodPoint(
-                        r.getBucket(),
-                        nz(r.getRevenue()).subtract(refundByBucket.getOrDefault(r.getBucket(), BigDecimal.ZERO)),
-                        nz(r.getProfit()).subtract(retProfitByBucket.getOrDefault(r.getBucket(), BigDecimal.ZERO)),
-                        r.getInvoiceCount()))
+                        r.getBucket(), nz(r.getRevenue()), nz(r.getProfit()), r.getInvoiceCount()))
                 .toList());
-        // Kỳ chỉ có TRẢ HÀNG (không có bán) → thêm điểm âm để tổng khớp.
-        java.util.Set<String> salesBuckets = points.stream()
-                .map(RevenueReportResponse.PeriodPoint::label).collect(java.util.stream.Collectors.toSet());
-        for (String b : refundByBucket.keySet()) {
-            if (!salesBuckets.contains(b)) {
-                points.add(new RevenueReportResponse.PeriodPoint(b,
-                        refundByBucket.get(b).negate(),
-                        retProfitByBucket.getOrDefault(b, BigDecimal.ZERO).negate(), 0L));
-            }
-        }
         points.sort(java.util.Comparator.comparing(RevenueReportResponse.PeriodPoint::label));
 
         // Tổng tính từ các kỳ để luôn khớp tuyệt đối với bảng/biểu đồ hiển thị.
@@ -88,7 +65,10 @@ public class ReportService {
     }
 
     public List<ShiftReportResponse> shiftReport() {
-        return shiftSummaryRepository.findAll().stream()
+        Long storeId = StoreContext.currentStoreId();
+        var summaries = storeId == null ? shiftSummaryRepository.findAll()
+                                        : shiftSummaryRepository.findByStoreId(storeId);
+        return summaries.stream()
                 .map(v -> ShiftReportResponse.from(v, invoiceRepository.sumCashSalesByShift(v.getShiftId())))
                 .toList();
     }

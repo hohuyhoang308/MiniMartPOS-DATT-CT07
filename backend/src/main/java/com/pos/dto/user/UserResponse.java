@@ -8,10 +8,14 @@ import java.time.LocalDateTime;
 
 public record UserResponse(
         Long id, String username, String fullName,
-        Role role, UserStatus status, LocalDateTime createdAt) {
+        Role role, Long storeId, String storeName,
+        UserStatus status, LocalDateTime createdAt) {
 
     public static UserResponse from(User u) {
         return new UserResponse(u.getId(), u.getUsername(), u.getFullName(),
-                u.getRole(), u.getStatus(), u.getCreatedAt());
+                u.getRole(),
+                u.getStore() != null ? u.getStore().getId() : null,
+                u.getStore() != null ? u.getStore().getName() : null,
+                u.getStatus(), u.getCreatedAt());
     }
 }

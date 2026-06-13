@@ -50,9 +50,9 @@ public class InventoryController {
         return ApiResponse.ok(service.abcXyzAnalysis());
     }
 
-    /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). Cả thu ngân (để lên kệ). */
+    /** Chi tiết các lô của 1 sản phẩm (HSD + tồn kho/kệ theo lô). Cả nhân viên (để lên kệ). */
     @GetMapping("/batches/{productId}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<List<BatchDetailResponse>> batches(@PathVariable Long productId) {
         return ApiResponse.ok(service.productBatches(productId));
     }

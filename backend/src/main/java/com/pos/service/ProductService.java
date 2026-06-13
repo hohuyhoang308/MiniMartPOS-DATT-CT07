@@ -84,17 +84,20 @@ public class ProductService {
      */
     public List<ProductResponse> relatedProducts(Long productId, int limit) {
         Product base = getOrThrow(productId);
-        Map<Long, ProductStockView> stock = stockRepository.findAll().stream()
+        // Gợi ý theo CỬA HÀNG đang đăng nhập (đa cửa hàng): tồn kệ + thống kê mua kèm của chính cửa hàng đó.
+        Long storeId = com.pos.security.StoreContext.currentStoreId();
+        Map<Long, ProductStockView> stock = (storeId == null ? stockRepository.findAll()
+                                                             : stockRepository.findByStoreId(storeId)).stream()
                 .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
 
-        // n(B): số HĐ chứa mỗi sản phẩm — mẫu số của lift
-        Map<Long, Long> invoiceCount = invoiceItemRepository.invoiceCountByProduct().stream()
+        // n(B): số HĐ chứa mỗi sản phẩm — mẫu số của lift (lọc theo cửa hàng)
+        Map<Long, Long> invoiceCount = invoiceItemRepository.invoiceCountByProduct(storeId).stream()
                 .collect(Collectors.toMap(ProductCountRow::getProductId,
                         r -> r.getCnt() != null ? r.getCnt() : 1L, (a, b) -> a));
 
         LinkedHashMap<Long, Product> picked = new LinkedHashMap<>();
         // 1) Từ lịch sử: xếp theo lift = co(A,B)/n(B), lọc support tối thiểu, chỉ món còn hàng TRÊN KỆ
-        invoiceItemRepository.boughtTogether(productId, PageRequest.of(0, Math.max(limit * 5, 20))).stream()
+        invoiceItemRepository.boughtTogether(productId, storeId, PageRequest.of(0, Math.max(limit * 5, 20))).stream()
                 .filter(r -> r.getCnt() != null && r.getCnt() >= MIN_SUPPORT)
                 .sorted((a, b) -> Double.compare(
                         b.getCnt() / (double) Math.max(1L, invoiceCount.getOrDefault(b.getProductId(), 1L)),
@@ -239,7 +242,10 @@ public class ProductService {
     }
 
     private ProductStockView stockView(Long productId) {
-        return stockRepository.findByProductId(productId).orElse(null);
+        // Tồn hiển thị theo CHI NHÁNH đang làm việc (đa chuỗi); chưa chọn chi nhánh → không kèm tồn.
+        Long storeId = com.pos.security.StoreContext.currentStoreId();
+        if (storeId == null) return null;
+        return stockRepository.findByProductIdAndStoreId(productId, storeId).orElse(null);
     }
 
     private Product getOrThrow(Long id) {

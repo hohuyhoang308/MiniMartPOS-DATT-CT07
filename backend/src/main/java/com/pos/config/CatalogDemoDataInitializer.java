@@ -48,6 +48,10 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     private final WorkShiftRepository workShiftRepository;
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
+    private final StoreRepository storeRepository;
+
+    /** Chi nhánh demo (CH01) — toàn bộ dữ liệu demo (nhập kho, kệ, ca, hóa đơn) thuộc chi nhánh này. */
+    private Store demoStore;
 
     @PersistenceContext
     private EntityManager em;
@@ -57,7 +61,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                                       GoodsReceiptRepository goodsReceiptRepository, UserRepository userRepository,
                                       ShelfTransferRepository shelfTransferRepository, ShelfRepository shelfRepository,
                                       WorkShiftRepository workShiftRepository, InvoiceRepository invoiceRepository,
-                                      CustomerRepository customerRepository) {
+                                      CustomerRepository customerRepository, StoreRepository storeRepository) {
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.supplierRepository = supplierRepository;
@@ -69,6 +73,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         this.workShiftRepository = workShiftRepository;
         this.invoiceRepository = invoiceRepository;
         this.customerRepository = customerRepository;
+        this.storeRepository = storeRepository;
     }
 
     /** Đặc tả 1 mặt hàng demo (thuế + quy cách suy ra từ danh mục/đơn vị). */
@@ -78,6 +83,11 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        demoStore = storeRepository.findByCode("CH01").orElse(null);
+        if (demoStore == null) {
+            log.warn("Bỏ qua seed catalog: chưa có chi nhánh CH01.");
+            return;
+        }
         Map<String, Category> categories = ensureCategories();
         Map<String, Unit> units = ensureUnits();
         Map<String, Shelf> shelves = ensureShelves();
@@ -139,6 +149,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
             List<GoodsReceiptItem> batches = batchesBySupplier.get(sup);
             if (batches.isEmpty()) continue;
             GoodsReceipt receipt = new GoodsReceipt();
+            receipt.setStore(demoStore);
             receipt.setCode(nextReceiptCode());
             receipt.setSupplier(suppliers.get(sup));
             receipt.setCreatedBy(createdBy);
@@ -188,7 +199,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
 
     private int seedSalesHistory(User createdBy, Map<String, Shelf> shelves,
                                  Map<Long, Product> productsWithStock) {
-        User cashier = userRepository.findByUsername("cashier").orElse(createdBy);
+        User cashier = userRepository.findByUsername("staff").orElse(createdBy);
         List<Long> productIds = new ArrayList<>(productsWithStock.keySet());
         if (productIds.isEmpty()) return 0;
         Map<Long, int[]> shelfRemain = new HashMap<>();   // batchId (lô lịch sử) -> [còn lại để bán]
@@ -234,6 +245,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         //      hiện tại (giữ nguyên bức tranh tồn kho/cận HSD/cần nhập của các lô đang bày bán). ----
         Supplier supplier = supplierRepository.findAll().stream().findFirst().orElse(null);
         GoodsReceipt histReceipt = new GoodsReceipt();
+        histReceipt.setStore(demoStore);
         histReceipt.setCode(nextReceiptCode());
         histReceipt.setSupplier(supplier);
         histReceipt.setCreatedBy(createdBy);
@@ -276,6 +288,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         for (int d = 0; d <= HISTORY_DAYS; d++) {
             int dayOffset = HISTORY_DAYS - d; // d=HISTORY_DAYS → hôm nay (offset 0)
             WorkShift shift = new WorkShift();
+            shift.setStore(demoStore);
             shift.setUser(cashier);
             shift.setOpeningCash(BigDecimal.valueOf(500000));
             shift.setStatus(ShiftStatus.CLOSED);
@@ -326,6 +339,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                                            Map<Long, int[]> shelfRemain, Map<Long, GoodsReceiptItem> histBatch, long seq) {
         Invoice inv = new Invoice();
         inv.setShift(shift);
+        inv.setStore(shift.getStore());
         BigDecimal subtotal = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         for (long[] line : basket) {
             GoodsReceiptItem b = histBatch.get(line[0]);
@@ -423,8 +437,9 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         for (int i = 0; i < cats.length; i++) {
             String code = String.format("K%02d", i + 1);
             String catName = cats[i];
-            Shelf shelf = shelfRepository.findByCodeIgnoreCase(code).orElseGet(() -> {
+            Shelf shelf = shelfRepository.findByStoreIdAndCodeIgnoreCase(demoStore.getId(), code).orElseGet(() -> {
                 Shelf s = new Shelf();
+                s.setStore(demoStore);
                 s.setCode(code); s.setName(catName); s.setCapacity(800); s.setStatus(CommonStatus.ACTIVE);
                 return shelfRepository.save(s);
             });

@@ -8,8 +8,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/** Cấu hình hệ thống (FR10 + FR-A) — bảng {@code store_config} 1 dòng (singleton, id=1).
- *  Hub: thông tin cửa hàng + ngân hàng (VietQR) + WEB2M + Telegram.
+/** Cấu hình từng chi nhánh (FR10 + FR-A) — bảng {@code store_config}, MỖI chi nhánh MỘT dòng.
+ *  Khóa chính {@code id} TRÙNG với {@code stores.id} (quan hệ 1–1 chia sẻ khóa) nên mỗi cửa hàng
+ *  có ngân hàng/WEB2M/Telegram riêng. Hub: thông tin cửa hàng + ngân hàng (VietQR) + WEB2M + Telegram.
  *  LƯU Ý: web2m_api_url & telegram_bot_token là NHẠY CẢM. */
 @Entity
 @Table(name = "store_config")
@@ -18,10 +19,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class StoreConfig {
 
-    public static final byte SINGLETON_ID = 1;
+    /** Chi nhánh mặc định (dữ liệu cấu hình cũ trước đa chuỗi thuộc về chi nhánh này). */
+    public static final long DEFAULT_STORE_ID = 1L;
 
+    /** = stores.id (1–1 chia sẻ khóa). KHÔNG tự sinh: gán bằng id của chi nhánh. */
     @Id
-    private Byte id = SINGLETON_ID;
+    private Long id;
 
     // --- Thông tin cửa hàng (in hóa đơn - FR10) ---
     @Column(nullable = false, length = 150)

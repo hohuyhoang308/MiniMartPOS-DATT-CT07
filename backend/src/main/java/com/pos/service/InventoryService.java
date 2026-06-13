@@ -12,6 +12,7 @@ import com.pos.repository.ShelfRepository;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ExpiringBatchViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,40 +71,43 @@ public class InventoryService {
                 .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
     }
 
-    /** Bản đồ sản phẩm → mã kệ đang bày (kệ có tồn &gt; 0). Mỗi SP thường nằm 1 kệ theo quy ước. */
-    private Map<Long, String> productShelfCode() {
+    /** Bản đồ sản phẩm → mã kệ đang bày của CHI NHÁNH (kệ có tồn &gt; 0). */
+    private Map<Long, String> productShelfCode(Long storeId) {
         Map<Long, String> byId = shelfCodeById();
         Map<Long, String> byProduct = new HashMap<>();
-        for (var b : batchStockRepository.findAll()) {
-            if (b.getShelfId() != null && b.getOnShelf() != null && b.getOnShelf() > 0) {
+        for (var b : batchStockRepository.findOnShelfByStore(storeId)) {
+            if (b.getShelfId() != null) {
                 byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
             }
         }
         return byProduct;
     }
 
-    /** Chi tiết các LÔ còn hàng của 1 sản phẩm (HSD + tồn kho/kệ + Ở KỆ NÀO theo lô). */
+    /** Chi tiết các LÔ còn hàng của 1 sản phẩm TẠI CHI NHÁNH (HSD + tồn kho/kệ + Ở KỆ NÀO theo lô). */
     public List<BatchDetailResponse> productBatches(Long productId) {
+        Long storeId = StoreContext.requireStoreId();
         Map<Long, String> shelfById = shelfCodeById();
-        return batchStockRepository.findProductBatches(productId).stream()
+        return batchStockRepository.findProductBatches(productId, storeId).stream()
                 .map(v -> BatchDetailResponse.from(v, v.getShelfId() != null ? shelfById.get(v.getShelfId()) : null))
                 .toList();
     }
 
     public List<StockResponse> currentStock() {
-        Map<Long, String> byProduct = productShelfCode();
-        return stockRepository.findAll().stream()
+        Long storeId = StoreContext.requireStoreId();
+        Map<Long, String> byProduct = productShelfCode(storeId);
+        return stockRepository.findByStoreId(storeId).stream()
                 .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }
 
     public List<StockResponse> lowStock() {
-        Map<Long, String> byProduct = productShelfCode();
-        return stockRepository.findLowStock().stream()
+        Long storeId = StoreContext.requireStoreId();
+        Map<Long, String> byProduct = productShelfCode(storeId);
+        return stockRepository.findLowStock(storeId).stream()
                 .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }
 
     public List<ExpiringBatchResponse> expiringBatches() {
-        return expiringRepository.findAllByOrderByDaysLeftAsc().stream()
+        return expiringRepository.findByStoreIdOrderByDaysLeftAsc(StoreContext.requireStoreId()).stream()
                 .map(ExpiringBatchResponse::from).toList();
     }
 
@@ -112,14 +116,15 @@ public class InventoryService {
      * ngày để gợi ý mặt hàng cần nhập và số lượng nhập. Sắp theo độ khẩn rồi tới số ngày còn bán.
      */
     public List<ReorderSuggestionResponse> reorderSuggestions() {
+        Long storeId = StoreContext.requireStoreId();
         LocalDateTime from = LocalDateTime.now().minusDays(VELOCITY_DAYS);
         Map<Long, Long> soldByProduct = new HashMap<>();
-        for (var row : invoiceItemRepository.soldQuantitySince(from)) {
+        for (var row : invoiceItemRepository.soldQuantitySince(from, storeId)) {
             soldByProduct.put(row.getProductId(), row.getSoldQty() != null ? row.getSoldQty() : 0L);
         }
         // Tổng bình phương lượng bán theo NGÀY (để tính phương sai nhu cầu σ²).
         Map<Long, Double> sumSqByProduct = new HashMap<>();
-        for (var row : invoiceItemRepository.dailySalesSince(from)) {
+        for (var row : invoiceItemRepository.dailySalesSince(from, storeId)) {
             double q = row.getSoldQty() != null ? row.getSoldQty() : 0;
             sumSqByProduct.merge(row.getProductId(), q * q, Double::sum);
         }
@@ -131,11 +136,11 @@ public class InventoryService {
                 .collect(Collectors.toMap(com.pos.dto.inventory.AbcXyzResponse::productId,
                         r -> new String[]{r.abcClass(), r.xyzClass()}, (a, b) -> a));
         // KẾT NỐI HSD → cảnh báo sản phẩm đang có lô cận/quá hạn (đừng vội nhập thêm khi còn hàng sắp hết hạn).
-        Set<Long> expiringProducts = expiringRepository.findAllByOrderByDaysLeftAsc().stream()
+        Set<Long> expiringProducts = expiringRepository.findByStoreIdOrderByDaysLeftAsc(storeId).stream()
                 .map(com.pos.entity.view.ExpiringBatchView::getProductId).collect(Collectors.toSet());
 
         List<ReorderSuggestionResponse> result = new ArrayList<>();
-        for (var v : stockRepository.findAll()) {
+        for (var v : stockRepository.findByStoreId(storeId)) {
             long current = v.getCurrentStock() != null ? v.getCurrentStock() : 0L;
             int min = v.getMinStock() != null ? v.getMinStock() : 0;
             long sold = soldByProduct.getOrDefault(v.getProductId(), 0L);
@@ -237,19 +242,20 @@ public class InventoryService {
      * (CV = σ/μ). Giúp dồn kiểm soát chặt cho nhóm A/X, nới nhóm C/Z. Xếp theo doanh thu giảm dần.
      */
     public List<com.pos.dto.inventory.AbcXyzResponse> abcXyzAnalysis() {
+        Long storeId = StoreContext.requireStoreId();
         LocalDateTime from = LocalDateTime.now().minusDays(ABC_DAYS);
 
         // Độ biến động (XYZ) tính trên lượng bán theo TUẦN — gộp tuần để bỏ nhiễu "ngày bán = 0"
         // của bán lẻ, tránh việc mọi mặt hàng đều bị xếp Z (thất thường) một cách giả tạo.
         Map<Long, Double> weeklySumSq = new HashMap<>();
-        for (var row : invoiceItemRepository.weeklySalesSince(from)) {
+        for (var row : invoiceItemRepository.weeklySalesSince(from, storeId)) {
             double q = row.getSoldQty() != null ? row.getSoldQty() : 0;
             weeklySumSq.merge(row.getProductId(), q * q, Double::sum);
         }
         Map<Long, String> names = productRepository.findAll().stream()
                 .collect(Collectors.toMap(Product::getId, Product::getName, (a, b) -> a));
 
-        var rows = invoiceItemRepository.revenueByProductSince(from).stream()
+        var rows = invoiceItemRepository.revenueByProductSince(from, storeId).stream()
                 .filter(r -> r.getRevenue() != null && r.getRevenue().signum() > 0)
                 .sorted((a, b) -> b.getRevenue().compareTo(a.getRevenue()))
                 .toList();

@@ -18,6 +18,10 @@ public class ShiftSummaryView {
     @Column(name = "shift_id")
     private Long shiftId;
 
+    /** Chi nhánh mở ca (đa chuỗi). */
+    @Column(name = "store_id")
+    private Long storeId;
+
     @Column(name = "user_id")
     private Long userId;
 

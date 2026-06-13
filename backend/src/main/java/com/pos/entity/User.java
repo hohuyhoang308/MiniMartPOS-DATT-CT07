@@ -36,6 +36,19 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    /**
+     * Chi nhánh người dùng trực thuộc (đa chuỗi). NULL = không gắn chi nhánh nào —
+     * chỉ dùng cho {@link Role#CHAIN_ADMIN} (quản trị toàn chuỗi). ADMIN/MANAGER/CASHIER
+     * BẮT BUỘC gắn một chi nhánh: mọi truy vấn của họ tự lọc theo chi nhánh này.
+     *
+     * <p>EAGER vì {@code User} là principal bảo mật: được nạp ở mỗi request (JWT filter) và
+     * đọc {@code storeId/storeName} NGOÀI transaction (lúc đăng nhập, trong StoreContext) —
+     * lazy sẽ gây LazyInitializationException.</p>
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "store_id")
+    private Store store;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserStatus status = UserStatus.ACTIVE;

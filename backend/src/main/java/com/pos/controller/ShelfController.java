@@ -30,21 +30,21 @@ public class ShelfController {
 
     /** Danh sách kệ + thống kê. Mọi vai trò (để lên kệ & xem). */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<List<ShelfResponse>> list() {
         return ApiResponse.ok(service.listShelves());
     }
 
     /** Nội dung một kệ: lô nào, sản phẩm gì, HSD, số lượng. */
     @GetMapping("/{id}/inventory")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<List<ShelfItemResponse>> inventory(@PathVariable Long id) {
         return ApiResponse.ok(service.shelfInventory(id));
     }
 
     /** Đưa hàng từ kho lên một KỆ (FIFO/HSD) — LÊN KỆ là việc của thu ngân. */
     @PostMapping("/transfer")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<Integer> transfer(@Valid @RequestBody ShelfTransferRequest req) {
         int moved = service.replenishShelf(req.productId(), req.shelfId(), req.quantity());
         return ApiResponse.ok("Đã đưa " + moved + " sản phẩm lên kệ", moved);
@@ -52,7 +52,7 @@ public class ShelfController {
 
     /** Lấy hàng của một LÔ từ kệ về lại kho (đặt xuống) — đối ứng với lên kệ. */
     @PostMapping("/return")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<Long> returnToWarehouse(@Valid @RequestBody ShelfReturnRequest req) {
         long qty = service.returnToWarehouse(req.batchId(), req.quantity());
         return ApiResponse.ok("Đã lấy " + qty + " sản phẩm từ kệ về kho", qty);

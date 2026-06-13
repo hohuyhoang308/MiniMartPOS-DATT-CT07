@@ -2,12 +2,17 @@ package com.pos.config;
 
 import com.pos.security.JwtAuthEntryPoint;
 import com.pos.security.JwtAuthenticationFilter;
+import com.pos.security.StoreContextFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -30,13 +35,16 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final StoreContextFilter storeContextFilter;
     private final JwtAuthEntryPoint authEntryPoint;
     private final String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter,
+                          StoreContextFilter storeContextFilter,
                           JwtAuthEntryPoint authEntryPoint,
                           @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.storeContextFilter = storeContextFilter;
         this.authEntryPoint = authEntryPoint;
         this.allowedOrigins = allowedOrigins;
     }
@@ -52,7 +60,9 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(eh -> eh.authenticationEntryPoint(authEntryPoint))
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            // Sau khi đã xác thực: nạp cửa hàng đang chọn (X-Store-Id) cho ADMIN toàn chuỗi.
+            .addFilterAfter(storeContextFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 
@@ -69,6 +79,27 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
+    }
+
+    /**
+     * Phân cấp vai trò TỪ CAO XUỐNG THẤP: ADMIN ⊃ MANAGER ⊃ STAFF.
+     * Nhờ vậy quyền cao tự động bao hàm quyền thấp ở @PreAuthorize (ADMIN làm được mọi việc của
+     * MANAGER; MANAGER làm được việc của STAFF).
+     */
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.fromHierarchy("""
+                ROLE_ADMIN > ROLE_MANAGER
+                ROLE_MANAGER > ROLE_STAFF
+                """);
+    }
+
+    /** Áp phân cấp vai trò vào @PreAuthorize (method security). */
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
+        handler.setRoleHierarchy(roleHierarchy);
+        return handler;
     }
 
     @Bean

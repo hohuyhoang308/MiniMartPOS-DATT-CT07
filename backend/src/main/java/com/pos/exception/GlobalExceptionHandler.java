@@ -48,12 +48,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Sai tài khoản hoặc mật khẩu"));
     }
 
-    /** Tài khoản bị khóa (LOCKED) → DisabledException/LockedException. */
+    /** Tài khoản bị khóa (LOCKED) hoặc CỬA HÀNG đã ngừng hoạt động → DisabledException/LockedException. */
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuth(
             org.springframework.security.core.AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("Tài khoản bị khóa hoặc không hợp lệ"));
+                .body(ApiResponse.error("Tài khoản bị khóa hoặc cửa hàng đã ngừng hoạt động — không thể đăng nhập"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

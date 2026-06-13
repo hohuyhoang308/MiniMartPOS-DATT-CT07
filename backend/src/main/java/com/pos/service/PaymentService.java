@@ -9,6 +9,7 @@ import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +46,7 @@ public class PaymentService {
     public PaymentInfoResponse confirmPaid(Long invoiceId) {
         Invoice inv = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> NotFoundException.of("hóa đơn", invoiceId));
+        StoreContext.assertSameStore(inv.getStore().getId());   // chặn xác nhận thanh toán chéo cửa hàng
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Hóa đơn đã hủy — không thể xác nhận thanh toán.");
         }
@@ -87,6 +89,7 @@ public class PaymentService {
     public PaymentInfoResponse getStatus(Long invoiceId) {
         Invoice inv = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> NotFoundException.of("hóa đơn", invoiceId));
+        StoreContext.assertSameStore(inv.getStore().getId());   // chặn xem trạng thái thanh toán chéo cửa hàng
         return paymentRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .map(pt -> new PaymentInfoResponse(inv.getId(), inv.getCode(), pt.getAmount(),
                         pt.getTransferContent(), null, pt.getStatus().name()))

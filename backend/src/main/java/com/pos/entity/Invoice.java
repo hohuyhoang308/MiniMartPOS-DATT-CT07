@@ -32,6 +32,11 @@ public class Invoice {
     @Column(nullable = false, unique = true, length = 30)
     private String code;
 
+    /** Chi nhánh phát sinh hóa đơn (đa chuỗi) — chốt từ ca lúc bán để truy vấn doanh thu theo chi nhánh khỏi join qua ca. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
+
     /** Ca làm việc ⇒ suy ra thu ngân. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_id", nullable = false)

@@ -2,17 +2,20 @@ package com.pos.service;
 
 import com.pos.dto.shift.OpenShiftRequest;
 import com.pos.dto.shift.ShiftResponse;
+import com.pos.entity.Store;
 import com.pos.entity.User;
 import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
+import com.pos.repository.StoreRepository;
 import com.pos.repository.UserRepository;
 import com.pos.repository.WorkShiftRepository;
 import com.pos.repository.view.ShiftSummaryViewRepository;
 import com.pos.security.CustomUserDetails;
 import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,22 +30,22 @@ public class ShiftService {
 
     private final WorkShiftRepository shiftRepository;
     private final UserRepository userRepository;
+    private final StoreRepository storeRepository;
     private final ShiftSummaryViewRepository summaryRepository;
     private final InvoiceRepository invoiceRepository;
-    private final com.pos.repository.SalesReturnRepository returnRepository;
     private final AuditService auditService;
 
     public ShiftService(WorkShiftRepository shiftRepository,
                         UserRepository userRepository,
+                        StoreRepository storeRepository,
                         ShiftSummaryViewRepository summaryRepository,
                         InvoiceRepository invoiceRepository,
-                        com.pos.repository.SalesReturnRepository returnRepository,
                         AuditService auditService) {
         this.shiftRepository = shiftRepository;
         this.userRepository = userRepository;
+        this.storeRepository = storeRepository;
         this.summaryRepository = summaryRepository;
         this.invoiceRepository = invoiceRepository;
-        this.returnRepository = returnRepository;
         this.auditService = auditService;
     }
 
@@ -50,12 +53,18 @@ public class ShiftService {
     @Transactional
     public ShiftResponse open(OpenShiftRequest req) {
         Long userId = SecurityUtils.currentUserId();
+        // Khóa dòng user TRƯỚC khi kiểm tra: 2 request mở ca đồng thời của cùng người
+        // phải tuần tự — request sau thấy ca OPEN vừa commit và bị từ chối (hết race).
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> NotFoundException.of("tài khoản", userId));
         if (shiftRepository.existsByUserIdAndStatus(userId, ShiftStatus.OPEN)) {
             throw new BadRequestException("Bạn đang có một ca chưa đóng — vui lòng đóng ca trước khi mở ca mới");
         }
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> NotFoundException.of("tài khoản", userId));
+        // Chi nhánh của ca: người gắn chi nhánh → chi nhánh đó; CHAIN_ADMIN → chi nhánh đang chọn (X-Store-Id).
+        Store store = user.getStore() != null ? user.getStore()
+                : storeRepository.getReferenceById(StoreContext.requireStoreId());
         WorkShift shift = new WorkShift();
+        shift.setStore(store);
         shift.setUser(user);
         shift.setOpeningCash(req.openingCash());
         shift.setStatus(ShiftStatus.OPEN);
@@ -65,9 +74,13 @@ public class ShiftService {
         return toResponse(saved);
     }
 
-    /** 200 ca gần nhất (mới nhất trước) — màn Quản lý ca. */
+    /** 200 ca gần nhất (mới nhất trước) — màn Quản lý ca. Lọc theo chi nhánh đang làm việc (null = toàn chuỗi). */
     public List<ShiftResponse> listAll() {
-        return shiftRepository.findTop200ByOrderByOpenedAtDesc().stream().map(this::toResponse).toList();
+        Long storeId = StoreContext.currentStoreId();
+        List<WorkShift> shifts = storeId == null
+                ? shiftRepository.findTop200ByOrderByOpenedAtDesc()
+                : shiftRepository.findTop200ByStoreIdOrderByOpenedAtDesc(storeId);
+        return shifts.stream().map(this::toResponse).toList();
     }
 
     /**
@@ -75,8 +88,12 @@ public class ShiftService {
      * Chưa có ca nào đóng → 0 (thu ngân tự nhập lần đầu).
      */
     public BigDecimal suggestedOpeningCash() {
-        return shiftRepository.findFirstByStatusOrderByClosedAtDesc(ShiftStatus.CLOSED)
-                .map(WorkShift::getClosingCash)
+        // Gợi ý theo két của CHÍNH cửa hàng (đa cửa hàng); ADMIN không gắn cửa hàng → toàn chuỗi.
+        Long storeId = StoreContext.currentStoreId();
+        var lastClosed = storeId == null
+                ? shiftRepository.findFirstByStatusOrderByClosedAtDesc(ShiftStatus.CLOSED)
+                : shiftRepository.findFirstByStoreIdAndStatusOrderByClosedAtDesc(storeId, ShiftStatus.CLOSED);
+        return lastClosed.map(WorkShift::getClosingCash)
                 .filter(java.util.Objects::nonNull)
                 .orElse(BigDecimal.ZERO);
     }
@@ -93,6 +110,13 @@ public class ShiftService {
         }
         if (shift.getStatus() == ShiftStatus.CLOSED) {
             throw new BadRequestException("Ca này đã được đóng");
+        }
+        // Không đóng ca khi còn hóa đơn QR đang chờ xác nhận tiền — tránh hóa đơn "lơ lửng"
+        // ngoài ca và lệch doanh thu đối soát (job nền sẽ tự hủy mã QR quá hạn sau 15 phút).
+        long pendingQr = invoiceRepository.countByShiftIdAndStatus(shiftId, com.pos.entity.enums.InvoiceStatus.PENDING_PAYMENT);
+        if (pendingQr > 0) {
+            throw new BadRequestException("Còn " + pendingQr + " hóa đơn QR đang chờ thanh toán trong ca — "
+                    + "vui lòng chờ khách chuyển tiền hoặc để hệ thống tự hủy mã quá hạn trước khi đóng ca");
         }
         shift.setClosingCash(closingCash);
         shift.setClosedAt(LocalDateTime.now());
@@ -115,21 +139,19 @@ public class ShiftService {
     }
 
     public ShiftResponse findById(Long id) {
-        return toResponse(shiftRepository.findById(id)
-                .orElseThrow(() -> NotFoundException.of("ca làm việc", id)));
+        WorkShift shift = shiftRepository.findById(id)
+                .orElseThrow(() -> NotFoundException.of("ca làm việc", id));
+        StoreContext.assertSameStore(shift.getStore().getId());   // chặn xem ca chéo cửa hàng
+        return toResponse(shift);
     }
 
     private ShiftResponse toResponse(WorkShift shift) {
         var summary = summaryRepository.findByShiftId(shift.getId());
         BigDecimal cashSales = invoiceRepository.sumCashSalesByShift(shift.getId());
-        // Tiền hoàn trả hàng phát sinh trong ca (theo khoảng thời gian ca) — chi ra khỏi két.
-        LocalDateTime from = shift.getOpenedAt();
-        LocalDateTime to = shift.getClosedAt() != null ? shift.getClosedAt() : LocalDateTime.now();
-        BigDecimal cashRefunds = (from != null) ? returnRepository.sumRefundBetween(from, to) : BigDecimal.ZERO;
         return ShiftResponse.from(
                 shift, shift.getUser().getFullName(),
                 summary.map(s -> s.getTotalSales()).orElse(BigDecimal.ZERO),
                 summary.map(s -> s.getInvoiceCount()).orElse(0L),
-                cashSales, cashRefunds);
+                cashSales);
     }
 }

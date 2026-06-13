@@ -4,10 +4,13 @@ import com.pos.dto.user.CreateUserRequest;
 import com.pos.dto.user.ResetPasswordRequest;
 import com.pos.dto.user.UpdateUserRequest;
 import com.pos.dto.user.UserResponse;
+import com.pos.entity.Store;
 import com.pos.entity.User;
+import com.pos.entity.enums.Role;
 import com.pos.entity.enums.UserStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
+import com.pos.repository.StoreRepository;
 import com.pos.repository.UserRepository;
 import com.pos.security.SecurityUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,13 +25,33 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository repository;
+    private final StoreRepository storeRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
-    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, AuditService auditService) {
+    public UserService(UserRepository repository, StoreRepository storeRepository,
+                       PasswordEncoder passwordEncoder, AuditService auditService) {
         this.repository = repository;
+        this.storeRepository = storeRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
+    }
+
+    /**
+     * Chốt cửa hàng cho tài khoản theo vai trò (đa cửa hàng). Chỉ ADMIN toàn chuỗi mới quản lý tài khoản
+     * (xem @PreAuthorize ở UserController), nên người tạo luôn là ADMIN:
+     * <ul>
+     *   <li>{@code ADMIN} → KHÔNG gắn cửa hàng (quản trị toàn chuỗi).</li>
+     *   <li>{@code MANAGER}/{@code STAFF} → BẮT BUỘC chọn một cửa hàng.</li>
+     * </ul>
+     */
+    private Store resolveStore(Role role, Long requestedStoreId) {
+        if (role == Role.ADMIN) return null;   // quản trị toàn chuỗi — không thuộc cửa hàng nào
+        if (requestedStoreId == null) {
+            throw new BadRequestException("Vai trò " + role + " phải gắn một cửa hàng");
+        }
+        return storeRepository.findById(requestedStoreId)
+                .orElseThrow(() -> NotFoundException.of("cửa hàng", requestedStoreId));
     }
 
     public List<UserResponse> findAll() {
@@ -45,10 +68,12 @@ public class UserService {
         u.setPasswordHash(passwordEncoder.encode(req.password()));
         u.setFullName(req.fullName());
         u.setRole(req.role());
+        u.setStore(resolveStore(req.role(), req.storeId()));
         u.setStatus(UserStatus.ACTIVE);
         User saved = repository.save(u);
         auditService.log("CREATE_USER", "USER", saved.getId(),
-                "Tạo tài khoản " + saved.getUsername() + " (vai trò " + saved.getRole() + ")");
+                "Tạo tài khoản " + saved.getUsername() + " (vai trò " + saved.getRole()
+                        + (saved.getStore() != null ? ", chi nhánh " + saved.getStore().getName() : "") + ")");
         return UserResponse.from(saved);
     }
 
@@ -61,6 +86,7 @@ public class UserService {
         }
         u.setFullName(req.fullName());
         u.setRole(req.role());
+        u.setStore(resolveStore(req.role(), req.storeId()));
         u.setStatus(req.status());
         User saved = repository.save(u);
         auditService.log("UPDATE_USER", "USER", saved.getId(),

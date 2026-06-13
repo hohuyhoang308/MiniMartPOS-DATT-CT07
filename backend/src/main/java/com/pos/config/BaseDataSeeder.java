@@ -22,10 +22,11 @@ import java.time.LocalDateTime;
 
 /**
  * Seed DỮ LIỆU NỀN bắt buộc để hệ thống chạy được trên CSDL trống (sau khi drop + tạo lại cấu trúc):
- * tài khoản đăng nhập, cấu hình cửa hàng, vài khách & khuyến mãi demo, và 1 ca mở sẵn cho thu ngân.
+ * CHI NHÁNH (đa chuỗi), tài khoản đăng nhập (gắn chi nhánh), cấu hình từng chi nhánh, vài khách &
+ * khuyến mãi demo, và 1 ca mở sẵn cho thu ngân chi nhánh 1.
  *
  * <p>Idempotent (chỉ thêm phần còn thiếu) → an toàn chạy lại mỗi lần khởi động. Chỉ chạy khi
- * profile KHÁC prod. Chạy TRƯỚC {@link CatalogDemoDataInitializer} (cần có user để gán phiếu nhập).</p>
+ * profile KHÁC prod. Chạy TRƯỚC {@link CatalogDemoDataInitializer} (cần có user/chi nhánh để gán phiếu nhập).</p>
  */
 @Component
 @Profile("!prod")
@@ -36,6 +37,7 @@ public class BaseDataSeeder implements CommandLineRunner {
     private static final String DEMO_PASSWORD = "123456";
 
     private final UserRepository userRepository;
+    private final StoreRepository storeRepository;
     private final StoreConfigRepository storeConfigRepository;
     private final CustomerRepository customerRepository;
     private final PromotionRepository promotionRepository;
@@ -43,12 +45,14 @@ public class BaseDataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
 
     public BaseDataSeeder(UserRepository userRepository,
+                          StoreRepository storeRepository,
                           StoreConfigRepository storeConfigRepository,
                           CustomerRepository customerRepository,
                           PromotionRepository promotionRepository,
                           WorkShiftRepository shiftRepository,
                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.storeRepository = storeRepository;
         this.storeConfigRepository = storeConfigRepository;
         this.customerRepository = customerRepository;
         this.promotionRepository = promotionRepository;
@@ -59,48 +63,81 @@ public class BaseDataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        seedUsers();
-        seedStoreConfig();
+        Store ch01 = ensureStore("CH01", "MiniMart — Cửa hàng 1 (Quận 1)", "123 Đường Lê Lợi, Q.1, TP.HCM", "0901234567");
+        Store ch02 = ensureStore("CH02", "MiniMart — Cửa hàng 2 (Thủ Đức)", "45 Võ Văn Ngân, TP.Thủ Đức", "0902223344");
+        seedUsers(ch01, ch02);
+        seedStoreConfig(ch01, "MB Bank", "970422");
+        seedStoreConfig(ch02, "Vietcombank", "970436");
         seedCustomers();
         seedPromotions();
         seedOpenShiftForCashier();
     }
 
-    /** Tạo 3 tài khoản demo nếu thiếu; nếu đã có thì đảm bảo mật khẩu = "123456". */
-    private void seedUsers() {
-        ensureUser("admin", "Chủ cửa hàng", Role.ADMIN);
-        ensureUser("manager", "Quản lý ca", Role.MANAGER);
-        ensureUser("cashier", "Thu ngân A", Role.CASHIER);
+    /** Chi nhánh: trả về dòng đã có (theo mã) hoặc tạo mới. */
+    private Store ensureStore(String code, String name, String address, String phone) {
+        return storeRepository.findByCode(code).orElseGet(() -> {
+            Store s = new Store();
+            s.setCode(code);
+            s.setName(name);
+            s.setAddress(address);
+            s.setPhone(phone);
+            s.setStatus(CommonStatus.ACTIVE);
+            Store saved = storeRepository.save(s);
+            log.info("Đã tạo chi nhánh {} — {}", code, name);
+            return saved;
+        });
     }
 
-    private void ensureUser(String username, String fullName, Role role) {
+    /**
+     * Tài khoản demo theo mô hình phân tầng:
+     *  - 1 ADMIN quản trị TOÀN CHUỖI (không gắn cửa hàng).
+     *  - Mỗi cửa hàng: 1 quản lý (MANAGER) + 1 nhân viên (STAFF). (Có thể tạo thêm N người tuỳ ý ở màn Tài khoản.)
+     */
+    private void seedUsers(Store ch01, Store ch02) {
+        ensureUser("admin", "Quản trị viên (toàn chuỗi)", Role.ADMIN, null);
+        ensureUser("manager", "Quản lý cửa hàng 1", Role.MANAGER, ch01);
+        ensureUser("staff", "Nhân viên cửa hàng 1", Role.STAFF, ch01);
+        ensureUser("manager2", "Quản lý cửa hàng 2", Role.MANAGER, ch02);
+        ensureUser("staff2", "Nhân viên cửa hàng 2", Role.STAFF, ch02);
+    }
+
+    private void ensureUser(String username, String fullName, Role role, Store store) {
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             user = new User();
             user.setUsername(username);
             user.setFullName(fullName);
             user.setRole(role);
+            user.setStore(store);
             user.setStatus(UserStatus.ACTIVE);
             user.setPasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
             userRepository.save(user);
             log.info("Đã tạo tài khoản demo '{}' (mật khẩu 123456)", username);
-        } else if (!passwordEncoder.matches(DEMO_PASSWORD, user.getPasswordHash())) {
-            user.setPasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
-            userRepository.save(user);
-            log.info("Đã đặt lại mật khẩu demo '{}' = 123456", username);
+        } else {
+            boolean dirty = false;
+            if (!passwordEncoder.matches(DEMO_PASSWORD, user.getPasswordHash())) {
+                user.setPasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
+                dirty = true;
+            }
+            // Đồng bộ vai trò + cửa hàng của tài khoản demo về đúng mô hình mới (idempotent, sửa cả DB cũ).
+            if (user.getRole() != role) { user.setRole(role); dirty = true; }
+            Long cur = user.getStore() != null ? user.getStore().getId() : null;
+            Long want = store != null ? store.getId() : null;
+            if (!java.util.Objects.equals(cur, want)) { user.setStore(store); dirty = true; }
+            if (dirty) userRepository.save(user);
         }
     }
 
-    private void seedStoreConfig() {
-        if (storeConfigRepository.findById(StoreConfig.SINGLETON_ID).isPresent()) return;
+    private void seedStoreConfig(Store store, String bankName, String bankBin) {
+        if (storeConfigRepository.findById(store.getId()).isPresent()) return;
         StoreConfig cfg = new StoreConfig();
-        cfg.setId(StoreConfig.SINGLETON_ID);
-        cfg.setName("Cửa hàng tiện lợi MiniMart");
-        cfg.setAddress("123 Đường Lê Lợi, Q.1, TP.HCM");
-        cfg.setPhone("0901234567");
+        cfg.setId(store.getId());          // 1–1 chia sẻ khóa với stores.id
+        cfg.setName(store.getName());
+        cfg.setAddress(store.getAddress());
+        cfg.setPhone(store.getPhone());
         cfg.setTaxCode("0312345678");
-        cfg.setBankName("MB Bank");
-        cfg.setBankBin("970422");
+        cfg.setBankName(bankName);
+        cfg.setBankBin(bankBin);
         cfg.setBankAccountNo("xxxxxxxxxxxx");
         cfg.setBankAccountName("CHU TAI KHOAN");
         cfg.setTransferPrefix("POS");
@@ -109,7 +146,7 @@ public class BaseDataSeeder implements CommandLineRunner {
         cfg.setNotifyLowStock(true);
         cfg.setNotifyNewInvoice(false);
         storeConfigRepository.save(cfg);
-        log.info("Đã tạo cấu hình cửa hàng mặc định.");
+        log.info("Đã tạo cấu hình cho chi nhánh {}.", store.getCode());
     }
 
     private void seedCustomers() {
@@ -154,19 +191,19 @@ public class BaseDataSeeder implements CommandLineRunner {
     }
 
     /**
-     * Mở sẵn 1 ca cho thu ngân để vào POS bán được ngay — CHỈ trên CSDL hoàn toàn mới
-     * (chưa có ca nào). Tránh việc mỗi lần khởi động lại sinh thêm 1 ca rỗng khi thu ngân
-     * đang không có ca mở → tích lũy dữ liệu rác về lâu dài.
+     * Mở sẵn 1 ca cho nhân viên cửa hàng 1 để vào POS bán được ngay — CHỈ trên CSDL hoàn toàn mới
+     * (chưa có ca nào). Tránh việc mỗi lần khởi động lại sinh thêm 1 ca rỗng.
      */
     private void seedOpenShiftForCashier() {
         if (shiftRepository.count() > 0) return;
-        userRepository.findByUsername("cashier").ifPresent(cashier -> {
+        userRepository.findByUsername("staff").ifPresent(staff -> {
             WorkShift shift = new WorkShift();
-            shift.setUser(cashier);
+            shift.setStore(staff.getStore());
+            shift.setUser(staff);
             shift.setOpeningCash(BigDecimal.valueOf(500000));
             shift.setStatus(ShiftStatus.OPEN);
             shiftRepository.save(shift);
-            log.info("Đã mở sẵn 1 ca cho thu ngân (tiền đầu ca 500.000đ).");
+            log.info("Đã mở sẵn 1 ca cho nhân viên cửa hàng 1 (tiền đầu ca 500.000đ).");
         });
     }
 }

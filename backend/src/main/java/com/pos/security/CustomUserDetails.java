@@ -1,6 +1,7 @@
 package com.pos.security;
 
 import com.pos.entity.User;
+import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.enums.UserStatus;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -32,6 +33,16 @@ public class CustomUserDetails implements UserDetails {
         return user.getRole().name();
     }
 
+    /** Chi nhánh người dùng trực thuộc; null = quản trị toàn chuỗi (CHAIN_ADMIN). */
+    public Long getStoreId() {
+        return user.getStore() != null ? user.getStore().getId() : null;
+    }
+
+    /** Tên chi nhánh trực thuộc (null nếu là CHAIN_ADMIN). */
+    public String getStoreName() {
+        return user.getStore() != null ? user.getStore().getName() : null;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
@@ -47,14 +58,21 @@ public class CustomUserDetails implements UserDetails {
         return user.getUsername();
     }
 
-    @Override
-    public boolean isAccountNonLocked() {
-        return user.getStatus() == UserStatus.ACTIVE;
+    /** Cửa hàng còn hoạt động? ADMIN không gắn cửa hàng → luôn true. */
+    private boolean storeActive() {
+        return user.getStore() == null || user.getStore().getStatus() == CommonStatus.ACTIVE;
     }
 
     @Override
+    public boolean isAccountNonLocked() {
+        return user.getStatus() == UserStatus.ACTIVE && storeActive();
+    }
+
+    /** Tài khoản đăng nhập/hoạt động được khi: tài khoản ACTIVE **và** cửa hàng trực thuộc còn hoạt động.
+     *  → Cửa hàng đóng (INACTIVE) thì MANAGER/STAFF của cửa hàng đó KHÔNG đăng nhập được (và token cũ bị vô hiệu). */
+    @Override
     public boolean isEnabled() {
-        return user.getStatus() == UserStatus.ACTIVE;
+        return user.getStatus() == UserStatus.ACTIVE && storeActive();
     }
 
     @Override public boolean isAccountNonExpired() { return true; }

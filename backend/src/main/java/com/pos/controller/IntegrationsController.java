@@ -32,16 +32,17 @@ public class IntegrationsController {
         this.web2mSyncService = web2mSyncService;
     }
 
-    // --- Telegram recipients ---
+    // --- Telegram recipients (theo cửa hàng: storeId) ---
     @GetMapping("/telegram/recipients")
-    public ApiResponse<List<TelegramRecipientResponse>> recipients() {
-        return ApiResponse.ok(recipientService.findAll());
+    public ApiResponse<List<TelegramRecipientResponse>> recipients(@RequestParam(required = false) Long storeId) {
+        return ApiResponse.ok(recipientService.findAll(storeId));
     }
 
     @PostMapping("/telegram/recipients")
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
-    public ApiResponse<TelegramRecipientResponse> addRecipient(@Valid @RequestBody TelegramRecipientRequest req) {
-        return ApiResponse.ok("Thêm người nhận thành công", recipientService.add(req));
+    public ApiResponse<TelegramRecipientResponse> addRecipient(@RequestParam(required = false) Long storeId,
+                                                               @Valid @RequestBody TelegramRecipientRequest req) {
+        return ApiResponse.ok("Thêm người nhận thành công", recipientService.add(storeId, req));
     }
 
     @DeleteMapping("/telegram/recipients/{id}")
@@ -51,17 +52,19 @@ public class IntegrationsController {
     }
 
     @PostMapping("/telegram/test")
-    public ApiResponse<Map<String, Boolean>> testTelegram(@Valid @RequestBody TestMessageRequest req) {
-        boolean ok = telegramService.testSend(req.chatId(), req.text());
+    public ApiResponse<Map<String, Boolean>> testTelegram(@RequestParam(required = false) Long storeId,
+                                                          @Valid @RequestBody TestMessageRequest req) {
+        boolean ok = telegramService.testSend(storeId, req.chatId(), req.text());
         return ApiResponse.ok(ok ? "Đã gửi tin nhắn thử" : "Gửi thất bại — kiểm tra token/Chat ID",
                 Map.of("sent", ok));
     }
 
     // --- WEB2M ---
     @PostMapping("/web2m/test")
-    public ApiResponse<Map<String, Boolean>> testWeb2m(@RequestBody(required = false) Map<String, String> body) {
+    public ApiResponse<Map<String, Boolean>> testWeb2m(@RequestParam(required = false) Long storeId,
+                                                       @RequestBody(required = false) Map<String, String> body) {
         String apiUrl = body != null ? body.get("apiUrl") : null;
-        boolean ok = web2mSyncService.testConnection(apiUrl);
+        boolean ok = web2mSyncService.testConnection(storeId, apiUrl);
         return ApiResponse.ok(ok ? "Kết nối WEB2M thành công" : "Không kết nối được WEB2M",
                 Map.of("connected", ok));
     }

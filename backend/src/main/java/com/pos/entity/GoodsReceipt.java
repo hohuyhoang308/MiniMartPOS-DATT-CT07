@@ -26,6 +26,11 @@ public class GoodsReceipt {
     @Column(nullable = false, unique = true, length = 30)
     private String code;
 
+    /** Chi nhánh nhập hàng (đa chuỗi) — LÔ hàng của phiếu này thuộc về chi nhánh đây. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "supplier_id", nullable = false)
     private Supplier supplier;

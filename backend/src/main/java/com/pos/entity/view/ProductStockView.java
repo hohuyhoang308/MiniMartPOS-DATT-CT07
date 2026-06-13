@@ -4,9 +4,11 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import org.hibernate.annotations.Immutable;
 
-/** Tồn kho hiện tại từng sản phẩm (FR8.1) — ánh xạ view {@code v_product_stock} (chỉ đọc). */
+/** Tồn kho hiện tại từng sản phẩm THEO CHI NHÁNH (FR8.1, đa chuỗi) —
+ *  ánh xạ view {@code v_product_stock} (chỉ đọc). Khóa kép (product_id, store_id). */
 @Entity
 @Immutable
+@IdClass(ProductStockId.class)
 @Table(name = "v_product_stock")
 @Getter
 public class ProductStockView {
@@ -14,6 +16,11 @@ public class ProductStockView {
     @Id
     @Column(name = "product_id")
     private Long productId;
+
+    /** Chi nhánh (đa chuỗi) — tồn kho tính riêng từng chi nhánh. */
+    @Id
+    @Column(name = "store_id")
+    private Long storeId;
 
     private String barcode;
     private String name;

@@ -8,9 +8,11 @@ import java.util.Optional;
 
 public interface ShelfRepository extends JpaRepository<Shelf, Long> {
 
-    boolean existsByCodeIgnoreCase(String code);
+    /** Mã kệ duy nhất TRONG một chi nhánh (đa chuỗi). */
+    boolean existsByStoreIdAndCodeIgnoreCase(Long storeId, String code);
 
-    Optional<Shelf> findByCodeIgnoreCase(String code);
+    Optional<Shelf> findByStoreIdAndCodeIgnoreCase(Long storeId, String code);
 
-    List<Shelf> findAllByOrderByCode();
+    /** Kệ của một chi nhánh, sắp theo mã. */
+    List<Shelf> findByStoreIdOrderByCode(Long storeId);
 }

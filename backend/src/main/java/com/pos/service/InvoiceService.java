@@ -12,11 +12,11 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.repository.PromotionRepository;
-import com.pos.repository.SalesReturnRepository;
 import com.pos.repository.StoreConfigRepository;
 import org.springframework.data.domain.PageRequest;
 import com.pos.security.CustomUserDetails;
 import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import com.pos.util.VietQrUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +35,6 @@ public class InvoiceService {
     private final StoreConfigRepository storeConfigRepository;
     private final AuditService auditService;
     private final LoyaltyService loyaltyService;
-    private final SalesReturnRepository salesReturnRepository;
     private final PromotionRepository promotionRepository;
 
     public InvoiceService(InvoiceRepository invoiceRepository,
@@ -43,34 +42,29 @@ public class InvoiceService {
                           StoreConfigRepository storeConfigRepository,
                           AuditService auditService,
                           LoyaltyService loyaltyService,
-                          SalesReturnRepository salesReturnRepository,
                           PromotionRepository promotionRepository) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.storeConfigRepository = storeConfigRepository;
         this.auditService = auditService;
         this.loyaltyService = loyaltyService;
-        this.salesReturnRepository = salesReturnRepository;
         this.promotionRepository = promotionRepository;
     }
 
     /** Tối đa số hóa đơn trả về 1 lần (giới hạn payload khi dữ liệu lớn). */
     private static final int MAX_INVOICES = 500;
 
-    /** Lọc HĐ (tối đa {@value MAX_INVOICES} mới nhất). Cashier chỉ thấy hóa đơn thuộc ca của chính mình. */
+    /** Lọc HĐ (tối đa {@value MAX_INVOICES} mới nhất). Lọc theo CHI NHÁNH; cashier chỉ thấy HĐ ca của mình. */
     public List<InvoiceResponse> search(LocalDate date, Long customerId, InvoiceStatus status) {
         LocalDateTime from = date != null ? date.atStartOfDay() : null;
         LocalDateTime to = date != null ? date.plusDays(1).atStartOfDay() : null;
 
-        List<Invoice> list = invoiceRepository.search(from, to, customerId, status, null,
-                PageRequest.of(0, MAX_INVOICES));
-
+        // Nhân viên (STAFF) chỉ xem HĐ thuộc ca CỦA MÌNH → đẩy điều kiện vào truy vấn (không bị cắt bởi trần 500).
         CustomUserDetails me = SecurityUtils.currentUser();
-        if ("CASHIER".equals(me.getRole())) {
-            list = list.stream()
-                    .filter(i -> i.getShift().getUser().getId().equals(me.getId()))
-                    .toList();
-        }
+        Long onlyUserId = "STAFF".equals(me.getRole()) ? me.getId() : null;
+
+        List<Invoice> list = invoiceRepository.search(from, to, customerId, status, null,
+                StoreContext.currentStoreId(), onlyUserId, PageRequest.of(0, MAX_INVOICES));
         return list.stream().map(InvoiceResponse::from).toList();
     }
 
@@ -79,7 +73,7 @@ public class InvoiceService {
         PaymentTransaction pt = paymentRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(id).orElse(null);
         String qrUrl = null;
         if (pt != null) {
-            StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+            StoreConfig cfg = storeConfigRepository.findById(inv.getStore().getId()).orElse(null);
             qrUrl = VietQrUtil.buildQrUrl(cfg, pt.getAmount(), pt.getTransferContent());
         }
         return InvoiceResponse.from(inv, pt, qrUrl);
@@ -98,10 +92,6 @@ public class InvoiceService {
         Invoice inv = getOrThrow(id);
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Hóa đơn này đã bị hủy trước đó");
-        }
-        // Đã có phiếu TRẢ HÀNG → hủy sẽ làm tồn kho cộng dư (double-count). Buộc xử lý qua trả hàng.
-        if (!salesReturnRepository.findByInvoiceIdOrderByCreatedAtDesc(id).isEmpty()) {
-            throw new BadRequestException("Hóa đơn đã có phiếu trả hàng — không thể hủy. Hãy xử lý phần còn lại qua TRẢ HÀNG.");
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
         inv.setCancelReason(reason.trim());
@@ -157,6 +147,8 @@ public class InvoiceService {
     }
 
     private Invoice getOrThrow(Long id) {
-        return invoiceRepository.findById(id).orElseThrow(() -> NotFoundException.of("hóa đơn", id));
+        Invoice inv = invoiceRepository.findById(id).orElseThrow(() -> NotFoundException.of("hóa đơn", id));
+        StoreContext.assertSameStore(inv.getStore().getId());   // chặn xem/hủy hóa đơn chéo cửa hàng
+        return inv;
     }
 }

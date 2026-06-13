@@ -1,21 +1,35 @@
 package com.pos.repository.view;
 
 import com.pos.entity.view.ProductStockView;
+import com.pos.entity.view.ProductStockId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface ProductStockViewRepository extends JpaRepository<ProductStockView, Long> {
+public interface ProductStockViewRepository extends JpaRepository<ProductStockView, ProductStockId> {
 
-    Optional<ProductStockView> findByProductId(Long productId);
+    /** Tồn của 1 sản phẩm tại 1 CHI NHÁNH (đa chuỗi). */
+    Optional<ProductStockView> findByProductIdAndStoreId(Long productId, Long storeId);
 
-    /** Sản phẩm tồn thấp (FR8.2): current_stock <= min_stock. */
+    /** Tồn toàn bộ sản phẩm của 1 chi nhánh (màn tồn kho theo chi nhánh). */
+    List<ProductStockView> findByStoreId(Long storeId);
+
+    /** Sản phẩm tồn thấp (FR8.2) của 1 chi nhánh: current_stock <= min_stock. */
+    @Query("SELECT v FROM ProductStockView v WHERE v.storeId = :storeId AND v.currentStock <= v.minStock ORDER BY v.currentStock")
+    List<ProductStockView> findLowStock(@Param("storeId") Long storeId);
+
+    /** Số sản phẩm đã hết hàng (tồn = 0) của 1 chi nhánh. */
+    @Query("SELECT COUNT(v) FROM ProductStockView v WHERE v.storeId = :storeId AND v.currentStock <= 0")
+    long countOutOfStock(@Param("storeId") Long storeId);
+
+    /** Tồn thấp TOÀN CHUỖI (mỗi dòng = 1 sản phẩm tại 1 chi nhánh) — dashboard của CHAIN_ADMIN. */
     @Query("SELECT v FROM ProductStockView v WHERE v.currentStock <= v.minStock ORDER BY v.currentStock")
-    List<ProductStockView> findLowStock();
+    List<ProductStockView> findLowStockAll();
 
-    /** Số sản phẩm đã hết hàng (tồn = 0). */
+    /** Số (sản phẩm × chi nhánh) hết hàng toàn chuỗi. */
     @Query("SELECT COUNT(v) FROM ProductStockView v WHERE v.currentStock <= 0")
-    long countOutOfStock();
+    long countOutOfStockAll();
 }

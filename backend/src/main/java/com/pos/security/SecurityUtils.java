@@ -20,4 +20,14 @@ public final class SecurityUtils {
     public static Long currentUserId() {
         return currentUser().getId();
     }
+
+    /** Chi nhánh đang làm việc (đa chuỗi); null = toàn chuỗi. Xem {@link StoreContext}. */
+    public static Long currentStoreId() {
+        return StoreContext.currentStoreId();
+    }
+
+    /** Có phải quản trị viên TOÀN CHUỖI không (vai trò ADMIN, không gắn cửa hàng). */
+    public static boolean isAdmin() {
+        return "ADMIN".equals(currentUser().getRole());
+    }
 }

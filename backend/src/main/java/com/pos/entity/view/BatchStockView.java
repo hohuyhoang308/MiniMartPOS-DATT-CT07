@@ -21,6 +21,10 @@ public class BatchStockView {
     @Column(name = "product_id")
     private Long productId;
 
+    /** Chi nhánh của lô (thừa hưởng từ phiếu nhập) — để lọc tồn theo chi nhánh. */
+    @Column(name = "store_id")
+    private Long storeId;
+
     /** Kệ mà lô này đang nằm (NULL nếu chưa lên kệ). */
     @Column(name = "shelf_id")
     private Long shelfId;

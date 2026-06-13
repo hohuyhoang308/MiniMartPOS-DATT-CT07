@@ -7,9 +7,11 @@ import com.pos.entity.*;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.GoodsReceiptRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.repository.StoreRepository;
 import com.pos.repository.SupplierRepository;
 import com.pos.repository.UserRepository;
 import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import com.pos.util.CodeGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,29 +30,37 @@ public class GoodsReceiptService {
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final StoreRepository storeRepository;
     private final AuditService auditService;
 
     public GoodsReceiptService(GoodsReceiptRepository receiptRepository,
                                SupplierRepository supplierRepository,
                                ProductRepository productRepository,
                                UserRepository userRepository,
+                               StoreRepository storeRepository,
                                AuditService auditService) {
         this.receiptRepository = receiptRepository;
         this.supplierRepository = supplierRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.storeRepository = storeRepository;
         this.auditService = auditService;
     }
 
     public List<GoodsReceiptResponse> findAll() {
-        return receiptRepository.findAll().stream()
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .map(GoodsReceiptResponse::from).toList();
+        // Lọc TẠI CSDL theo cửa hàng đang làm việc (đa cửa hàng); ADMIN chưa chọn cửa hàng (null) → toàn chuỗi.
+        Long storeId = StoreContext.currentStoreId();
+        var receipts = storeId == null
+                ? receiptRepository.findAll().stream().sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())).toList()
+                : receiptRepository.findByStoreIdOrderByCreatedAtDesc(storeId);
+        return receipts.stream().map(GoodsReceiptResponse::from).toList();
     }
 
     public GoodsReceiptResponse findById(Long id) {
-        return GoodsReceiptResponse.from(receiptRepository.findById(id)
-                .orElseThrow(() -> NotFoundException.of("phiếu nhập", id)));
+        GoodsReceipt r = receiptRepository.findById(id)
+                .orElseThrow(() -> NotFoundException.of("phiếu nhập", id));
+        StoreContext.assertSameStore(r.getStore().getId());   // chặn xem phiếu nhập chéo cửa hàng
+        return GoodsReceiptResponse.from(r);
     }
 
     @Transactional
@@ -60,7 +70,11 @@ public class GoodsReceiptService {
         User createdBy = userRepository.findById(SecurityUtils.currentUserId())
                 .orElseThrow(() -> NotFoundException.of("tài khoản", SecurityUtils.currentUserId()));
 
+        // Chi nhánh nhập = chi nhánh đang làm việc (đa chuỗi). LÔ hàng sẽ thừa hưởng chi nhánh này.
+        Store store = storeRepository.getReferenceById(StoreContext.requireStoreId());
+
         GoodsReceipt receipt = new GoodsReceipt();
+        receipt.setStore(store);
         receipt.setSupplier(supplier);
         receipt.setCreatedBy(createdBy);
         receipt.setNote(req.note());

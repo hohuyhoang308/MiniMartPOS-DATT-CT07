@@ -1,7 +1,7 @@
 package com.pos.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.pos.entity.Invoice;
 import com.pos.entity.PaymentTransaction;
 import com.pos.entity.StoreConfig;
@@ -58,43 +58,55 @@ public class Web2mSyncService {
     /** Chạy đối soát một lần. Trả về số giao dịch khớp & xác nhận. */
     @Transactional
     public int sync() {
-        StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
-        if (cfg == null || cfg.getWeb2mApiUrl() == null || cfg.getWeb2mApiUrl().isBlank()) {
-            throw new BadRequestException("Chưa cấu hình URL API WEB2M");
-        }
+        List<StoreConfig> configs = storeConfigRepository.findAll().stream()
+                .filter(c -> c.getWeb2mApiUrl() != null && !c.getWeb2mApiUrl().isBlank())
+                .toList();
+        if (configs.isEmpty()) return 0;
         List<PaymentTransaction> pending = paymentRepository.findByStatus(PaymentStatus.PENDING);
         if (pending.isEmpty()) return 0;
 
-        JsonNode transactions = fetchTransactions(cfg.getWeb2mApiUrl());
-        if (transactions == null || !transactions.isArray()) return 0;
-
         int matched = 0;
-        for (PaymentTransaction pt : pending) {
-            for (JsonNode tx : transactions) {
-                if (matches(pt, tx)) {
-                    pt.setStatus(PaymentStatus.PAID);
-                    pt.setBankReference(extractReference(tx));
-                    pt.setPaidAt(LocalDateTime.now());
-                    paymentRepository.save(pt);
-                    // Tiền đã về → chuyển HĐ từ CHỜ THANH TOÁN sang HOÀN TẤT (giờ mới tính doanh thu).
-                    Invoice inv = pt.getInvoice();
-                    if (inv.getStatus() == InvoiceStatus.PENDING_PAYMENT) {
-                        inv.setStatus(InvoiceStatus.COMPLETED);
-                        invoiceRepository.save(inv);
+        for (StoreConfig cfg : configs) {
+            Long storeId = cfg.getId();
+            // Chỉ khớp giao dịch PENDING của HĐ thuộc chính chi nhánh này (đa chuỗi).
+            List<PaymentTransaction> storePending = pending.stream()
+                    .filter(pt -> pt.getInvoice() != null && pt.getInvoice().getStore() != null
+                            && storeId.equals(pt.getInvoice().getStore().getId()))
+                    .toList();
+            if (storePending.isEmpty()) continue;
+
+            JsonNode transactions = fetchTransactions(cfg.getWeb2mApiUrl());
+            if (transactions == null || !transactions.isArray()) continue;
+
+            for (PaymentTransaction pt : storePending) {
+                for (JsonNode tx : transactions) {
+                    if (matches(pt, tx)) {
+                        pt.setStatus(PaymentStatus.PAID);
+                        pt.setBankReference(extractReference(tx));
+                        pt.setPaidAt(LocalDateTime.now());
+                        paymentRepository.save(pt);
+                        // Tiền đã về → chuyển HĐ từ CHỜ THANH TOÁN sang HOÀN TẤT (giờ mới tính doanh thu).
+                        Invoice inv = pt.getInvoice();
+                        if (inv.getStatus() == InvoiceStatus.PENDING_PAYMENT) {
+                            inv.setStatus(InvoiceStatus.COMPLETED);
+                            invoiceRepository.save(inv);
+                        }
+                        matched++;
+                        notifyPaid(pt, storeId);
+                        break;
                     }
-                    matched++;
-                    notifyPaid(pt);
-                    break;
                 }
             }
         }
         return matched;
     }
 
-    /** Kiểm tra kết nối API WEB2M (FR-A6 nút "kiểm tra kết nối"). */
-    public boolean testConnection(String apiUrl) {
+    /** Kiểm tra kết nối API WEB2M (FR-A6). apiUrl trống → dùng cấu hình WEB2M của CỬA HÀNG được chọn (ADMIN truyền storeId). */
+    public boolean testConnection(Long storeId, String apiUrl) {
+        Long sid = (storeId != null && com.pos.security.SecurityUtils.isAdmin())
+                ? storeId : com.pos.security.StoreContext.requireStoreId();
         String url = (apiUrl != null && !apiUrl.isBlank()) ? apiUrl
-                : storeConfigRepository.findById(StoreConfig.SINGLETON_ID)
+                : storeConfigRepository.findById(sid)
                     .map(StoreConfig::getWeb2mApiUrl).orElse(null);
         if (url == null || url.isBlank()) {
             throw new BadRequestException("Chưa cấu hình URL API WEB2M");
@@ -134,9 +146,9 @@ public class Web2mSyncService {
         return normalize(desc).contains(normalize(pt.getTransferContent()));
     }
 
-    private void notifyPaid(PaymentTransaction pt) {
-        if (telegramService.notifyPaymentEnabled()) {
-            telegramService.broadcast("✅ <b>Đã nhận thanh toán QR</b>\n"
+    private void notifyPaid(PaymentTransaction pt, Long storeId) {
+        if (telegramService.notifyPaymentEnabled(storeId)) {
+            telegramService.broadcast(storeId, "✅ <b>Đã nhận thanh toán QR</b>\n"
                     + "Hóa đơn: " + pt.getInvoice().getCode() + "\n"
                     + "Số tiền: " + pt.getAmount().toBigInteger() + "đ\n"
                     + "Mã GD NH: " + (pt.getBankReference() != null ? pt.getBankReference() : "-"));

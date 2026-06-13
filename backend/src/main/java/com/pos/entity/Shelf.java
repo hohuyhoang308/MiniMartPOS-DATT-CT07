@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 
 /** Kệ trưng bày vật lý trong cửa hàng (Kệ A1, Kệ 1...) — bảng {@code shelves}. */
 @Entity
-@Table(name = "shelves")
+@Table(name = "shelves",
+       uniqueConstraints = @UniqueConstraint(name = "uq_shelf_store_code", columnNames = {"store_id", "code"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,8 +22,13 @@ public class Shelf {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Mã kệ (duy nhất): A1, B2, K01... */
-    @Column(nullable = false, unique = true, length = 30)
+    /** Chi nhánh đặt kệ (đa chuỗi). */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
+
+    /** Mã kệ (duy nhất TRONG một chi nhánh): A1, B2, K01... */
+    @Column(nullable = false, length = 30)
     private String code;
 
     /** Tên/khu vực kệ (vd "Nước giải khát"). */

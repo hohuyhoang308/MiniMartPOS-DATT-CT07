@@ -44,7 +44,7 @@ public class InvoicePdfService {
     public byte[] export(Long invoiceId) {
         Invoice inv = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> NotFoundException.of("hóa đơn", invoiceId));
-        StoreConfig cfg = storeConfigRepository.findById(StoreConfig.SINGLETON_ID).orElse(null);
+        StoreConfig cfg = storeConfigRepository.findById(inv.getStore().getId()).orElse(null);
 
         // Khổ 80mm (~226pt) chiều rộng, cao tự co
         Document doc = new Document(new Rectangle(226, 600), 12, 12, 12, 12);

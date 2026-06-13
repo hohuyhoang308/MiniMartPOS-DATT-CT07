@@ -12,9 +12,11 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.view.BatchStockView;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
+import com.pos.entity.Store;
 import com.pos.repository.*;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.security.SecurityUtils;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class ShelfService {
     private final GoodsReceiptItemRepository batchRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
+    private final StoreRepository storeRepository;
     private final AuditService auditService;
 
     public ShelfService(ShelfRepository shelfRepository,
@@ -42,6 +45,7 @@ public class ShelfService {
                         GoodsReceiptItemRepository batchRepository,
                         UserRepository userRepository,
                         ProductRepository productRepository,
+                        StoreRepository storeRepository,
                         AuditService auditService) {
         this.shelfRepository = shelfRepository;
         this.batchStockRepository = batchStockRepository;
@@ -50,21 +54,23 @@ public class ShelfService {
         this.batchRepository = batchRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
+        this.storeRepository = storeRepository;
         this.auditService = auditService;
     }
 
     // ---------- CRUD kệ ----------
 
-    /** Danh sách kệ kèm thống kê đang chứa (số mặt hàng + tổng số lượng trên kệ). */
+    /** Danh sách kệ của CHI NHÁNH kèm thống kê đang chứa (số mặt hàng + tổng số lượng trên kệ). */
     public List<ShelfResponse> listShelves() {
+        Long storeId = StoreContext.requireStoreId();
         Map<Long, Set<Long>> productsByShelf = new HashMap<>();
         Map<Long, Long> qtyByShelf = new HashMap<>();
-        for (BatchStockView v : batchStockRepository.findAll()) {
-            if (v.getShelfId() == null || v.getOnShelf() == null || v.getOnShelf() <= 0) continue;
+        for (BatchStockView v : batchStockRepository.findOnShelfByStore(storeId)) {
+            if (v.getShelfId() == null) continue;
             productsByShelf.computeIfAbsent(v.getShelfId(), k -> new HashSet<>()).add(v.getProductId());
             qtyByShelf.merge(v.getShelfId(), v.getOnShelf(), Long::sum);
         }
-        return shelfRepository.findAllByOrderByCode().stream()
+        return shelfRepository.findByStoreIdOrderByCode(storeId).stream()
                 .map(s -> ShelfResponse.from(s,
                         productsByShelf.getOrDefault(s.getId(), Set.of()).size(),
                         qtyByShelf.getOrDefault(s.getId(), 0L)))
@@ -73,10 +79,12 @@ public class ShelfService {
 
     @Transactional
     public ShelfResponse create(ShelfRequest req) {
-        if (shelfRepository.existsByCodeIgnoreCase(req.code().trim())) {
-            throw new BadRequestException("Mã kệ đã tồn tại: " + req.code());
+        Long storeId = StoreContext.requireStoreId();
+        if (shelfRepository.existsByStoreIdAndCodeIgnoreCase(storeId, req.code().trim())) {
+            throw new BadRequestException("Mã kệ đã tồn tại trong chi nhánh: " + req.code());
         }
         Shelf s = new Shelf();
+        s.setStore(storeRepository.getReferenceById(storeId));
         apply(s, req);
         Shelf saved = shelfRepository.save(s);
         auditService.log("CREATE_SHELF", "SHELF", saved.getId(),
@@ -89,8 +97,8 @@ public class ShelfService {
     public ShelfResponse update(Long id, ShelfRequest req) {
         Shelf s = getOrThrow(id);
         if (!s.getCode().equalsIgnoreCase(req.code().trim())
-                && shelfRepository.existsByCodeIgnoreCase(req.code().trim())) {
-            throw new BadRequestException("Mã kệ đã tồn tại: " + req.code());
+                && shelfRepository.existsByStoreIdAndCodeIgnoreCase(s.getStore().getId(), req.code().trim())) {
+            throw new BadRequestException("Mã kệ đã tồn tại trong chi nhánh: " + req.code());
         }
         // NGỪNG DÙNG kệ: chỉ cho phép khi kệ đã hết hàng. Tránh tình trạng "ngừng" mà POS vẫn bán
         // được hàng còn trên kệ — phải lấy về kho hoặc bán hết trước.
@@ -166,7 +174,7 @@ public class ShelfService {
         }
 
         int need = quantity, moved = 0;
-        for (BatchStockView b : batchStockRepository.findWarehouseBatchesFifo(productId)) {
+        for (BatchStockView b : batchStockRepository.findWarehouseBatchesFifo(productId, shelf.getStore().getId())) {
             if (need <= 0) break;
             if (b.getShelfId() != null && !b.getShelfId().equals(shelfId)) continue; // lô đã thuộc kệ khác
             int avail = b.getInWarehouse() != null ? b.getInWarehouse().intValue() : 0;
@@ -248,7 +256,9 @@ public class ShelfService {
     }
 
     private Shelf getOrThrow(Long id) {
-        return shelfRepository.findById(id).orElseThrow(() -> NotFoundException.of("kệ", id));
+        Shelf s = shelfRepository.findById(id).orElseThrow(() -> NotFoundException.of("kệ", id));
+        StoreContext.assertSameStore(s.getStore().getId());   // chặn thao tác chéo cửa hàng
+        return s;
     }
 
     /** CommonStatus → nhãn tiếng Việt cho nhật ký kiểm toán. */

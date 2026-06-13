@@ -16,27 +16,37 @@ public interface BatchStockViewRepository extends JpaRepository<BatchStockView, 
      */
     @Query("""
             SELECT v FROM BatchStockView v
-            WHERE v.productId = :productId AND v.onShelf > 0
+            WHERE v.productId = :productId AND v.storeId = :storeId AND v.onShelf > 0
               AND (v.expiryDate IS NULL OR v.expiryDate >= CURRENT_DATE)
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
-    List<BatchStockView> findAvailableBatchesFifo(@Param("productId") Long productId);
+    List<BatchStockView> findAvailableBatchesFifo(@Param("productId") Long productId,
+                                                  @Param("storeId") Long storeId);
 
-    /** Các lô còn tồn TRONG KHO của 1 sản phẩm, FIFO theo HSD — dùng để chọn lô đưa lên kệ. */
+    /** Các lô còn tồn TRONG KHO của 1 sản phẩm tại 1 CHI NHÁNH, FIFO theo HSD — dùng để chọn lô đưa lên kệ. */
     @Query("""
             SELECT v FROM BatchStockView v
-            WHERE v.productId = :productId AND v.inWarehouse > 0
+            WHERE v.productId = :productId AND v.storeId = :storeId AND v.inWarehouse > 0
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
-    List<BatchStockView> findWarehouseBatchesFifo(@Param("productId") Long productId);
+    List<BatchStockView> findWarehouseBatchesFifo(@Param("productId") Long productId,
+                                                  @Param("storeId") Long storeId);
 
-    /** Tất cả lô CÒN HÀNG của 1 sản phẩm (FIFO theo HSD) — xem chi tiết kho/kệ theo lô. */
+    /** Tất cả lô CÒN HÀNG của 1 sản phẩm tại 1 chi nhánh (FIFO theo HSD) — xem chi tiết kho/kệ theo lô. */
     @Query("""
             SELECT v FROM BatchStockView v
-            WHERE v.productId = :productId AND v.quantityRemaining > 0
+            WHERE v.productId = :productId AND v.storeId = :storeId AND v.quantityRemaining > 0
             ORDER BY CASE WHEN v.expiryDate IS NULL THEN 1 ELSE 0 END, v.expiryDate, v.batchId
             """)
-    List<BatchStockView> findProductBatches(@Param("productId") Long productId);
+    List<BatchStockView> findProductBatches(@Param("productId") Long productId,
+                                            @Param("storeId") Long storeId);
+
+    /** Lô còn hàng trên kệ của 1 chi nhánh (gộp mọi sản phẩm) — thống kê kệ theo chi nhánh. */
+    @Query("""
+            SELECT v FROM BatchStockView v
+            WHERE v.storeId = :storeId AND v.onShelf > 0
+            """)
+    List<BatchStockView> findOnShelfByStore(@Param("storeId") Long storeId);
 
     /** Các lô đang nằm TRÊN một KỆ (còn tồn kệ) — xem kệ chứa gì, lô/HSD nào. */
     @Query("""

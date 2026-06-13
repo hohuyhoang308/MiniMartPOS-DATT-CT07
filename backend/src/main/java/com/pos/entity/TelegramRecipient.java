@@ -6,9 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /** Người nhận thông báo Telegram (FR-A5) — bảng {@code telegram_recipients}.
- *  Tách bảng để giữ 1NF (mỗi Chat ID một dòng). */
+ *  Tách bảng để giữ 1NF (mỗi Chat ID một dòng). Gắn theo CHI NHÁNH qua {@code config_id} (= stores.id):
+ *  mỗi chi nhánh có danh sách người nhận riêng; một Chat ID có thể trùng giữa các chi nhánh. */
 @Entity
-@Table(name = "telegram_recipients")
+@Table(name = "telegram_recipients",
+       uniqueConstraints = @UniqueConstraint(name = "uq_tele_store_chat", columnNames = {"config_id", "chat_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,11 +20,12 @@ public class TelegramRecipient {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** = store_config.id = stores.id (chi nhánh sở hữu người nhận này). */
     @Column(name = "config_id", nullable = false)
-    private Byte configId = StoreConfig.SINGLETON_ID;
+    private Long configId = StoreConfig.DEFAULT_STORE_ID;
 
     /** ID số hoặc @username kênh. */
-    @Column(name = "chat_id", nullable = false, unique = true, length = 50)
+    @Column(name = "chat_id", nullable = false, length = 50)
     private String chatId;
 
     @Column(length = 100)

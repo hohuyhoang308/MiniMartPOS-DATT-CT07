@@ -16,18 +16,20 @@ import java.util.List;
 
 public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> {
 
-    /** Top sản phẩm bán chạy theo số lượng (HĐ COMPLETED) trong khoảng thời gian. */
+    /** Top sản phẩm bán chạy theo số lượng (HĐ COMPLETED) trong khoảng — lọc chi nhánh (null = toàn chuỗi). */
     @Query("""
             SELECT ii.product.id AS productId, ii.product.name AS productName,
                    SUM(ii.quantity) AS quantitySold, SUM(ii.subtotal) AS revenue
             FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             GROUP BY ii.product.id, ii.product.name
             ORDER BY SUM(ii.quantity) DESC
             """)
     List<TopProductRow> topProducts(@Param("from") LocalDateTime from,
                                     @Param("to") LocalDateTime to,
+                                    @Param("storeId") Long storeId,
                                     Pageable pageable);
 
     /**
@@ -40,18 +42,22 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             FROM InvoiceItemBatch iib
             WHERE iib.invoiceItem.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND iib.invoiceItem.invoice.createdAt >= :from AND iib.invoiceItem.invoice.createdAt < :to
+              AND (:storeId IS NULL OR iib.invoiceItem.invoice.store.id = :storeId)
             """)
-    BigDecimal sumProfit(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    BigDecimal sumProfit(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                         @Param("storeId") Long storeId);
 
-    /** Tổng số sản phẩm đã bán. */
+    /** Tổng số sản phẩm đã bán — lọc chi nhánh. */
     @Query("""
             SELECT COALESCE(SUM(ii.quantity), 0) FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             """)
-    long sumQuantity(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    long sumQuantity(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                     @Param("storeId") Long storeId);
 
-    /** Doanh thu & sản lượng theo danh mục. */
+    /** Doanh thu & sản lượng theo danh mục — lọc chi nhánh. */
     @Query("""
             SELECT ii.product.category.name AS categoryName,
                    COALESCE(SUM(ii.subtotal), 0) AS revenue,
@@ -59,20 +65,23 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             GROUP BY ii.product.category.name
             ORDER BY SUM(ii.subtotal) DESC
             """)
-    List<CategorySalesRow> categorySales(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    List<CategorySalesRow> categorySales(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                         @Param("storeId") Long storeId);
 
-    /** Sản lượng đã bán theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — tính tốc độ bán. */
+    /** Sản lượng đã bán theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — tính tốc độ bán, lọc chi nhánh. */
     @Query("""
             SELECT ii.product.id AS productId, COALESCE(SUM(ii.quantity), 0) AS soldQty
             FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND ii.invoice.createdAt >= :from
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             GROUP BY ii.product.id
             """)
-    List<ProductSalesRow> soldQuantitySince(@Param("from") LocalDateTime from);
+    List<ProductSalesRow> soldQuantitySince(@Param("from") LocalDateTime from, @Param("storeId") Long storeId);
 
     /**
      * Sản lượng bán theo (sản phẩm, NGÀY) kể từ {@code from} — mỗi dòng là số bán 1 ngày của 1 SP.
@@ -83,9 +92,10 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             FROM invoice_items ii
             JOIN invoices i ON i.id = ii.invoice_id
             WHERE i.status = 'COMPLETED' AND i.created_at >= :from
+              AND (:storeId IS NULL OR i.store_id = :storeId)
             GROUP BY ii.product_id, DATE(i.created_at)
             """, nativeQuery = true)
-    List<ProductSalesRow> dailySalesSince(@Param("from") LocalDateTime from);
+    List<ProductSalesRow> dailySalesSince(@Param("from") LocalDateTime from, @Param("storeId") Long storeId);
 
     /**
      * Sản lượng bán theo (sản phẩm, TUẦN) kể từ {@code from} — mỗi dòng là số bán trong 1 tuần của 1 SP.
@@ -98,11 +108,12 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             FROM invoice_items ii
             JOIN invoices i ON i.id = ii.invoice_id
             WHERE i.status = 'COMPLETED' AND i.created_at >= :from
+              AND (:storeId IS NULL OR i.store_id = :storeId)
             GROUP BY ii.product_id, FLOOR(DATEDIFF(i.created_at, :from) / 7)
             """, nativeQuery = true)
-    List<ProductSalesRow> weeklySalesSince(@Param("from") LocalDateTime from);
+    List<ProductSalesRow> weeklySalesSince(@Param("from") LocalDateTime from, @Param("storeId") Long storeId);
 
-    /** Doanh thu + sản lượng theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — phân tích ABC/XYZ. */
+    /** Doanh thu + sản lượng theo sản phẩm kể từ {@code from} (HĐ COMPLETED) — phân tích ABC/XYZ, lọc chi nhánh. */
     @Query("""
             SELECT ii.product.id AS productId,
                    COALESCE(SUM(ii.subtotal), 0) AS revenue,
@@ -110,9 +121,11 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND ii.invoice.createdAt >= :from
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             GROUP BY ii.product.id
             """)
-    List<com.pos.repository.projection.ProductRevenueRow> revenueByProductSince(@Param("from") LocalDateTime from);
+    List<com.pos.repository.projection.ProductRevenueRow> revenueByProductSince(@Param("from") LocalDateTime from,
+                                                                                @Param("storeId") Long storeId);
 
     /**
      * Gợi ý "mua kèm" (market-basket): số hóa đơn ĐỒNG XUẤT HIỆN co(A,B) của mỗi sản phẩm B với A.
@@ -125,17 +138,20 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
               AND ii1.product.id = :productId
               AND ii2.product.id <> :productId
               AND ii1.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND (:storeId IS NULL OR ii1.invoice.store.id = :storeId)
             GROUP BY ii2.product.id
             ORDER BY COUNT(DISTINCT ii2.invoice.id) DESC
             """)
-    List<ProductCountRow> boughtTogether(@Param("productId") Long productId, Pageable pageable);
+    List<ProductCountRow> boughtTogether(@Param("productId") Long productId,
+                                         @Param("storeId") Long storeId, Pageable pageable);
 
-    /** Số HĐ COMPLETED chứa mỗi sản phẩm n(B) — mẫu số để tính lift cho gợi ý mua kèm. */
+    /** Số HĐ COMPLETED chứa mỗi sản phẩm n(B) — mẫu số để tính lift cho gợi ý mua kèm, lọc theo cửa hàng. */
     @Query("""
             SELECT ii.product.id AS productId, COUNT(DISTINCT ii.invoice.id) AS cnt
             FROM InvoiceItem ii
             WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
             GROUP BY ii.product.id
             """)
-    List<ProductCountRow> invoiceCountByProduct();
+    List<ProductCountRow> invoiceCountByProduct(@Param("storeId") Long storeId);
 }

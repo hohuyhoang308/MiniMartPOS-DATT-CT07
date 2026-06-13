@@ -21,6 +21,10 @@ public class ExpiringBatchView {
     @Column(name = "product_id")
     private Long productId;
 
+    /** Chi nhánh của lô (đa chuỗi). */
+    @Column(name = "store_id")
+    private Long storeId;
+
     @Column(name = "product_name")
     private String productName;
 
