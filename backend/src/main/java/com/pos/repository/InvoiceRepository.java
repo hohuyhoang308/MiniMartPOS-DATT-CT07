@@ -3,9 +3,13 @@ package com.pos.repository;
 import com.pos.entity.Invoice;
 import com.pos.entity.enums.InvoiceStatus;
 import com.pos.repository.projection.DailyRevenueRow;
+import com.pos.repository.projection.EmployeeSalesRow;
 import com.pos.repository.projection.HourlySalesRow;
 import com.pos.repository.projection.PaymentBreakdownRow;
 import com.pos.repository.projection.PeriodReportRow;
+import com.pos.repository.projection.ShiftCashRow;
+import com.pos.repository.projection.StoreAmountRow;
+import com.pos.repository.projection.StoreCountRow;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -66,18 +70,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
      */
     @Query(value = """
             SELECT DATE_FORMAT(i.created_at, :fmt) AS bucket,
-                   COALESCE(SUM(i.total_amount), 0) AS revenue,
-                   COALESCE(SUM(p.profit), 0)      AS profit,
-                   COUNT(*)                        AS invoiceCount
+                   COALESCE(SUM(i.total_amount), 0)                        AS revenue,
+                   COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(c.cogs), 0) AS profit,
+                   COUNT(*)                                                AS invoiceCount
             FROM invoices i
             LEFT JOIN (
                 SELECT ii.invoice_id AS invoice_id,
-                       SUM((ii.unit_price - gri.import_price) * iib.quantity) AS profit
+                       SUM(gri.import_price * iib.quantity) AS cogs
                 FROM invoice_item_batches iib
-                JOIN invoice_items ii      ON ii.id  = iib.invoice_item_id
+                JOIN invoice_items ii        ON ii.id  = iib.invoice_item_id
                 JOIN goods_receipt_items gri ON gri.id = iib.batch_id
+                JOIN invoices i2             ON i2.id  = ii.invoice_id
+                WHERE i2.status = 'COMPLETED' AND i2.created_at >= :from AND i2.created_at < :to
                 GROUP BY ii.invoice_id
-            ) p ON p.invoice_id = i.id
+            ) c ON c.invoice_id = i.id
             WHERE i.status = 'COMPLETED' AND i.created_at >= :from AND i.created_at < :to
               AND (:storeId IS NULL OR i.store_id = :storeId)
             GROUP BY DATE_FORMAT(i.created_at, :fmt)
@@ -111,6 +117,17 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                          Pageable pageable);
 
     List<Invoice> findByCustomerIdAndStatusOrderByCreatedAtDesc(Long customerId, InvoiceStatus status);
+
+    /** Lịch sử mua của 1 khách, LỌC theo chi nhánh đang làm việc (null = toàn chuỗi, chỉ CHAIN_ADMIN). */
+    @Query("""
+            SELECT i FROM Invoice i
+            WHERE i.customer.id = :customerId AND i.status = :status
+              AND (:storeId IS NULL OR i.store.id = :storeId)
+            ORDER BY i.createdAt DESC
+            """)
+    List<Invoice> findCustomerHistory(@Param("customerId") Long customerId,
+                                      @Param("status") InvoiceStatus status,
+                                      @Param("storeId") Long storeId);
 
     /** Số khách thân thiết được phục vụ (HĐ COMPLETED có gắn khách) trong khoảng — lọc chi nhánh. */
     @Query("""
@@ -159,4 +176,49 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
               AND i.paymentMethod = com.pos.entity.enums.PaymentMethod.CASH
             """)
     BigDecimal sumCashSalesByShift(@Param("shiftId") Long shiftId);
+
+    /** Tiền mặt thực thu gộp theo NHIỀU ca cùng lúc — bỏ N+1 ở báo cáo ca. */
+    @Query("""
+            SELECT i.shift.id AS shiftId, COALESCE(SUM(i.totalAmount), 0) AS amount
+            FROM Invoice i
+            WHERE i.shift.id IN :shiftIds
+              AND i.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND i.paymentMethod = com.pos.entity.enums.PaymentMethod.CASH
+            GROUP BY i.shift.id
+            """)
+    List<ShiftCashRow> cashSalesByShiftIds(@Param("shiftIds") List<Long> shiftIds);
+
+    /** Doanh số bán gộp theo THU NGÂN (qua ca) trong khoảng — báo cáo hiệu suất nhân viên, lọc chi nhánh. */
+    @Query("""
+            SELECT i.shift.user.id AS userId, i.shift.user.fullName AS cashierName,
+                   COUNT(i) AS invoiceCount, COALESCE(SUM(i.totalAmount), 0) AS revenue
+            FROM Invoice i
+            WHERE i.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND i.createdAt >= :from AND i.createdAt < :to
+              AND (:storeId IS NULL OR i.store.id = :storeId)
+            GROUP BY i.shift.user.id, i.shift.user.fullName
+            ORDER BY COALESCE(SUM(i.totalAmount), 0) DESC
+            """)
+    List<EmployeeSalesRow> salesByCashier(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                          @Param("storeId") Long storeId);
+
+    /** Doanh thu gộp theo CHI NHÁNH trong khoảng — màn so sánh chi nhánh (1 truy vấn cho mọi cửa hàng). */
+    @Query("""
+            SELECT i.store.id AS storeId, COALESCE(SUM(i.totalAmount), 0) AS amount
+            FROM Invoice i
+            WHERE i.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND i.createdAt >= :from AND i.createdAt < :to
+            GROUP BY i.store.id
+            """)
+    List<StoreAmountRow> revenueByStore(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Số hóa đơn COMPLETED gộp theo CHI NHÁNH trong khoảng — màn so sánh chi nhánh. */
+    @Query("""
+            SELECT i.store.id AS storeId, COUNT(i) AS count
+            FROM Invoice i
+            WHERE i.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND i.createdAt >= :from AND i.createdAt < :to
+            GROUP BY i.store.id
+            """)
+    List<StoreCountRow> countByStore(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

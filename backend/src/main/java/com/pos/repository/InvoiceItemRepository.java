@@ -2,9 +2,13 @@ package com.pos.repository;
 
 import com.pos.entity.InvoiceItem;
 import com.pos.repository.projection.CategorySalesRow;
+import com.pos.repository.projection.ProductCogsRow;
 import com.pos.repository.projection.ProductCountRow;
+import com.pos.repository.projection.ProductSalesDetailRow;
 import com.pos.repository.projection.ProductSalesRow;
+import com.pos.repository.projection.StoreAmountRow;
 import com.pos.repository.projection.TopProductRow;
+import com.pos.repository.projection.UserQtyRow;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -33,19 +37,29 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
                                     Pageable pageable);
 
     /**
-     * Lợi nhuận gộp CHÍNH XÁC theo FIFO‑lô: COGS lấy đúng {@code import_price} của lô đã phân bổ khi bán
-     * (không dùng cost_price hiện tại của sản phẩm → báo cáo quá khứ không bị đổi khi đổi giá nhập).
-     * Lợi nhuận = Σ (giá bán − giá nhập của lô) × số lượng phân bổ, trên HĐ COMPLETED.
+     * GIÁ VỐN HÀNG BÁN (COGS) chính xác theo FIFO‑lô = Σ giá nhập của lô × số lượng phân bổ, trên HĐ COMPLETED.
+     * Lợi nhuận gộp = doanh thu thuần (đã trừ khuyến mãi ở total_amount) − COGS → trừ tách bạch ở tầng service.
      */
     @Query("""
-            SELECT COALESCE(SUM((iib.invoiceItem.unitPrice - iib.batch.importPrice) * iib.quantity), 0)
+            SELECT COALESCE(SUM(iib.batch.importPrice * iib.quantity), 0)
             FROM InvoiceItemBatch iib
             WHERE iib.invoiceItem.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
               AND iib.invoiceItem.invoice.createdAt >= :from AND iib.invoiceItem.invoice.createdAt < :to
               AND (:storeId IS NULL OR iib.invoiceItem.invoice.store.id = :storeId)
             """)
-    BigDecimal sumProfit(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
-                         @Param("storeId") Long storeId);
+    BigDecimal sumCogs(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                       @Param("storeId") Long storeId);
+
+    /** COGS gộp theo CHI NHÁNH trong khoảng — cho màn so sánh chi nhánh (1 truy vấn cho mọi cửa hàng). */
+    @Query("""
+            SELECT iib.invoiceItem.invoice.store.id AS storeId,
+                   COALESCE(SUM(iib.batch.importPrice * iib.quantity), 0) AS amount
+            FROM InvoiceItemBatch iib
+            WHERE iib.invoiceItem.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND iib.invoiceItem.invoice.createdAt >= :from AND iib.invoiceItem.invoice.createdAt < :to
+            GROUP BY iib.invoiceItem.invoice.store.id
+            """)
+    List<StoreAmountRow> cogsByStore(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     /** Tổng số sản phẩm đã bán — lọc chi nhánh. */
     @Query("""
@@ -154,4 +168,44 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
             GROUP BY ii.product.id
             """)
     List<ProductCountRow> invoiceCountByProduct(@Param("storeId") Long storeId);
+
+    /** Tổng số lượng hàng bán theo THU NGÂN (qua ca) trong khoảng — báo cáo hiệu suất nhân viên. */
+    @Query("""
+            SELECT ii.invoice.shift.user.id AS userId, COALESCE(SUM(ii.quantity), 0) AS qty
+            FROM InvoiceItem ii
+            WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
+            GROUP BY ii.invoice.shift.user.id
+            """)
+    List<UserQtyRow> itemsByCashier(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                    @Param("storeId") Long storeId);
+
+    /** Doanh số bán theo từng SẢN PHẨM trong khoảng (số lượng + doanh thu) — báo cáo lợi nhuận sản phẩm. */
+    @Query("""
+            SELECT ii.product.id AS productId, ii.product.name AS productName,
+                   ii.product.category.name AS categoryName,
+                   COALESCE(SUM(ii.quantity), 0) AS qtySold, COALESCE(SUM(ii.subtotal), 0) AS revenue
+            FROM InvoiceItem ii
+            WHERE ii.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND ii.invoice.createdAt >= :from AND ii.invoice.createdAt < :to
+              AND (:storeId IS NULL OR ii.invoice.store.id = :storeId)
+            GROUP BY ii.product.id, ii.product.name, ii.product.category.name
+            ORDER BY COALESCE(SUM(ii.subtotal), 0) DESC
+            """)
+    List<ProductSalesDetailRow> productSales(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                             @Param("storeId") Long storeId);
+
+    /** GIÁ VỐN (COGS) theo FIFO‑lô của từng SẢN PHẨM trong khoảng — ghép với doanh số để ra lợi nhuận/biên. */
+    @Query("""
+            SELECT iib.invoiceItem.product.id AS productId,
+                   COALESCE(SUM(iib.batch.importPrice * iib.quantity), 0) AS cogs
+            FROM InvoiceItemBatch iib
+            WHERE iib.invoiceItem.invoice.status = com.pos.entity.enums.InvoiceStatus.COMPLETED
+              AND iib.invoiceItem.invoice.createdAt >= :from AND iib.invoiceItem.invoice.createdAt < :to
+              AND (:storeId IS NULL OR iib.invoiceItem.invoice.store.id = :storeId)
+            GROUP BY iib.invoiceItem.product.id
+            """)
+    List<ProductCogsRow> cogsByProduct(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                       @Param("storeId") Long storeId);
 }

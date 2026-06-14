@@ -1,6 +1,8 @@
 package com.pos.controller;
 
 import com.pos.common.ApiResponse;
+import com.pos.dto.report.EmployeeReportResponse;
+import com.pos.dto.report.ProductReportResponse;
 import com.pos.dto.report.ReportPeriod;
 import com.pos.dto.report.RevenueReportResponse;
 import com.pos.dto.report.ShiftReportResponse;
@@ -38,6 +40,22 @@ public class ReportController {
     @GetMapping("/shifts")
     public ApiResponse<List<ShiftReportResponse>> shifts() {
         return ApiResponse.ok(service.shiftReport());
+    }
+
+    /** Hiệu suất nhân viên (doanh số / số HĐ / hàng bán / lệch quỹ theo từng thu ngân). */
+    @GetMapping("/employees")
+    public ApiResponse<List<EmployeeReportResponse>> employees(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.ok(service.employeeReport(from, to));
+    }
+
+    /** Báo cáo sản phẩm: lợi nhuận/biên theo SP + hàng ế (tồn nhưng không bán được). */
+    @GetMapping("/products")
+    public ApiResponse<ProductReportResponse> products(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.ok(service.productReport(from, to));
     }
 
     /** Xuất báo cáo doanh thu ra Excel (.xlsx). */
