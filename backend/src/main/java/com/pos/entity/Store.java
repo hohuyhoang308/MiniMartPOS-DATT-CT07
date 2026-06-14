@@ -58,6 +58,10 @@ public class Store {
     @Column(nullable = false)
     private CommonStatus status = CommonStatus.ACTIVE;
 
+    /** Kho trung tâm (Obj 1.1): chi nhánh đặc biệt chỉ chứa hàng để điều chuyển, không bán lẻ. */
+    @Column(name = "is_warehouse", nullable = false)
+    private boolean warehouse = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

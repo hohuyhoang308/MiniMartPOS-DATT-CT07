@@ -403,6 +403,84 @@ CREATE TABLE IF NOT EXISTS loyalty_point_ledger (
     CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 14. GIÁ BÁN RIÊNG THEO CHI NHÁNH (Obj 1.3) — giữ mô hình giá TẬP TRUNG (products.sale_price là giá chuẩn),
+--     mỗi (sản phẩm, chi nhánh) có TỐI ĐA 1 override ACTIVE. Giá bán = COALESCE(override, giá chuẩn).
+CREATE TABLE IF NOT EXISTS product_store_prices (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id  BIGINT NOT NULL,
+    store_id    BIGINT NOT NULL,
+    sale_price  DECIMAL(12,2) NOT NULL,                     -- giá bán riêng (đã gồm VAT)
+    status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    updated_by  BIGINT,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_psp UNIQUE (product_id, store_id),        -- 1 override / (sản phẩm, chi nhánh)
+    CONSTRAINT fk_psp_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_psp_store   FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_psp_user    FOREIGN KEY (updated_by) REFERENCES users(id),
+    CONSTRAINT chk_psp_price  CHECK (sale_price >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 15. ĐIỀU CHUYỂN HÀNG NỘI BỘ giữa chi nhánh (Obj 1.1) — state machine PENDING→SHIPPING→RECEIVED/CANCELLED.
+--     KHÔNG mutate lô: SHIP ghi stock_adjustments(reason=TRANSFER_OUT) trừ tồn nguồn; RECEIVE tạo
+--     goods_receipts(source=TRANSFER) ở đích → tồn xuất hiện ở đích như lô mới (giữ FIFO theo HSD gốc).
+CREATE TABLE IF NOT EXISTS stock_transfers (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30) NOT NULL UNIQUE,
+    source_store_id BIGINT NOT NULL,
+    dest_store_id   BIGINT NOT NULL,
+    status          ENUM('PENDING','SHIPPING','RECEIVED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+    created_by      BIGINT,
+    shipped_by      BIGINT, shipped_at  DATETIME,
+    received_by     BIGINT, received_at DATETIME,
+    cancelled_by    BIGINT, cancelled_at DATETIME, cancel_reason VARCHAR(255),
+    dest_receipt_id BIGINT,                                 -- phiếu nhập sinh ở đích khi RECEIVED (truy vết)
+    note            VARCHAR(255),
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_tr_src (source_store_id),
+    KEY idx_tr_dst (dest_store_id),
+    KEY idx_tr_status (status),
+    CONSTRAINT fk_tr_src  FOREIGN KEY (source_store_id) REFERENCES stores(id),
+    CONSTRAINT fk_tr_dst  FOREIGN KEY (dest_store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_tr_rcpt FOREIGN KEY (dest_receipt_id) REFERENCES goods_receipts(id),
+    CONSTRAINT fk_tr_cby  FOREIGN KEY (created_by)  REFERENCES users(id),
+    CONSTRAINT fk_tr_sby  FOREIGN KEY (shipped_by)  REFERENCES users(id),
+    CONSTRAINT fk_tr_rby  FOREIGN KEY (received_by) REFERENCES users(id),
+    CONSTRAINT chk_tr_diff CHECK (source_store_id <> dest_store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS stock_transfer_items (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transfer_id  BIGINT NOT NULL,
+    batch_id     BIGINT NOT NULL,                           -- lô NGUỒN (goods_receipt_items.id)
+    product_id   BIGINT NOT NULL,
+    quantity     INT NOT NULL,
+    expiry_date  DATE,                                      -- HSD chốt từ lô nguồn → tái tạo ở đích
+    cost_price   DECIMAL(12,2) NOT NULL,                    -- giá vốn theo lô (chuyển kho không đổi giá vốn)
+    CONSTRAINT fk_tri_tr    FOREIGN KEY (transfer_id) REFERENCES stock_transfers(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tri_batch FOREIGN KEY (batch_id)    REFERENCES goods_receipt_items(id),
+    CONSTRAINT fk_tri_prod  FOREIGN KEY (product_id)  REFERENCES products(id),
+    CONSTRAINT chk_tri_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16. BẢNG TỔNG HỢP DOANH THU NGÀY (Obj 2 — rollup) — 1 dòng / (chi nhánh, ngày). Job nền tổng hợp
+--     từ invoices COMPLETED để báo cáo nhiều năm × nhiều chi nhánh không phải quét bảng hóa đơn thô.
+CREATE TABLE IF NOT EXISTS daily_sales_rollup (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id      BIGINT NOT NULL,
+    sales_date    DATE   NOT NULL,
+    revenue       DECIMAL(16,2) NOT NULL DEFAULT 0,         -- Σ total_amount (COMPLETED)
+    discount      DECIMAL(16,2) NOT NULL DEFAULT 0,
+    tax           DECIMAL(16,2) NOT NULL DEFAULT 0,
+    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn (FIFO) hàng đã bán
+    gross_profit  DECIMAL(16,2) NOT NULL DEFAULT 0,         -- revenue − cogs
+    invoice_count INT NOT NULL DEFAULT 0,
+    items_sold    INT NOT NULL DEFAULT 0,
+    rolled_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_dsr UNIQUE (store_id, sales_date),
+    KEY idx_dsr_date (sales_date),
+    CONSTRAINT fk_dsr_store FOREIGN KEY (store_id) REFERENCES stores(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- =====================================================================
 --  MIGRATION nhẹ cho CSDL CŨ (idempotent): thêm cột points_used nếu thiếu.
 --  (MySQL không có ADD COLUMN IF NOT EXISTS → kiểm tra qua information_schema.)
@@ -467,6 +545,42 @@ DROP TABLE IF EXISTS sales_returns;
 -- MODIFY COLUMN an toàn chạy lại nhiều lần (idempotent về kết quả).
 ALTER TABLE invoices
     MODIFY COLUMN status ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED';
+
+-- Obj 1.1: kho trung tâm = 1 chi nhánh đặc biệt (stores.is_warehouse) + nguồn gốc phiếu nhập
+-- (goods_receipts.source: PURCHASE mua ngoài / TRANSFER nhận điều chuyển). Bổ sung cho CSDL cũ.
+SET @add_is_wh := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stores' AND column_name='is_warehouse'),
+    'SELECT 1',
+    'ALTER TABLE stores ADD COLUMN is_warehouse TINYINT(1) NOT NULL DEFAULT 0'));
+PREPARE stmt_iswh FROM @add_is_wh; EXECUTE stmt_iswh; DEALLOCATE PREPARE stmt_iswh;
+
+SET @add_gr_src := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='goods_receipts' AND column_name='source'),
+    'SELECT 1',
+    'ALTER TABLE goods_receipts ADD COLUMN source ENUM(''PURCHASE'',''TRANSFER'') NOT NULL DEFAULT ''PURCHASE'''));
+PREPARE stmt_grsrc FROM @add_gr_src; EXECUTE stmt_grsrc; DEALLOCATE PREPARE stmt_grsrc;
+
+-- Mở rộng lý do điều chỉnh tồn: thêm TRANSFER_OUT (xuất điều chuyển). MODIFY idempotent về kết quả.
+ALTER TABLE stock_adjustments
+    MODIFY COLUMN reason ENUM('EXPIRED','DAMAGED','LOST','OTHER','TRANSFER_OUT') NOT NULL;
+
+-- Phiếu nhập do điều chuyển nội bộ không có NCC → cho supplier_id nullable. MODIFY idempotent.
+ALTER TABLE goods_receipts MODIFY COLUMN supplier_id BIGINT NULL;
+
+-- SNAPSHOT đối soát quỹ lúc ĐÓNG CA (finding #3): chốt tiền-mặt-bán tại thời điểm đóng để hủy HĐ tiền mặt
+-- của ca ĐÃ ĐÓNG về sau KHÔNG làm lệch đối soát quỹ của ca đó (tiền thực tế ĐÃ nằm trong két lúc đóng).
+SET @add_fcs := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='work_shifts' AND column_name='final_cash_sales'),
+    'SELECT 1',
+    'ALTER TABLE work_shifts ADD COLUMN final_cash_sales DECIMAL(14,2) NULL'));
+PREPARE stmt_fcs FROM @add_fcs; EXECUTE stmt_fcs; DEALLOCATE PREPARE stmt_fcs;
+
+-- Backfill các ca ĐÃ ĐÓNG còn thiếu snapshot (idempotent: chỉ đụng dòng NULL).
+UPDATE work_shifts s
+LEFT JOIN ( SELECT shift_id, SUM(total_amount) cash FROM invoices
+            WHERE status='COMPLETED' AND payment_method='CASH' GROUP BY shift_id ) cs ON cs.shift_id = s.id
+SET s.final_cash_sales = COALESCE(cs.cash, 0)
+WHERE s.status='CLOSED' AND s.final_cash_sales IS NULL;
 
 -- =====================================================================
 --  MIGRATION ĐA CHUỖI (idempotent): thêm chi nhánh mặc định CH01 (id=1) và cột store_id

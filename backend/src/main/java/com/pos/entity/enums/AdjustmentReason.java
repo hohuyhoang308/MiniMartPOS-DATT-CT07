@@ -7,11 +7,14 @@ package com.pos.entity.enums;
  *   <li>{@code DAMAGED}  — hư hỏng/vỡ/bể, không bán được.</li>
  *   <li>{@code LOST}     — thất thoát/mất mát/thiếu hụt khi kiểm kê.</li>
  *   <li>{@code OTHER}    — lý do khác (ghi rõ ở ghi chú).</li>
+ *   <li>{@code TRANSFER_OUT} — xuất điều chuyển sang chi nhánh khác (Obj 1.1). Tồn rời kho NGUỒN;
+ *       hàng được tái tạo ở chi nhánh ĐÍCH bằng phiếu nhập nội bộ khi nhận.</li>
  * </ul>
  */
 public enum AdjustmentReason {
     EXPIRED,
     DAMAGED,
     LOST,
-    OTHER
+    OTHER,
+    TRANSFER_OUT
 }

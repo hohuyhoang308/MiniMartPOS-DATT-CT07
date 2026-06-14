@@ -26,9 +26,12 @@ public record GoodsReceiptResponse(
                 .map(it -> new Item(it.getId(), it.getProduct().getId(), it.getProduct().getName(),
                         it.getQuantity(), it.getImportPrice(), it.getExpiryDate()))
                 .toList();
+        // Phiếu nhập do điều chuyển nội bộ không có NCC (supplier = null).
+        Long supplierId = r.getSupplier() != null ? r.getSupplier().getId() : null;
+        String supplierName = r.getSupplier() != null ? r.getSupplier().getName() : "Điều chuyển nội bộ";
         return new GoodsReceiptResponse(
                 r.getId(), r.getCode(),
-                r.getSupplier().getId(), r.getSupplier().getName(),
+                supplierId, supplierName,
                 r.getCreatedBy().getFullName(),
                 r.getTotalAmount(), r.getNote(), r.getCreatedAt(), items);
     }

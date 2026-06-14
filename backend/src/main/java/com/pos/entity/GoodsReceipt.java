@@ -1,5 +1,6 @@
 package com.pos.entity;
 
+import com.pos.entity.enums.ReceiptSource;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,9 +32,15 @@ public class GoodsReceipt {
     @JoinColumn(name = "store_id", nullable = false)
     private Store store;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "supplier_id", nullable = false)
+    /** NCC (NULL nếu phiếu do NHẬN ĐIỀU CHUYỂN nội bộ — Obj 1.1). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
     private Supplier supplier;
+
+    /** Nguồn gốc: PURCHASE (mua NCC) hoặc TRANSFER (nhận điều chuyển). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private ReceiptSource source = ReceiptSource.PURCHASE;
 
     /** Người lập phiếu. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

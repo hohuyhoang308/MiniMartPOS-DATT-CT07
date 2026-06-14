@@ -53,6 +53,7 @@ public class SaleService {
     private final PromotionService promotionService;
     private final PromotionRepository promotionRepository;
     private final LoyaltyService loyaltyService;
+    private final ProductPricingService pricingService;
 
     public SaleService(InvoiceRepository invoiceRepository,
                        ProductRepository productRepository,
@@ -64,8 +65,10 @@ public class SaleService {
                        StoreConfigRepository storeConfigRepository,
                        PromotionService promotionService,
                        PromotionRepository promotionRepository,
-                       LoyaltyService loyaltyService) {
+                       LoyaltyService loyaltyService,
+                       ProductPricingService pricingService) {
         this.loyaltyService = loyaltyService;
+        this.pricingService = pricingService;
         this.invoiceRepository = invoiceRepository;
         this.productRepository = productRepository;
         this.customerRepository = customerRepository;
@@ -119,13 +122,16 @@ public class SaleService {
         for (SaleItemRequest line : req.items()) {
             Product product = productRepository.findById(line.productId())
                     .orElseThrow(() -> NotFoundException.of("sản phẩm", line.productId()));
+            // GIÁ THEO CHI NHÁNH (Obj 1.3): giá hiệu lực = override ACTIVE của chi nhánh ca, nếu không có → giá chuẩn.
+            // Resolve server-side từ store của ca (KHÔNG nhận giá từ client).
+            BigDecimal unitPrice = pricingService.effectiveSalePrice(product, shift.getStore().getId());
             InvoiceItem item = new InvoiceItem();
             item.setProduct(product);
             item.setQuantity(line.quantity());
-            item.setUnitPrice(product.getSalePrice());
+            item.setUnitPrice(unitPrice);
             invoice.addItem(item);
 
-            BigDecimal lineAmount = product.getSalePrice().multiply(BigDecimal.valueOf(line.quantity()));
+            BigDecimal lineAmount = unitPrice.multiply(BigDecimal.valueOf(line.quantity()));
             subtotal = subtotal.add(lineAmount);
             // VAT đã gồm trong giá: thuế = tiền × r/(100+r)
             BigDecimal r = product.getTaxRate() != null ? product.getTaxRate() : BigDecimal.ZERO;
@@ -154,7 +160,9 @@ public class SaleService {
         int startPoints = 0;
         BigDecimal redeemValue = BigDecimal.ZERO;
         if (req.customerId() != null) {
-            customer = customerRepository.findById(req.customerId())
+            // KHÓA GHI hàng khách: serialize đọc-rồi-ghi số dư điểm, chặn double-spend khi 2 ca bán
+            // đồng thời cùng 1 khách (xem CustomerRepository.findByIdForUpdate).
+            customer = customerRepository.findByIdForUpdate(req.customerId())
                     .orElseThrow(() -> NotFoundException.of("khách hàng", req.customerId()));
             startPoints = customer.getLoyaltyPoints();
             invoice.setCustomer(customer);
