@@ -26,9 +26,11 @@ public class AuditService {
      */
     @Transactional(readOnly = true)
     public List<AuditLog> recent() {
-        Long myStore = SecurityUtils.currentUser().getStoreId();
-        return myStore != null
-                ? repository.findTop200ByStoreIdOrderByCreatedAtDesc(myStore)
+        // Dùng StoreContext (không phải store cố định của user) để ADMIN khi "đi sâu" 1 chi nhánh
+        // qua X-Store-Id thấy đúng log của chi nhánh đó; MANAGER/STAFF vẫn bị chốt về cửa hàng mình.
+        Long scope = StoreContext.currentStoreId();
+        return scope != null
+                ? repository.findTop200ByStoreIdOrderByCreatedAtDesc(scope)
                 : repository.findTop200ByOrderByCreatedAtDesc();
     }
 

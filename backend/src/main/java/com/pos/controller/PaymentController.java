@@ -12,6 +12,7 @@ import java.util.Map;
 /** Thanh toán QR + đối soát WEB2M (FR-A1, FR-A4). */
 @RestController
 @RequestMapping("/api/payments")
+@PreAuthorize("hasAnyRole('STAFF','MANAGER','ADMIN')")   // gate tường minh thay vì dựa vào default authenticated()
 public class PaymentController {
 
     private final PaymentService paymentService;

@@ -12,6 +12,7 @@ import Loading from '../../components/ui/Loading'
 import { dashboardApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
+import { useStoreScope } from '../../context/StoreScopeContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
 
@@ -78,7 +79,8 @@ function AlertCard({ icon, color, count, label, onClick }) {
 
 export default function Dashboard() {
   const toast = useToast()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
+  const { isChainScope, scopeStoreName } = useStoreScope()
   const navigate = useNavigate()
   const [d, setD] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -100,7 +102,12 @@ export default function Dashboard() {
 
   return (
     <div>
-      <PageHeader title={`Xin chào, ${user?.fullName} 👋`} subtitle="Tình hình buôn bán của cửa hàng hôm nay" />
+      <PageHeader title={`Xin chào, ${user?.fullName} 👋`}
+        subtitle={isAdmin
+          ? (isChainScope
+            ? 'Tình hình buôn bán TOÀN CHUỖI hôm nay (gộp tất cả chi nhánh)'
+            : `Tình hình buôn bán hôm nay — chi nhánh: ${scopeStoreName || '—'}`)
+          : 'Tình hình buôn bán của cửa hàng hôm nay'} />
 
       {/* KPI chính */}
       <Row className="g-3 mb-3 stagger">

@@ -133,11 +133,15 @@ public class InvoiceService {
         if (customer != null) {
             int earned = inv.getPointsEarned() != null ? inv.getPointsEarned() : 0;
             int used = inv.getPointsUsed() != null ? inv.getPointsUsed() : 0;
-            int restored = Math.max(0, customer.getLoyaltyPoints() - earned + used);
+            int oldBalance = customer.getLoyaltyPoints();
+            int restored = Math.max(0, oldBalance - earned + used);
             customer.setLoyaltyPoints(restored);
-            int netDelta = used - earned; // đảo chiều: trả lại điểm đã dùng, gỡ điểm đã tích
-            if (netDelta != 0) {
-                loyaltyService.record(customer.getId(), inv.getId(), netDelta, ledgerReason, restored);
+            // BẤT BIẾN sổ cái: balanceAfter = oldBalance + delta. Phải ghi đúng phần ĐÃ THỰC SỰ đổi
+            // (restored − oldBalance), không phải (used − earned) lý thuyết — nếu không, khi clamp về 0
+            // tổng Σ(delta) sẽ lệch vĩnh viễn so với customers.loyalty_points (findPointMismatches báo lỗi ảo).
+            int appliedDelta = restored - oldBalance;
+            if (appliedDelta != 0) {
+                loyaltyService.record(customer.getId(), inv.getId(), appliedDelta, ledgerReason, restored);
             }
         }
         Promotion promo = inv.getPromotion();

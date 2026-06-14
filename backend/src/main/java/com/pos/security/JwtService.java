@@ -36,10 +36,15 @@ public class JwtService {
                 throw new IllegalStateException(
                         "JWT_SECRET chưa được đặt ở môi trường production. Hãy đặt biến môi trường JWT_SECRET (≥ 256-bit).");
             }
-            log.warn("⚠ Đang dùng JWT secret MẶC ĐỊNH (commit trong repo) — chỉ chấp nhận khi DEV. "
-                    + "Hãy đặt biến môi trường JWT_SECRET trước khi triển khai thật.");
+            // DEV: KHÔNG dùng secret mặc định (đã lộ trong repo → kẻ tấn công ký được token ADMIN giả).
+            // Thay bằng khóa NGẪU NHIÊN mỗi lần khởi động: dev vẫn chạy không cần cấu hình, nhưng secret
+            // công khai trở nên VÔ DỤNG để giả mạo. Hệ quả: token cũ mất hiệu lực sau khi restart (chấp nhận ở DEV).
+            this.key = Jwts.SIG.HS256.key().build();
+            log.warn("⚠ JWT secret mặc định bị bỏ qua — đang dùng khóa NGẪU NHIÊN tạm thời cho DEV "
+                    + "(token sẽ mất hiệu lực sau khi restart). Đặt biến môi trường JWT_SECRET để có khóa cố định.");
+        } else {
+            this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
 

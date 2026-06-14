@@ -18,12 +18,16 @@ export { SCOPE_KEY }
  * <p>MANAGER/STAFF gắn cố định 1 cửa hàng (qua token) nên không dùng tới ngữ cảnh này.</p>
  */
 export function StoreScopeProvider({ children }) {
-  const { isAdmin, isAuthenticated } = useAuth()
+  const { isAdmin, isAuthenticated, loading } = useAuth()
   const [stores, setStores] = useState([])
   const [scopeStoreId, setScope] = useState(() => localStorage.getItem(SCOPE_KEY) || '')
 
   // Nạp danh sách chi nhánh cho bộ chọn (chỉ ADMIN mới gọi được /stores).
   useEffect(() => {
+    // CHƯA xác định xong phiên đăng nhập (AuthContext đang đọc token) → KHÔNG đụng vào scope.
+    // Tránh race: lúc loading, isAdmin tạm = false → nhánh "else" bên dưới sẽ xoá nhầm chi nhánh ADMIN
+    // đã chọn khi refresh cứng trang. Chỉ xử lý sau khi auth đã sẵn sàng.
+    if (loading) return
     if (isAdmin) {
       storeApi.list().then((list) => {
         setStores(list)
@@ -42,7 +46,7 @@ export function StoreScopeProvider({ children }) {
       if (scopeStoreId) { localStorage.removeItem(SCOPE_KEY); setScope('') }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isAuthenticated])
+  }, [isAdmin, isAuthenticated, loading])
 
   /** Đổi chi nhánh đang xem ('' = toàn chuỗi). Ghi localStorage NGAY để request kế tiếp đính đúng header. */
   function setScopeStoreId(id) {

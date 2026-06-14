@@ -13,6 +13,7 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.repository.StoreConfigRepository;
+import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,10 @@ public class InvoicePdfService {
     public byte[] export(Long invoiceId) {
         Invoice inv = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> NotFoundException.of("hóa đơn", invoiceId));
+        // CHỐNG IDOR ĐA CỬA HÀNG: chỉ cho xuất PDF hóa đơn THUỘC cửa hàng của người gọi
+        // (ADMIN toàn chuỗi vẫn xuất được mọi HĐ). Nếu thiếu, nhân viên cửa hàng A có thể tải
+        // hóa đơn của mọi cửa hàng khác bằng cách dò id.
+        StoreContext.assertSameStore(inv.getStore().getId());
         StoreConfig cfg = storeConfigRepository.findById(inv.getStore().getId()).orElse(null);
 
         // Khổ 80mm (~226pt) chiều rộng, cao tự co
