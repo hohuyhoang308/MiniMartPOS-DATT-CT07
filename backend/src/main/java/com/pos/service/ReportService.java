@@ -38,19 +38,40 @@ public class ReportService {
     private final com.pos.repository.CashMovementRepository cashMovementRepository;
     private final com.pos.repository.WorkShiftRepository workShiftRepository;
     private final com.pos.repository.view.ProductStockViewRepository productStockRepository;
+    private final com.pos.repository.DailySalesRollupRepository rollupRepository;
 
     public ReportService(InvoiceRepository invoiceRepository,
                          InvoiceItemRepository invoiceItemRepository,
                          ShiftSummaryViewRepository shiftSummaryRepository,
                          com.pos.repository.CashMovementRepository cashMovementRepository,
                          com.pos.repository.WorkShiftRepository workShiftRepository,
-                         com.pos.repository.view.ProductStockViewRepository productStockRepository) {
+                         com.pos.repository.view.ProductStockViewRepository productStockRepository,
+                         com.pos.repository.DailySalesRollupRepository rollupRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.shiftSummaryRepository = shiftSummaryRepository;
         this.cashMovementRepository = cashMovementRepository;
         this.workShiftRepository = workShiftRepository;
         this.productStockRepository = productStockRepository;
+        this.rollupRepository = rollupRepository;
+    }
+
+    /**
+     * Báo cáo doanh thu/lợi nhuận ngày đọc từ bảng ROLLUP (Obj 2) — nhanh & ổn định với dữ liệu nhiều năm.
+     * Store-scoped: chọn chi nhánh → đúng chi nhánh; ADMIN toàn chuỗi → gộp tất cả chi nhánh theo ngày.
+     *
+     * <p>Trước khi đọc, tổng hợp lại khoảng ngày yêu cầu (upsert idempotent) để số liệu HÔM NAY (và mọi
+     * thay đổi sau lần chạy cron 00:30, vd hủy hóa đơn) luôn cập nhật — tránh báo cáo thiếu dữ liệu trong ngày.
+     * Upsert là 1 truy vấn gộp theo (chi nhánh, ngày) nên rẻ; cron đêm vẫn giữ vai trò tổng hợp định kỳ.</p>
+     */
+    @Transactional
+    public List<com.pos.dto.report.DailyRollupResponse> dailyRollup(LocalDate from, LocalDate to) {
+        rollupRepository.upsertRange(from, to);   // làm tươi khoảng ngày yêu cầu (gồm hôm nay) trước khi đọc
+        Long storeId = StoreContext.currentStoreId();
+        List<com.pos.entity.DailySalesRollup> rows = storeId != null
+                ? rollupRepository.findByStoreIdAndSalesDateBetweenOrderBySalesDate(storeId, from, to)
+                : rollupRepository.findBySalesDateBetween(from, to);
+        return rows.stream().map(com.pos.dto.report.DailyRollupResponse::from).toList();
     }
 
     public RevenueReportResponse revenue(LocalDate from, LocalDate to, ReportPeriod period) {
@@ -88,9 +109,18 @@ public class ReportService {
                                         : shiftSummaryRepository.findByStoreId(storeId);
         // Tiền mặt thực thu của tất cả ca trong 1 truy vấn gộp (bỏ N+1).
         List<Long> shiftIds = summaries.stream().map(v -> v.getShiftId()).toList();
-        Map<Long, BigDecimal> cashByShift = shiftIds.isEmpty() ? Map.of()
-                : invoiceRepository.cashSalesByShiftIds(shiftIds).stream()
-                        .collect(Collectors.toMap(ShiftCashRow::getShiftId, r -> nz(r.getAmount())));
+        Map<Long, BigDecimal> cashByShift = shiftIds.isEmpty() ? new java.util.HashMap<>()
+                : new java.util.HashMap<>(invoiceRepository.cashSalesByShiftIds(shiftIds).stream()
+                        .collect(Collectors.toMap(ShiftCashRow::getShiftId, r -> nz(r.getAmount()))));
+        // Ca ĐÃ ĐÓNG: thay tiền-mặt-bán bằng SNAPSHOT đã chốt lúc đóng (finding #3) để đối soát quỹ cố định,
+        // không lệch khi HĐ tiền mặt bị hủy về sau. Ca đang mở: giữ giá trị tính theo thời gian thực ở trên.
+        if (!shiftIds.isEmpty()) {
+            for (com.pos.entity.WorkShift ws : workShiftRepository.findAllById(shiftIds)) {
+                if (ws.getStatus() == com.pos.entity.enums.ShiftStatus.CLOSED && ws.getFinalCashSales() != null) {
+                    cashByShift.put(ws.getId(), ws.getFinalCashSales());
+                }
+            }
+        }
         // Ròng thu/chi tiền mặt ngoài bán hàng (petty cash) gộp theo ca — để tiền dự kiến khớp trang Ca.
         Map<Long, BigDecimal> netByShift = shiftIds.isEmpty() ? Map.of()
                 : cashMovementRepository.netByShiftIds(shiftIds).stream()

@@ -125,6 +125,9 @@ public class ShiftService {
             throw new BadRequestException("Còn " + pendingQr + " hóa đơn QR đang chờ thanh toán trong ca — "
                     + "vui lòng chờ khách chuyển tiền hoặc để hệ thống tự hủy mã quá hạn trước khi đóng ca");
         }
+        // CHỐT SNAPSHOT tiền-mặt-bán tại thời điểm đóng (finding #3): từ đây đối soát quỹ của ca này cố định,
+        // không bị lệch nếu sau này có HĐ tiền mặt trong ca bị hủy (việc hoàn tiền là nghiệp vụ của ca hiện tại).
+        shift.setFinalCashSales(invoiceRepository.sumCashSalesByShift(shiftId));
         shift.setClosingCash(closingCash);
         shift.setClosedAt(LocalDateTime.now());
         shift.setStatus(ShiftStatus.CLOSED);
@@ -154,7 +157,10 @@ public class ShiftService {
 
     private ShiftResponse toResponse(WorkShift shift) {
         var summary = summaryRepository.findByShiftId(shift.getId());
-        BigDecimal cashSales = invoiceRepository.sumCashSalesByShift(shift.getId());
+        // Ca ĐÃ ĐÓNG: dùng snapshot đã chốt (đối soát quỹ cố định); ca đang mở: tính tiền mặt bán theo thời gian thực.
+        BigDecimal cashSales = (shift.getStatus() == ShiftStatus.CLOSED && shift.getFinalCashSales() != null)
+                ? shift.getFinalCashSales()
+                : invoiceRepository.sumCashSalesByShift(shift.getId());
         BigDecimal cashIn = cashMovementRepository.sumByShiftAndType(shift.getId(), CashMovementType.IN);
         BigDecimal cashOut = cashMovementRepository.sumByShiftAndType(shift.getId(), CashMovementType.OUT);
         return ShiftResponse.from(

@@ -43,6 +43,23 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Health check / observability (ops): /actuator/health cho Docker/K8s liveness-readiness. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Cache abstraction (Obj 2). Mặc định in-memory (ConcurrentMapCacheManager) để chạy local
+             KHÔNG cần Redis; bật profile 'redis' để dùng RedisCacheManager ở môi trường thật. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- Bean Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

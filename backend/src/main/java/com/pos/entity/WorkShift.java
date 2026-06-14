@@ -40,6 +40,14 @@ public class WorkShift {
     @Column(name = "closing_cash", precision = 12, scale = 2)
     private BigDecimal closingCash;
 
+    /**
+     * SNAPSHOT tiền-mặt-bán CHỐT lúc đóng ca (finding #3) — NULL khi ca đang mở.
+     * Đối soát quỹ của ca ĐÃ ĐÓNG dùng giá trị này thay vì tính lại từ hóa đơn, để việc hủy HĐ tiền mặt
+     * về sau (ở ca khác) không làm thay đổi chênh lệch quỹ đã chốt của ca này.
+     */
+    @Column(name = "final_cash_sales", precision = 14, scale = 2)
+    private BigDecimal finalCashSales;
+
     @CreationTimestamp
     @Column(name = "opened_at", nullable = false, updatable = false)
     private LocalDateTime openedAt;

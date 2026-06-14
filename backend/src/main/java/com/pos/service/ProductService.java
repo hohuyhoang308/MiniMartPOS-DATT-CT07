@@ -15,11 +15,13 @@ import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.ShelfRepository;
 import com.pos.repository.UnitRepository;
+import com.pos.config.CacheConfig;
 import com.pos.repository.projection.ProductCountRow;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
 
 import java.util.HashMap;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -192,7 +194,10 @@ public class ProductService {
         return ProductResponse.from(saved, 0L, 0L, 0L);
     }
 
+    // Giá chuẩn đổi → xóa toàn bộ cache giá-đã-resolve (storePrice fallback về giá chuẩn) để POS không
+    // đọc giá cũ. Coarse (allEntries) nhưng đúng: đổi giá là thao tác hiếm, độ trễ rebuild cache không đáng kể.
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.STORE_PRICE, allEntries = true)
     public ProductResponse update(Long id, ProductRequest req) {
         Product p = getOrThrow(id);
         if (!p.getBarcode().equals(req.barcode()) && productRepository.existsByBarcode(req.barcode())) {
@@ -236,6 +241,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.STORE_PRICE, allEntries = true)
     public void delete(Long id) {
         Product p = getOrThrow(id);
         String name = p.getName();

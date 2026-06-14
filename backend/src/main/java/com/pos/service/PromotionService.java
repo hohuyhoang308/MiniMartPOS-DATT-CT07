@@ -9,7 +9,7 @@ import com.pos.entity.enums.DiscountType;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.PromotionRepository;
-import com.pos.util.Money;
+import com.pos.service.promotion.DiscountStrategyFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +24,13 @@ public class PromotionService {
 
     private final PromotionRepository repository;
     private final AuditService auditService;
+    private final DiscountStrategyFactory discountStrategyFactory;
 
-    public PromotionService(PromotionRepository repository, AuditService auditService) {
+    public PromotionService(PromotionRepository repository, AuditService auditService,
+                            DiscountStrategyFactory discountStrategyFactory) {
         this.repository = repository;
         this.auditService = auditService;
+        this.discountStrategyFactory = discountStrategyFactory;
     }
 
     /** Kết quả áp mã dùng nội bộ cho SaleService (entity + số tiền giảm). */
@@ -124,14 +127,9 @@ public class PromotionService {
                     + p.getMinOrderAmount().toPlainString() + " để áp mã");
         }
 
-        BigDecimal discount;
-        if (p.getDiscountType() == DiscountType.PERCENT) {
-            // VND không có hào → làm tròn về ĐỒNG (Money). Tránh tiền lẻ không tiêu được.
-            discount = Money.round(subtotal.multiply(p.getDiscountValue()).movePointLeft(2));
-        } else {
-            discount = p.getDiscountValue();
-        }
-        // Không cho giảm vượt quá tổng tạm tính
+        // STRATEGY (Obj 3): cách tính giảm tùy loại được tách thành các DiscountStrategy riêng.
+        BigDecimal discount = discountStrategyFactory.forType(p.getDiscountType()).computeDiscount(p, subtotal);
+        // Bất biến total ≥ 0: không cho giảm vượt quá tổng tạm tính (giữ một chỗ kiểm soát duy nhất).
         if (discount.compareTo(subtotal) > 0) discount = subtotal;
         return new ApplyResult(p, discount);
     }

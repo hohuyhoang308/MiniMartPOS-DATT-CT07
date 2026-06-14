@@ -42,6 +42,14 @@ public class ReportController {
         return ApiResponse.ok(service.shiftReport());
     }
 
+    /** Doanh thu/lợi nhuận ngày đọc từ bảng ROLLUP (Obj 2) — phục vụ dữ liệu nhiều năm × nhiều chi nhánh. */
+    @GetMapping("/daily-rollup")
+    public ApiResponse<List<com.pos.dto.report.DailyRollupResponse>> dailyRollup(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.ok(service.dailyRollup(from, to));
+    }
+
     /** Hiệu suất nhân viên (doanh số / số HĐ / hàng bán / lệch quỹ theo từng thu ngân). */
     @GetMapping("/employees")
     public ApiResponse<List<EmployeeReportResponse>> employees(

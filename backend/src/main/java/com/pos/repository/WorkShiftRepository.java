@@ -38,7 +38,7 @@ public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
     @Query(value = """
             SELECT s.user_id AS userId,
                    SUM(CASE WHEN s.status = 'CLOSED'
-                            THEN s.closing_cash - s.opening_cash - COALESCE(cs.cash,0) - COALESCE(cm.net,0)
+                            THEN s.closing_cash - s.opening_cash - COALESCE(s.final_cash_sales, cs.cash, 0) - COALESCE(cm.net,0)
                             ELSE 0 END) AS variance,
                    SUM(CASE WHEN s.status = 'CLOSED' THEN 1 ELSE 0 END) AS closedShifts,
                    COUNT(*) AS totalShifts
