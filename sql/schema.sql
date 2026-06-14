@@ -14,7 +14,7 @@
 DROP DATABASE IF EXISTS pos_convenience_store;
 CREATE DATABASE pos_convenience_store
     CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
+    COLLATE utf8mb4_0900_ai_ci;   -- = mặc định MySQL 8; đồng nhất với DB do app tự tạo (tránh trộn collation)
 USE pos_convenience_store;
 
 -- ---------------------------------------------------------------------
@@ -93,6 +93,7 @@ CREATE TABLE products (
     CONSTRAINT fk_product_unit      FOREIGN KEY (unit_id)     REFERENCES units(id),
     CONSTRAINT fk_product_pack_unit FOREIGN KEY (pack_unit_id) REFERENCES units(id),
     CONSTRAINT chk_product_price    CHECK (sale_price >= 0 AND cost_price >= 0),
+    CONSTRAINT chk_product_packsize CHECK (pack_size >= 1),
     CONSTRAINT chk_product_minstock CHECK (min_stock >= 0)
 ) ENGINE=InnoDB;
 
@@ -161,9 +162,11 @@ CREATE TABLE promotions (
     usage_limit      INT,                                  -- NULL = không giới hạn
     used_count       INT NOT NULL DEFAULT 0,
     status           ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-    CONSTRAINT chk_promo_value CHECK (discount_value >= 0),
-    CONSTRAINT chk_promo_date  CHECK (end_date >= start_date),
-    CONSTRAINT chk_promo_used  CHECK (used_count >= 0)
+    CONSTRAINT chk_promo_value   CHECK (discount_value >= 0),
+    CONSTRAINT chk_promo_date    CHECK (end_date >= start_date),
+    CONSTRAINT chk_promo_used    CHECK (used_count >= 0),
+    CONSTRAINT chk_promo_percent CHECK (discount_type <> 'PERCENT' OR discount_value <= 100),  -- % giảm không quá 100
+    CONSTRAINT chk_promo_limit   CHECK (usage_limit IS NULL OR used_count <= usage_limit)       -- không dùng quá hạn mức
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -185,6 +188,9 @@ CREATE TABLE work_shifts (
 CREATE INDEX idx_shift_user   ON work_shifts(user_id);
 CREATE INDEX idx_shift_status ON work_shifts(status);
 CREATE INDEX idx_shift_store  ON work_shifts(store_id);
+
+
+-- (Bang cash_movements dinh nghia o muc petty cash ben duoi — gan stock_adjustments.)
 
 -- ---------------------------------------------------------------------
 -- 7. HÓA ĐƠN & CHI TIẾT (FR4, FR5)
@@ -217,6 +223,7 @@ CREATE TABLE invoices (
     CONSTRAINT fk_invoice_shift     FOREIGN KEY (shift_id)     REFERENCES work_shifts(id),
     CONSTRAINT fk_invoice_customer  FOREIGN KEY (customer_id)  REFERENCES customers(id),
     CONSTRAINT fk_invoice_promotion FOREIGN KEY (promotion_id) REFERENCES promotions(id),
+    CONSTRAINT fk_invoice_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id),  -- vết "ai hủy"
     CONSTRAINT chk_invoice_amount   CHECK (subtotal >= 0 AND discount_amount >= 0)
 ) ENGINE=InnoDB;
 
@@ -400,6 +407,7 @@ CREATE TABLE audit_logs (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     actor_user_id  BIGINT,
     actor_username VARCHAR(50),
+    store_id       BIGINT,                                -- chi nhanh phat sinh thao tac (NULL = toan chuoi)
     action         VARCHAR(60) NOT NULL,
     target_type    VARCHAR(40),
     target_id      BIGINT,
@@ -407,7 +415,10 @@ CREATE TABLE audit_logs (
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_audit_action (action),
     KEY idx_audit_target (target_type, target_id),
-    CONSTRAINT fk_audit_user FOREIGN KEY (actor_user_id) REFERENCES users(id)
+    KEY idx_audit_actor (actor_user_id),
+    KEY idx_audit_store (store_id),
+    CONSTRAINT fk_audit_user  FOREIGN KEY (actor_user_id) REFERENCES users(id),
+    CONSTRAINT fk_audit_store FOREIGN KEY (store_id)      REFERENCES stores(id)
 ) ENGINE=InnoDB;
 
 -- So cai diem tich luy (loyalty ledger): moi thay doi diem la 1 dong (truy vet, doi soat).
@@ -425,6 +436,44 @@ CREATE TABLE loyalty_point_ledger (
     CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- Xuat huy / dieu chinh giam ton (kiem ke & hao hut): rut hang het han/hu hong/that thoat khoi ton KHO
+-- cua mot LO. Moi dong GIAM `quantity` don vi (append-only). v_batch_stock tru tong nay.
+CREATE TABLE stock_adjustments (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id   BIGINT NOT NULL,                            -- chi nhanh phat sinh (= chi nhanh cua lo)
+    batch_id   BIGINT NOT NULL,                            -- = goods_receipt_items.id (lo bi giam ton)
+    quantity   INT NOT NULL,                               -- so luong GIAM (duong)
+    reason     ENUM('EXPIRED','DAMAGED','LOST','OTHER') NOT NULL,  -- het han / hu hong / that thoat / khac
+    note       VARCHAR(255),
+    created_by BIGINT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_adj_store (store_id),
+    KEY idx_adj_batch (batch_id),
+    CONSTRAINT fk_adj_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_adj_batch FOREIGN KEY (batch_id)   REFERENCES goods_receipt_items(id),
+    CONSTRAINT fk_adj_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_adj_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
+-- Thu/chi tien mat NGOAI ban hang trong ca (petty cash). Append-only. Doi soat quy cuoi ca:
+-- tien du kien = dau ca + tien mat ban + SUM(IN) - SUM(OUT).
+CREATE TABLE cash_movements (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    shift_id   BIGINT NOT NULL,                            -- ca phat sinh
+    store_id   BIGINT NOT NULL,                            -- chi nhanh (= chi nhanh cua ca)
+    type       ENUM('IN','OUT') NOT NULL,                  -- THU vao / CHI ra khoi ket
+    amount     DECIMAL(14,2) NOT NULL,                     -- so tien (duong)
+    reason     VARCHAR(255) NOT NULL,                      -- ly do/dien giai (bat buoc)
+    created_by BIGINT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_cash_shift (shift_id),
+    KEY idx_cash_store (store_id),
+    CONSTRAINT fk_cash_shift FOREIGN KEY (shift_id)   REFERENCES work_shifts(id),
+    CONSTRAINT fk_cash_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_cash_user  FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_cash_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng - thay cột dư thừa)
 -- =====================================================================
@@ -437,7 +486,8 @@ CREATE TABLE loyalty_point_ledger (
 -- Tất cả khóa JOIN (batch_id) đều đã có index. Cột & ngữ nghĩa giữ NGUYÊN 100%.
 --   sold (A) = phân bổ bán HĐ chưa hủy (HĐ hủy ⇒ tồn tự hoàn)
 --   transferred (T) = đã lên kệ ; shelf_returned (SR) = đã lấy từ kệ về kho
---   quantity_remaining = nhập − A ; on_shelf = (T−SR) − A ; in_warehouse = nhập − (T−SR)
+--   adjusted (ADJ) = đã XUẤT HỦY/giảm tồn (rút khỏi KHO: hết hạn/hư hỏng/thất thoát)
+--   quantity_remaining = nhập − A − ADJ ; on_shelf = (T−SR) − A ; in_warehouse = nhập − (T−SR) − ADJ
 --   store_id = chi nhánh của lô (thừa hưởng từ phiếu nhập) — ĐA CHUỖI.
 CREATE OR REPLACE VIEW v_batch_stock AS
 SELECT  gri.id        AS batch_id,
@@ -446,9 +496,9 @@ SELECT  gri.id        AS batch_id,
         gri.expiry_date,
         gri.quantity  AS quantity_in,
         fs.shelf_id,
-        (gri.quantity - COALESCE(sa.sold,0))                                                  AS quantity_remaining,
+        (gri.quantity - COALESCE(sa.sold,0) - COALESCE(adj.adjusted,0))                        AS quantity_remaining,
         ((COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0)) - COALESCE(sa.sold,0)) AS on_shelf,
-        (gri.quantity - (COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0)))        AS in_warehouse
+        (gri.quantity - (COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0)) - COALESCE(adj.adjusted,0)) AS in_warehouse
 FROM goods_receipt_items gri
 JOIN goods_receipts gr ON gr.id = gri.receipt_id
 LEFT JOIN ( SELECT iib.batch_id, SUM(iib.quantity) AS sold
@@ -461,6 +511,8 @@ LEFT JOIN ( SELECT batch_id, SUM(quantity) AS transferred
             FROM shelf_transfers GROUP BY batch_id )      tr   ON tr.batch_id   = gri.id
 LEFT JOIN ( SELECT batch_id, SUM(quantity) AS shelf_returned
             FROM shelf_returns GROUP BY batch_id )        sret ON sret.batch_id = gri.id
+LEFT JOIN ( SELECT batch_id, SUM(quantity) AS adjusted
+            FROM stock_adjustments GROUP BY batch_id )    adj  ON adj.batch_id  = gri.id
 LEFT JOIN ( SELECT batch_id, MIN(id) AS first_id
             FROM shelf_transfers GROUP BY batch_id )      fmin ON fmin.batch_id = gri.id
 LEFT JOIN shelf_transfers fs ON fs.id = fmin.first_id;
@@ -536,6 +588,94 @@ FROM work_shifts s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN invoices i ON i.shift_id = s.id AND i.status = 'COMPLETED'
 GROUP BY s.id, s.store_id, s.user_id, u.full_name, s.opening_cash, s.closing_cash, s.opened_at, s.closed_at, s.status;
+
+-- =====================================================================
+--  TRIGGER TOÀN VẸN — ép các bất biến mà khóa ngoại đơn cột KHÔNG diễn đạt được
+--  (đa chi nhánh, đúng sản phẩm lô, không bán vượt tồn, 1 lô/1 kệ, HĐ↔ca, 1 ca mở).
+--  Bản chạy ỨNG DỤNG tạo các trigger này bằng SchemaTriggersInitializer (JDBC).
+-- =====================================================================
+DELIMITER $$
+
+DROP TRIGGER IF EXISTS trg_iib_bi_integrity $$
+CREATE TRIGGER trg_iib_bi_integrity BEFORE INSERT ON invoice_item_batches FOR EACH ROW
+BEGIN
+    DECLARE v_item_product BIGINT; DECLARE v_item_qty INT; DECLARE v_inv_store BIGINT;
+    DECLARE v_batch_product BIGINT; DECLARE v_batch_store BIGINT; DECLARE v_batch_qty INT;
+    DECLARE v_alloc INT; DECLARE v_sold INT;
+    SELECT ii.product_id, ii.quantity, i.store_id INTO v_item_product, v_item_qty, v_inv_store
+      FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id WHERE ii.id = NEW.invoice_item_id;
+    SELECT gri.product_id, gr.store_id, gri.quantity INTO v_batch_product, v_batch_store, v_batch_qty
+      FROM goods_receipt_items gri JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
+    IF v_batch_store <> v_inv_store THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: phan bo lo khac chi nhanh voi hoa don';
+    END IF;
+    IF v_batch_product <> v_item_product THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: lo phan bo khong dung san pham cua dong hoa don';
+    END IF;
+    SELECT COALESCE(SUM(iib.quantity),0) INTO v_alloc
+      FROM invoice_item_batches iib WHERE iib.invoice_item_id = NEW.invoice_item_id;
+    IF v_alloc + NEW.quantity > v_item_qty THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: tong phan bo lo vuot so luong dong hoa don';
+    END IF;
+    SELECT COALESCE(SUM(iib.quantity),0) INTO v_sold
+      FROM invoice_item_batches iib
+      JOIN invoice_items ii2 ON ii2.id = iib.invoice_item_id
+      JOIN invoices i2 ON i2.id = ii2.invoice_id
+      WHERE iib.batch_id = NEW.batch_id AND i2.status <> 'CANCELLED';
+    IF v_sold + NEW.quantity > v_batch_qty THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: ban vuot ton kho cua lo';
+    END IF;
+END $$
+
+DROP TRIGGER IF EXISTS trg_st_bi_integrity $$
+CREATE TRIGGER trg_st_bi_integrity BEFORE INSERT ON shelf_transfers FOR EACH ROW
+BEGIN
+    DECLARE v_batch_store BIGINT; DECLARE v_shelf_store BIGINT; DECLARE v_other_shelf BIGINT;
+    SELECT gr.store_id INTO v_batch_store FROM goods_receipt_items gri
+      JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
+    SELECT store_id INTO v_shelf_store FROM shelves WHERE id = NEW.shelf_id;
+    IF v_batch_store <> v_shelf_store THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: len ke khac chi nhanh voi lo';
+    END IF;
+    SELECT MIN(shelf_id) INTO v_other_shelf FROM shelf_transfers
+      WHERE batch_id = NEW.batch_id AND shelf_id <> NEW.shelf_id;
+    IF v_other_shelf IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: mot lo chi duoc nam tren mot ke';
+    END IF;
+END $$
+
+DROP TRIGGER IF EXISTS trg_sr_bi_integrity $$
+CREATE TRIGGER trg_sr_bi_integrity BEFORE INSERT ON shelf_returns FOR EACH ROW
+BEGIN
+    DECLARE v_batch_store BIGINT; DECLARE v_shelf_store BIGINT;
+    SELECT gr.store_id INTO v_batch_store FROM goods_receipt_items gri
+      JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
+    SELECT store_id INTO v_shelf_store FROM shelves WHERE id = NEW.shelf_id;
+    IF v_batch_store <> v_shelf_store THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: lay hang tu ke khac chi nhanh voi lo';
+    END IF;
+END $$
+
+DROP TRIGGER IF EXISTS trg_inv_bi_store $$
+CREATE TRIGGER trg_inv_bi_store BEFORE INSERT ON invoices FOR EACH ROW
+BEGIN
+    DECLARE v_shift_store BIGINT;
+    SELECT store_id INTO v_shift_store FROM work_shifts WHERE id = NEW.shift_id;
+    IF v_shift_store IS NOT NULL AND NEW.store_id <> v_shift_store THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: hoa don khac chi nhanh voi ca lam viec';
+    END IF;
+END $$
+
+DROP TRIGGER IF EXISTS trg_ws_bi_oneopen $$
+CREATE TRIGGER trg_ws_bi_oneopen BEFORE INSERT ON work_shifts FOR EACH ROW
+BEGIN
+    IF NEW.status = 'OPEN'
+       AND EXISTS (SELECT 1 FROM work_shifts WHERE user_id = NEW.user_id AND status = 'OPEN') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: nhan vien da co mot ca dang mo';
+    END IF;
+END $$
+
+DELIMITER ;
 
 -- =====================================================================
 --  DỮ LIỆU MẪU
