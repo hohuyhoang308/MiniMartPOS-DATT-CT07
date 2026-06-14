@@ -32,4 +32,12 @@ public interface ProductStockViewRepository extends JpaRepository<ProductStockVi
     /** Số (sản phẩm × chi nhánh) hết hàng toàn chuỗi. */
     @Query("SELECT COUNT(v) FROM ProductStockView v WHERE v.currentStock <= 0")
     long countOutOfStockAll();
+
+    /** Số mặt hàng TỒN THẤP gộp theo từng chi nhánh — màn so sánh chi nhánh (1 truy vấn cho mọi cửa hàng). */
+    @Query("SELECT v.storeId AS storeId, COUNT(v) AS count FROM ProductStockView v WHERE v.currentStock <= v.minStock GROUP BY v.storeId")
+    List<com.pos.repository.projection.StoreCountRow> lowStockCountByStore();
+
+    /** Số mặt hàng HẾT HÀNG gộp theo từng chi nhánh — màn so sánh chi nhánh. */
+    @Query("SELECT v.storeId AS storeId, COUNT(v) AS count FROM ProductStockView v WHERE v.currentStock <= 0 GROUP BY v.storeId")
+    List<com.pos.repository.projection.StoreCountRow> outOfStockCountByStore();
 }

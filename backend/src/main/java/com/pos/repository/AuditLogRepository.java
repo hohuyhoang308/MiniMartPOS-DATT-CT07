@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
-    /** 200 vết kiểm toán mới nhất — màn xem nhật ký (admin). */
+    /** 200 vết kiểm toán mới nhất — màn xem nhật ký (ADMIN toàn chuỗi). */
     List<AuditLog> findTop200ByOrderByCreatedAtDesc();
+
+    /** 200 vết mới nhất của MỘT cửa hàng — màn xem nhật ký của MANAGER. */
+    List<AuditLog> findTop200ByStoreIdOrderByCreatedAtDesc(Long storeId);
 }

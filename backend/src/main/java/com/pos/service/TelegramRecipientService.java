@@ -53,6 +53,9 @@ public class TelegramRecipientService {
     public void delete(Long id) {
         TelegramRecipient r = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.of("người nhận Telegram", id));
+        // Cô lập đa cửa hàng: configId chính là id cửa hàng — chặn xóa người nhận của cửa hàng khác
+        // (CHAIN_ADMIN chưa chọn chi nhánh được bỏ qua).
+        StoreContext.assertSameStore(r.getConfigId());
         repository.delete(r);
     }
 }

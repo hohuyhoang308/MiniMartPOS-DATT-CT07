@@ -12,10 +12,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** Quản lý tài khoản nhân viên (UC02) — chỉ Admin. */
+/**
+ * Quản lý tài khoản nhân viên (UC02).
+ * <ul>
+ *   <li>ADMIN toàn chuỗi: toàn quyền (mọi cửa hàng, mọi vai trò).</li>
+ *   <li>MANAGER: chỉ quản lý STAFF trong CHÍNH cửa hàng mình — phạm vi do {@link UserService} chốt
+ *       (ép vai trò STAFF + cửa hàng của manager, chặn thao tác lên tài khoản ngoài phạm vi).</li>
+ * </ul>
+ */
 @RestController
 @RequestMapping("/api/users")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
 public class UserController {
 
     private final UserService service;

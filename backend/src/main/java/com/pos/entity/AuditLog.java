@@ -26,6 +26,10 @@ public class AuditLog {
     @Column(name = "actor_username", length = 50)
     private String actorUsername;
 
+    /** Chi nhánh phát sinh thao tác; null = phạm vi toàn chuỗi (ADMIN chưa chọn cửa hàng). */
+    @Column(name = "store_id")
+    private Long storeId;
+
     @Column(nullable = false, length = 60)
     private String action;
 

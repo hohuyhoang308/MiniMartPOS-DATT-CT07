@@ -55,8 +55,21 @@ public class StoreConfigService {
         return StoreContext.requireStoreId();
     }
 
+    /** ĐỌC cấu hình — KHÔNG ghi DB. Chưa cấu hình → trả về mặc định tạm (lấy tên/địa chỉ từ chi nhánh). */
     public StoreConfigResponse get(Long storeId) {
-        return StoreConfigResponse.from(getEntity(resolveConfigStoreId(storeId)));
+        Long id = resolveConfigStoreId(storeId);
+        return repository.findById(id)
+                .map(StoreConfigResponse::from)
+                .orElseGet(() -> {
+                    Store store = storeRepository.findById(id)
+                            .orElseThrow(() -> NotFoundException.of("chi nhánh", id));
+                    StoreConfig c = new StoreConfig();
+                    c.setId(id);
+                    c.setName(store.getName());
+                    c.setAddress(store.getAddress());
+                    c.setPhone(store.getPhone());
+                    return StoreConfigResponse.from(c);   // chỉ dựng để hiển thị, không lưu
+                });
     }
 
     @Transactional

@@ -10,6 +10,7 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.CustomerRepository;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.view.CustomerSpendingViewRepository;
+import com.pos.security.StoreContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -99,8 +100,10 @@ public class CustomerService {
     public CustomerHistoryResponse history(Long id) {
         Customer c = getOrThrow(id);
         var spending = spendingRepository.findByCustomerId(id);
+        // Cô lập đa cửa hàng: nhân viên/quản lý chỉ thấy lịch sử mua tại CHÍNH cửa hàng mình;
+        // CHAIN_ADMIN (chưa chọn chi nhánh) thấy toàn chuỗi.
         List<CustomerHistoryResponse.InvoiceBrief> invoices =
-                invoiceRepository.findByCustomerIdAndStatusOrderByCreatedAtDesc(id, InvoiceStatus.COMPLETED)
+                invoiceRepository.findCustomerHistory(id, InvoiceStatus.COMPLETED, StoreContext.currentStoreId())
                         .stream()
                         .map(i -> new CustomerHistoryResponse.InvoiceBrief(
                                 i.getId(), i.getCode(), i.getTotalAmount(), i.getCreatedAt().format(FMT)))

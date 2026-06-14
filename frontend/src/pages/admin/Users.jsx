@@ -13,7 +13,7 @@ import { formatDateTime } from '../../utils/format'
 
 export default function Users() {
   const toast = useToast()
-  const { isAdmin } = useAuth()
+  const { isAdmin, isManager } = useAuth()
   const [list, setList] = useState([])
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
@@ -61,15 +61,20 @@ export default function Users() {
 
   return (
     <div>
-      <PageHeader title="Quản lý tài khoản" subtitle="Tài khoản nhân viên và quyền của từng người">
+      <PageHeader title="Quản lý tài khoản"
+        subtitle={isManager ? 'Tài khoản nhân viên (thu ngân) của cửa hàng bạn' : 'Tài khoản nhân viên và quyền của từng người'}>
         <Button onClick={() => setForm({ username: '', password: '', fullName: '', role: 'STAFF', storeId: '' })}>
           <i className="bi bi-person-plus me-1"></i>Thêm tài khoản
         </Button>
       </PageHeader>
 
-      <InfoBanner id="users" title="Các vai trò và quyền">
-        <b>Quản trị viên</b>: toàn quyền TOÀN CHUỖI (mọi cửa hàng), quản lý chi nhánh & tài khoản. <b>Quản lý cửa hàng</b>: điều hành một cửa hàng (sản phẩm, kho, báo cáo, ca). <b>Nhân viên</b>: bán hàng tại quầy.
-        Bấm <i className="bi bi-key"></i> để đặt lại mật khẩu, bấm <i className="bi bi-lock"></i> để khóa tài khoản
+      <InfoBanner id="users" title={isManager ? 'Quản lý nhân viên cửa hàng' : 'Các vai trò và quyền'}>
+        {isManager ? (
+          <>Bạn có thể tạo và quản lý tài khoản <b>nhân viên (thu ngân)</b> của <b>chính cửa hàng mình</b>.</>
+        ) : (
+          <><b>Quản trị viên</b>: toàn quyền TOÀN CHUỖI (mọi cửa hàng), quản lý chi nhánh & tài khoản. <b>Quản lý cửa hàng</b>: điều hành một cửa hàng (sản phẩm, kho, báo cáo, ca). <b>Nhân viên</b>: bán hàng tại quầy.</>
+        )}
+        {' '}Bấm <i className="bi bi-key"></i> để đặt lại mật khẩu, bấm <i className="bi bi-lock"></i> để khóa tài khoản
         (bạn không thể tự khóa chính mình). Tài khoản đã khóa sẽ không đăng nhập được.
       </InfoBanner>
 
@@ -87,10 +92,15 @@ export default function Users() {
                   <td><StatusPill value={u.status} /></td>
                   <td className="text-muted2 small">{formatDateTime(u.createdAt)}</td>
                   <td className="text-end">
-                    <Button size="sm" variant="light" className="me-1" title="Sửa"
-                      onClick={() => setForm({ id: u.id, fullName: u.fullName, role: u.role, storeId: u.storeId || '', status: u.status })}><i className="bi bi-pencil"></i></Button>
-                    <Button size="sm" variant="light" className="me-1" title="Đặt lại mật khẩu" onClick={() => setPwd(u)}><i className="bi bi-key"></i></Button>
-                    {u.status === 'ACTIVE' && <Button size="sm" variant="light" className="text-danger" title="Khóa" onClick={() => setLockTarget(u)}><i className="bi bi-lock"></i></Button>}
+                    {/* MANAGER chỉ thao tác được với STAFF của cửa hàng mình; backend cũng chặn. */}
+                    {(!isManager || u.role === 'STAFF') ? (
+                      <>
+                        <Button size="sm" variant="light" className="me-1" title="Sửa"
+                          onClick={() => setForm({ id: u.id, fullName: u.fullName, role: u.role, storeId: u.storeId || '', status: u.status })}><i className="bi bi-pencil"></i></Button>
+                        <Button size="sm" variant="light" className="me-1" title="Đặt lại mật khẩu" onClick={() => setPwd(u)}><i className="bi bi-key"></i></Button>
+                        {u.status === 'ACTIVE' && <Button size="sm" variant="light" className="text-danger" title="Khóa" onClick={() => setLockTarget(u)}><i className="bi bi-lock"></i></Button>}
+                      </>
+                    ) : <span className="text-muted2 small">—</span>}
                   </td>
                 </tr>
               ))}
@@ -114,14 +124,22 @@ export default function Users() {
             )}
             <Form.Group className="mb-3"><Form.Label>Họ tên *</Form.Label>
               <Form.Control required value={form?.fullName || ''} onChange={set('fullName')} /></Form.Group>
+            {/* MANAGER chỉ tạo/sửa được nhân viên (STAFF); ADMIN chọn mọi vai trò. */}
             <Form.Group className="mb-3"><Form.Label>Vai trò</Form.Label>
-              <Form.Select value={form?.role} onChange={set('role')}>
-                <option value="STAFF">Nhân viên</option>
-                <option value="MANAGER">Quản lý cửa hàng</option>
-                <option value="ADMIN">Quản trị viên (toàn chuỗi)</option>
-              </Form.Select></Form.Group>
-            {/* MANAGER/STAFF phải gắn cửa hàng; ADMIN quản trị toàn chuỗi nên không gắn. */}
-            {form?.role !== 'ADMIN' && (
+              {isManager ? (
+                <Form.Select value="STAFF" disabled>
+                  <option value="STAFF">Nhân viên</option>
+                </Form.Select>
+              ) : (
+                <Form.Select value={form?.role} onChange={set('role')}>
+                  <option value="STAFF">Nhân viên</option>
+                  <option value="MANAGER">Quản lý cửa hàng</option>
+                  <option value="ADMIN">Quản trị viên (toàn chuỗi)</option>
+                </Form.Select>
+              )}</Form.Group>
+            {/* MANAGER/STAFF phải gắn cửa hàng; ADMIN quản trị toàn chuỗi nên không gắn.
+                Với MANAGER đang đăng nhập: ẩn ô này — backend tự gán cửa hàng của họ. */}
+            {!isManager && form?.role !== 'ADMIN' && (
               <Form.Group className="mb-3"><Form.Label>Cửa hàng trực thuộc *</Form.Label>
                 <Form.Select required value={form?.storeId || ''} onChange={set('storeId')}>
                   <option value="">— Chọn cửa hàng —</option>

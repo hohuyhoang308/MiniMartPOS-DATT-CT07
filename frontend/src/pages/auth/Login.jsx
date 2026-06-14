@@ -62,9 +62,15 @@ export default function Login() {
 
           <div className="text-center mt-4">
             <div className="text-muted2 small mb-2">Tài khoản demo (mật khẩu <b>123456</b>)</div>
-            <div className="d-flex gap-2 justify-content-center">
-              {['admin', 'manager', 'cashier'].map((u) => (
-                <Button key={u} size="sm" variant="light" onClick={() => quick(u)}>{u}</Button>
+            <div className="d-flex flex-wrap gap-2 justify-content-center">
+              {[
+                { u: 'admin', hint: 'Quản trị toàn chuỗi' },
+                { u: 'manager', hint: 'Quản lý CH1' },
+                { u: 'staff', hint: 'Nhân viên CH1' },
+                { u: 'manager2', hint: 'Quản lý CH2' },
+                { u: 'staff2', hint: 'Nhân viên CH2' },
+              ].map(({ u, hint }) => (
+                <Button key={u} size="sm" variant="light" title={hint} onClick={() => quick(u)}>{u}</Button>
               ))}
             </div>
           </div>

@@ -50,9 +50,6 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     private final CustomerRepository customerRepository;
     private final StoreRepository storeRepository;
 
-    /** Chi nhánh demo (CH01) — toàn bộ dữ liệu demo (nhập kho, kệ, ca, hóa đơn) thuộc chi nhánh này. */
-    private Store demoStore;
-
     @PersistenceContext
     private EntityManager em;
 
@@ -83,73 +80,113 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        demoStore = storeRepository.findByCode("CH01").orElse(null);
-        if (demoStore == null) {
+        Store ch01 = storeRepository.findByCode("CH01").orElse(null);
+        Store ch02 = storeRepository.findByCode("CH02").orElse(null);
+        if (ch01 == null) {
             log.warn("Bỏ qua seed catalog: chưa có chi nhánh CH01.");
             return;
         }
         Map<String, Category> categories = ensureCategories();
         Map<String, Unit> units = ensureUnits();
-        Map<String, Shelf> shelves = ensureShelves();
         List<Supplier> suppliers = ensureSuppliers();
-        User createdBy = userRepository.findByUsername("manager")
+
+        // 1) SẢN PHẨM cấp CHUỖI (dùng chung mọi chi nhánh) — tạo nếu thiếu (idempotent theo mã vạch).
+        List<Spec> specs = specs();
+        Map<Spec, Product> productBySpec = ensureProducts(specs, categories, units);
+
+        // 2) TỒN KHO + KỆ + LỊCH SỬ BÁN theo TỪNG CHI NHÁNH (mỗi chi nhánh có kho/kệ/ca/hóa đơn riêng).
+        //    Random seed khác nhau để dữ liệu 2 chi nhánh không trùng khít.
+        seedStoreInventory(ch01, "manager", "staff", suppliers, specs, productBySpec, 42L);
+        if (ch02 != null) {
+            seedStoreInventory(ch02, "manager2", "staff2", suppliers, specs, productBySpec, 43L);
+        }
+    }
+
+    /**
+     * Tạo (nếu thiếu) toàn bộ sản phẩm cấp CHUỖI từ {@link #specs()} và trả về map Spec→Product để
+     * các chi nhánh dùng chung khi seed tồn kho. Idempotent theo mã vạch {@code 8930+số thứ tự}.
+     */
+    private Map<Spec, Product> ensureProducts(List<Spec> specs, Map<String, Category> categories,
+                                              Map<String, Unit> units) {
+        Map<Spec, Product> map = new LinkedHashMap<>();
+        int created = 0, idx = 0;
+        for (Spec s : specs) {
+            String barcode = String.format("8930%09d", ++idx);
+            Product p = productRepository.findByBarcode(barcode).orElse(null);
+            if (p == null) {
+                p = new Product();
+                p.setBarcode(barcode);
+                p.setName(s.name());
+                p.setCategory(categories.get(s.category()));
+                p.setUnit(units.get(s.unit()));
+                p.setCostPrice(BigDecimal.valueOf(s.cost()));
+                p.setSalePrice(BigDecimal.valueOf(s.sale()));
+                p.setTaxRate(BigDecimal.valueOf(taxOf(s.category())));
+                int[] pack = packOf(s.category(), s.unit());
+                p.setPackSize(pack[0]);
+                if (pack[0] > 1) p.setPackUnit(units.get(pack[1] == 24 ? "Thùng" : "Lốc"));
+                p.setMinStock(s.minStock());
+                p.setStatus(CommonStatus.ACTIVE);
+                p = productRepository.save(p);
+                created++;
+            }
+            map.put(s, p);
+        }
+        if (created > 0) log.info("Đã seed {} sản phẩm (cấp chuỗi).", created);
+        return map;
+    }
+
+    /**
+     * Seed TỒN KHO ban đầu + lên kệ + lịch sử bán 12 tuần cho MỘT chi nhánh. Idempotent theo chi nhánh:
+     * nếu chi nhánh đã có phiếu nhập thì coi như đã seed và bỏ qua (không đụng dữ liệu đang có).
+     *
+     * @param store           chi nhánh đích
+     * @param managerUsername tài khoản người lập phiếu (fallback admin)
+     * @param cashierUsername tài khoản thu ngân cho lịch sử bán (fallback = người lập phiếu)
+     * @param randomSeed      seed ngẫu nhiên (khác nhau giữa các chi nhánh để dữ liệu không trùng)
+     */
+    private void seedStoreInventory(Store store, String managerUsername, String cashierUsername,
+                                    List<Supplier> suppliers, List<Spec> specs,
+                                    Map<Spec, Product> productBySpec, long randomSeed) {
+        if (!goodsReceiptRepository.findByStoreIdOrderByCreatedAtDesc(store.getId()).isEmpty()) {
+            return; // chi nhánh đã có tồn kho → đã seed trước đó
+        }
+        User createdBy = userRepository.findByUsername(managerUsername)
                 .or(() -> userRepository.findByUsername("admin")).orElse(null);
         if (createdBy == null) {
-            log.warn("Bỏ qua seed catalog: chưa có tài khoản manager/admin.");
+            log.warn("Bỏ qua seed tồn kho {}: chưa có tài khoản {}/admin.", store.getCode(), managerUsername);
             return;
         }
+        User cashier = userRepository.findByUsername(cashierUsername).orElse(createdBy);
+        Map<String, Shelf> shelves = ensureShelves(store);
 
-        List<Spec> specs = specs();
-        // batch theo từng NCC để tạo nhiều phiếu nhập
+        // batch theo từng NCC để tạo nhiều phiếu nhập (chỉ những mặt hàng có tồn đầu kỳ > 0)
         List<List<GoodsReceiptItem>> batchesBySupplier = new ArrayList<>();
         List<List<String>> catsBySupplier = new ArrayList<>();
         for (int i = 0; i < suppliers.size(); i++) { batchesBySupplier.add(new ArrayList<>()); catsBySupplier.add(new ArrayList<>()); }
 
-        int created = 0, idx = 0;
         for (Spec s : specs) {
-            String barcode = String.format("8930%09d", ++idx);
-            if (productRepository.existsByBarcode(barcode)) continue;
-            Product p = new Product();
-            p.setBarcode(barcode);
-            p.setName(s.name());
-            p.setCategory(categories.get(s.category()));
-            p.setUnit(units.get(s.unit()));
-            p.setCostPrice(BigDecimal.valueOf(s.cost()));
-            p.setSalePrice(BigDecimal.valueOf(s.sale()));
-            p.setTaxRate(BigDecimal.valueOf(taxOf(s.category())));
-            int[] pack = packOf(s.category(), s.unit());
-            p.setPackSize(pack[0]);
-            if (pack[0] > 1) p.setPackUnit(units.get(pack[1] == 24 ? "Thùng" : "Lốc"));
-            p.setMinStock(s.minStock());
-            p.setStatus(CommonStatus.ACTIVE);
-            productRepository.save(p);
-            created++;
-
-            if (s.stockQty() > 0) {
-                GoodsReceiptItem item = new GoodsReceiptItem();
-                item.setProduct(p);
-                item.setQuantity(s.stockQty());
-                item.setImportPrice(BigDecimal.valueOf(s.cost()));
-                item.setExpiryDate(s.shelfLifeDays() > 0 ? LocalDate.now().plusDays(s.shelfLifeDays()) : null);
-                int sup = supplierOf(s.category());
-                batchesBySupplier.get(sup).add(item);
-                catsBySupplier.get(sup).add(s.category());
-            }
+            if (s.stockQty() <= 0) continue;
+            Product p = productBySpec.get(s);
+            if (p == null) continue;
+            GoodsReceiptItem item = new GoodsReceiptItem();
+            item.setProduct(p);
+            item.setQuantity(s.stockQty());
+            item.setImportPrice(BigDecimal.valueOf(s.cost()));
+            item.setExpiryDate(s.shelfLifeDays() > 0 ? LocalDate.now().plusDays(s.shelfLifeDays()) : null);
+            int sup = supplierOf(s.category());
+            batchesBySupplier.get(sup).add(item);
+            catsBySupplier.get(sup).add(s.category());
         }
 
-        if (created == 0) {
-            log.info("Catalog demo đã đầy đủ — không seed thêm.");
-            return;
-        }
-
-        // Mỗi NCC một phiếu nhập; gom lô vừa tạo + đưa lên kệ tới khi gần đầy (tôn trọng SỨC CHỨA kệ).
+        // Mỗi NCC một phiếu nhập; gom lô + đưa lên kệ tới khi gần đầy (tôn trọng SỨC CHỨA kệ).
         Map<Long, int[]> shelfLoad = new HashMap<>();                 // shelfId -> [đang chứa]
         Map<Long, Product> productsWithStock = new LinkedHashMap<>(); // productId -> Product (để sinh lịch sử bán)
         for (int sup = 0; sup < suppliers.size(); sup++) {
             List<GoodsReceiptItem> batches = batchesBySupplier.get(sup);
             if (batches.isEmpty()) continue;
             GoodsReceipt receipt = new GoodsReceipt();
-            receipt.setStore(demoStore);
+            receipt.setStore(store);
             receipt.setCode(nextReceiptCode());
             receipt.setSupplier(suppliers.get(sup));
             receipt.setCreatedBy(createdBy);
@@ -182,14 +219,10 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
             }
         }
 
-        // Lịch sử bán hàng 12 tuần (chỉ khi chưa có hóa đơn) → Dashboard/Báo cáo/ABC-XYZ có số liệu.
-        int invoicesSeeded = 0;
-        if (invoiceRepository.count() == 0) {
-            invoicesSeeded = seedSalesHistory(createdBy, shelves, productsWithStock);
-        }
-
-        log.info("Đã seed {} sản phẩm + {} NCC + lên kệ (tôn trọng sức chứa); tạo {} hóa đơn lịch sử 12 tuần.",
-                created, suppliers.size(), invoicesSeeded);
+        // Lịch sử bán hàng 12 tuần → Dashboard/Báo cáo/ABC-XYZ của chi nhánh có số liệu thật.
+        int invoicesSeeded = seedSalesHistory(store, createdBy, cashier, shelves, productsWithStock, randomSeed);
+        log.info("Chi nhánh {}: seed tồn kho + lên kệ (tôn trọng sức chứa); tạo {} hóa đơn lịch sử 12 tuần.",
+                store.getCode(), invoicesSeeded);
     }
 
     // ===================== LỊCH SỬ BÁN HÀNG =====================
@@ -197,14 +230,13 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
     /** Số ngày lịch sử demo (12 tuần) — đủ "rổ" tuần để XYZ phân loại được X/Y/Z thay vì dồn hết vào Z. */
     private static final int HISTORY_DAYS = 84;
 
-    private int seedSalesHistory(User createdBy, Map<String, Shelf> shelves,
-                                 Map<Long, Product> productsWithStock) {
-        User cashier = userRepository.findByUsername("staff").orElse(createdBy);
+    private int seedSalesHistory(Store store, User createdBy, User cashier, Map<String, Shelf> shelves,
+                                 Map<Long, Product> productsWithStock, long randomSeed) {
         List<Long> productIds = new ArrayList<>(productsWithStock.keySet());
         if (productIds.isEmpty()) return 0;
         Map<Long, int[]> shelfRemain = new HashMap<>();   // batchId (lô lịch sử) -> [còn lại để bán]
 
-        Random rnd = new Random(42); // tái lập được
+        Random rnd = new Random(randomSeed); // tái lập được
 
         // ---- Hồ sơ nhu cầu mỗi mặt hàng (để ABC × XYZ có phổ thật) ----
         //  pop    : mức phổ biến (Pareto: vài SP bán chạy, đa số bán ít) → quyết định DOANH THU (ABC)
@@ -245,7 +277,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         //      hiện tại (giữ nguyên bức tranh tồn kho/cận HSD/cần nhập của các lô đang bày bán). ----
         Supplier supplier = supplierRepository.findAll().stream().findFirst().orElse(null);
         GoodsReceipt histReceipt = new GoodsReceipt();
-        histReceipt.setStore(demoStore);
+        histReceipt.setStore(store);
         histReceipt.setCode(nextReceiptCode());
         histReceipt.setSupplier(supplier);
         histReceipt.setCreatedBy(createdBy);
@@ -288,7 +320,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         for (int d = 0; d <= HISTORY_DAYS; d++) {
             int dayOffset = HISTORY_DAYS - d; // d=HISTORY_DAYS → hôm nay (offset 0)
             WorkShift shift = new WorkShift();
-            shift.setStore(demoStore);
+            shift.setStore(store);
             shift.setUser(cashier);
             shift.setOpeningCash(BigDecimal.valueOf(500000));
             shift.setStatus(ShiftStatus.CLOSED);
@@ -303,7 +335,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
                 int lines = 1 + rnd.nextInt(4);
                 List<long[]> basket = demand.subList(i, Math.min(i + lines, demand.size()));
                 i += basket.size();
-                Invoice inv = buildInvoiceFromDemand(rnd, shift, basket, shelfRemain, histBatch, ++invSeq);
+                Invoice inv = buildInvoiceFromDemand(rnd, shift, basket, shelfRemain, histBatch, ++invSeq, store.getCode());
                 if (inv == null) continue;
                 Invoice saved = invoiceRepository.save(inv);
                 // chỉ tiền mặt mới vào két (QR vào ngân hàng)
@@ -336,7 +368,8 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
 
     /** Dựng 1 hóa đơn từ giỏ nhu cầu đã định sẵn (SP + số lượng), lấy hàng từ lô cung ứng lịch sử. */
     private Invoice buildInvoiceFromDemand(Random rnd, WorkShift shift, List<long[]> basket,
-                                           Map<Long, int[]> shelfRemain, Map<Long, GoodsReceiptItem> histBatch, long seq) {
+                                           Map<Long, int[]> shelfRemain, Map<Long, GoodsReceiptItem> histBatch,
+                                           long seq, String storeCode) {
         Invoice inv = new Invoice();
         inv.setShift(shift);
         inv.setStore(shift.getStore());
@@ -378,7 +411,7 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         inv.setPointsEarned(0);
         inv.setPointsUsed(0);
         inv.setStatus(InvoiceStatus.COMPLETED);
-        inv.setCode(String.format("HDS%05d", seq));
+        inv.setCode(String.format("HDS-%s-%05d", storeCode, seq));
         return inv;
     }
 
@@ -431,15 +464,15 @@ public class CatalogDemoDataInitializer implements CommandLineRunner {
         return result;
     }
 
-    private Map<String, Shelf> ensureShelves() {
+    private Map<String, Shelf> ensureShelves(Store store) {
         String[] cats = CAT_NAMES;
         Map<String, Shelf> map = new LinkedHashMap<>();
         for (int i = 0; i < cats.length; i++) {
             String code = String.format("K%02d", i + 1);
             String catName = cats[i];
-            Shelf shelf = shelfRepository.findByStoreIdAndCodeIgnoreCase(demoStore.getId(), code).orElseGet(() -> {
+            Shelf shelf = shelfRepository.findByStoreIdAndCodeIgnoreCase(store.getId(), code).orElseGet(() -> {
                 Shelf s = new Shelf();
-                s.setStore(demoStore);
+                s.setStore(store);
                 s.setCode(code); s.setName(catName); s.setCapacity(800); s.setStatus(CommonStatus.ACTIVE);
                 return shelfRepository.save(s);
             });

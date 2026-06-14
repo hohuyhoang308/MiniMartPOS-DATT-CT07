@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Xem nhật ký kiểm toán (chỉ ADMIN). */
+/** Xem nhật ký kiểm toán. ADMIN: toàn chuỗi; MANAGER: chỉ cửa hàng của mình (lọc ở {@link AuditService}). */
 @RestController
 @RequestMapping("/api/audit")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
 public class AuditController {
 
     private final AuditService service;

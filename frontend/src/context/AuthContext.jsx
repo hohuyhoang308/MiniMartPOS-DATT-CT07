@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { authApi } from '../api/auth'
-import { AUTH_KEY } from '../api/client'
+import { AUTH_KEY, SCOPE_KEY } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -38,6 +38,7 @@ export function AuthProvider({ children }) {
 
   function logout() {
     localStorage.removeItem(AUTH_KEY)
+    localStorage.removeItem(SCOPE_KEY) // xoá chi nhánh ADMIN đang xem
     setUser(null)
   }
 
@@ -48,6 +49,7 @@ export function AuthProvider({ children }) {
     logout,
     // ADMIN = quản trị viên toàn chuỗi (không gắn cửa hàng); MANAGER/STAFF gắn 1 cửa hàng (qua token).
     isAdmin: user?.role === 'ADMIN',
+    isManager: user?.role === 'MANAGER',
     isAuthenticated: !!user,
     hasRole: (...roles) => !!user && roles.includes(user.role),
   }

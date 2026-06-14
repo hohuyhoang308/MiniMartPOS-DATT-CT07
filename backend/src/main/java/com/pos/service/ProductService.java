@@ -61,13 +61,13 @@ public class ProductService {
         this.auditService = auditService;
     }
 
-    /** Bản đồ sản phẩm → mã kệ đang bày (kệ có tồn &gt; 0) — để danh sách/POS biết hàng ở kệ nào. */
-    private Map<Long, String> productShelfCode() {
+    /** Bản đồ sản phẩm → mã kệ đang bày của MỘT chi nhánh (kệ có tồn &gt; 0) — danh sách/POS biết hàng ở kệ nào. */
+    private Map<Long, String> productShelfCode(Long storeId) {
         Map<Long, String> byId = shelfRepository.findAll().stream()
                 .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
         Map<Long, String> byProduct = new HashMap<>();
-        for (var b : batchStockRepository.findAll()) {
-            if (b.getShelfId() != null && b.getOnShelf() != null && b.getOnShelf() > 0) {
+        for (var b : batchStockRepository.findOnShelfByStore(storeId)) {
+            if (b.getShelfId() != null) {
                 byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
             }
         }
@@ -125,15 +125,44 @@ public class ProductService {
         return v != null && v.getShelfStock() != null ? v.getShelfStock() : 0L;
     }
 
-    /** Tìm/lọc sản phẩm; đính kèm tồn kho (tổng + kệ + kho) từ view (1 truy vấn gom). */
+    /**
+     * Tìm/lọc sản phẩm; đính kèm tồn kho THEO CHI NHÁNH đang làm việc (đa cửa hàng).
+     * <ul>
+     *   <li>Đã chọn chi nhánh → tồn + mã kệ của ĐÚNG chi nhánh đó.</li>
+     *   <li>CHAIN_ADMIN chưa chọn chi nhánh (toàn chuỗi) → tồn GỘP của tất cả chi nhánh (mã kệ bỏ trống vì khác nhau giữa các cửa hàng).</li>
+     * </ul>
+     */
     public List<ProductResponse> search(String keyword, Long categoryId) {
         List<Product> products = productRepository.search(emptyToNull(keyword), categoryId);
-        Map<Long, ProductStockView> stockMap = stockRepository.findAll().stream()
-                .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
-        Map<Long, String> shelfByProduct = productShelfCode();
+        Long storeId = com.pos.security.StoreContext.currentStoreId();
+
+        if (storeId != null) {
+            Map<Long, ProductStockView> stockMap = stockRepository.findByStoreId(storeId).stream()
+                    .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
+            Map<Long, String> shelfByProduct = productShelfCode(storeId);
+            return products.stream()
+                    .map(p -> ProductResponse.from(p, stockMap.get(p.getId()), shelfByProduct.get(p.getId())))
+                    .toList();
+        }
+
+        // Toàn chuỗi: cộng tồn kho của một sản phẩm trên TẤT CẢ chi nhánh thành [tổng, kệ, kho].
+        Map<Long, long[]> totals = new HashMap<>();
+        for (ProductStockView v : stockRepository.findAll()) {
+            long[] t = totals.computeIfAbsent(v.getProductId(), k -> new long[3]);
+            t[0] += nz(v.getCurrentStock());
+            t[1] += nz(v.getShelfStock());
+            t[2] += nz(v.getWarehouseStock());
+        }
         return products.stream()
-                .map(p -> ProductResponse.from(p, stockMap.get(p.getId()), shelfByProduct.get(p.getId())))
+                .map(p -> {
+                    long[] t = totals.getOrDefault(p.getId(), new long[3]);
+                    return ProductResponse.from(p, t[0], t[1], t[2], null);
+                })
                 .toList();
+    }
+
+    private static long nz(Long v) {
+        return v != null ? v : 0L;
     }
 
     public ProductResponse findById(Long id) {

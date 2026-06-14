@@ -3,25 +3,57 @@ import { Dropdown } from 'react-bootstrap'
 import Sidebar from './Sidebar'
 import { findNav } from './navConfig'
 import { useAuth } from '../context/AuthContext'
+import { useStoreScope } from '../context/StoreScopeContext'
 import { useTheme } from '../context/ThemeContext'
 
 const ROLE_LABEL = { ADMIN: 'Quản trị viên', MANAGER: 'Quản lý cửa hàng', STAFF: 'Nhân viên' }
 const ROLE_COLOR = { ADMIN: 'pill-violet', MANAGER: 'pill-info', STAFF: 'pill-success' }
 
 /**
- * Phù hiệu PHẠM VI (đa cửa hàng) — chỉ hiển thị, KHÔNG phải bộ chọn:
- *  - ADMIN: "Toàn chuỗi" (quản trị mọi cửa hàng; cấu hình từng cửa hàng ở trang Cấu hình).
- *  - MANAGER/STAFF: tên cửa hàng trực thuộc (cố định theo tài khoản).
+ * Bộ chọn PHẠM VI (đa cửa hàng):
+ *  - ADMIN: dropdown chọn "Toàn chuỗi" hoặc 1 chi nhánh để đi sâu xem số liệu/vận hành cửa hàng đó.
+ *  - MANAGER/STAFF: phù hiệu tĩnh tên cửa hàng trực thuộc (cố định theo tài khoản).
  */
-function StoreBadge() {
+function StoreScopeSelector() {
   const { isAdmin, user } = useAuth()
-  if (isAdmin) return <span className="pill pill-violet"><i className="bi bi-diagram-3-fill"></i>Toàn chuỗi</span>
-  if (!user?.storeName) return null
-  return <span className="pill pill-muted"><i className="bi bi-shop"></i>{user.storeName}</span>
+  const { stores, scopeStoreId, setScopeStoreId, scopeStoreName } = useStoreScope()
+
+  if (!isAdmin) {
+    if (!user?.storeName) return null
+    return <span className="pill pill-muted"><i className="bi bi-shop"></i>{user.storeName}</span>
+  }
+
+  return (
+    <Dropdown align="end">
+      <Dropdown.Toggle as="div" bsPrefix=" "
+        className={`pill ${scopeStoreId ? 'pill-info' : 'pill-violet'} cursor-pointer`}
+        title="Chọn chi nhánh để xem số liệu, hoặc Toàn chuỗi để gộp tất cả">
+        <i className={`bi ${scopeStoreId ? 'bi-shop' : 'bi-diagram-3-fill'}`}></i>
+        {scopeStoreId ? scopeStoreName || 'Chi nhánh' : 'Toàn chuỗi'}
+        <i className="bi bi-chevron-down ms-1 small"></i>
+      </Dropdown.Toggle>
+      <Dropdown.Menu style={{ maxHeight: 320, overflowY: 'auto' }}>
+        <Dropdown.Header>Phạm vi xem dữ liệu</Dropdown.Header>
+        <Dropdown.Item active={!scopeStoreId} onClick={() => setScopeStoreId('')}>
+          <i className="bi bi-diagram-3-fill me-2"></i>Toàn chuỗi (gộp tất cả)
+        </Dropdown.Item>
+        <Dropdown.Divider />
+        {stores.map((s) => (
+          <Dropdown.Item key={s.id} active={String(s.id) === String(scopeStoreId)}
+            onClick={() => setScopeStoreId(String(s.id))}>
+            <i className="bi bi-shop me-2"></i>{s.code} — {s.name}
+            {s.status === 'INACTIVE' && <span className="pill pill-muted ms-2 small">Ngừng</span>}
+          </Dropdown.Item>
+        ))}
+        {stores.length === 0 && <Dropdown.Item disabled>Chưa có chi nhánh</Dropdown.Item>}
+      </Dropdown.Menu>
+    </Dropdown>
+  )
 }
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { scopeStoreId } = useStoreScope()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -46,7 +78,7 @@ export default function Layout() {
             <small>Hệ thống POS cửa hàng tiện lợi</small>
           </div>
           <div className="d-flex align-items-center gap-3">
-            <StoreBadge />
+            <StoreScopeSelector />
             <button type="button" className="theme-toggle" onClick={toggleTheme}
               title={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}>
               <i className={`bi ${theme === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill'}`}></i>
@@ -74,7 +106,8 @@ export default function Layout() {
             </Dropdown>
           </div>
         </header>
-        <main className="content"><Outlet /></main>
+        {/* Đổi chi nhánh → key đổi → toàn bộ trang remount & tải lại dữ liệu theo phạm vi mới. */}
+        <main className="content" key={scopeStoreId || 'chain'}><Outlet /></main>
       </div>
     </div>
   )

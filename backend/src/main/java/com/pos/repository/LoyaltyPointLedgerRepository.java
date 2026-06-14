@@ -12,6 +12,9 @@ public interface LoyaltyPointLedgerRepository extends JpaRepository<LoyaltyPoint
     /** Lịch sử điểm của 1 khách (mới nhất trước) — màn chi tiết khách hàng. */
     List<LoyaltyPointLedger> findTop100ByCustomerIdOrderByCreatedAtDesc(Long customerId);
 
+    /** Số dòng sổ cái của một khách — để seed dòng MỞ khi khách có điểm ban đầu mà chưa có sổ cái. */
+    long countByCustomerId(Long customerId);
+
     /**
      * Đối soát: liệt kê khách có số dư điểm (customers.loyalty_points) LỆCH với tổng sổ cái (Σ delta).
      * Sổ cái là nguồn truy vết append-only — lệch nghĩa là có chỗ cập nhật số dư mà quên ghi sổ (hoặc ngược lại).

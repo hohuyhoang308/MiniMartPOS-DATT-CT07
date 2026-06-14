@@ -1,6 +1,8 @@
 import axios from 'axios'
 
 export const AUTH_KEY = 'pos_auth'
+/** Khoá localStorage giữ chi nhánh ADMIN đang xem ('' = toàn chuỗi). Dùng chung với StoreScopeContext. */
+export const SCOPE_KEY = 'pos_store_scope'
 
 /** Axios instance: gọi /api (Vite proxy sang backend 8080), tự đính JWT, xử lý 401. */
 const client = axios.create({
@@ -8,8 +10,9 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Request: đính token JWT. Phạm vi cửa hàng (đa cửa hàng) do BACKEND tự suy ra từ tài khoản:
-// MANAGER/STAFF → cửa hàng của họ; ADMIN → toàn chuỗi. Cấu hình theo cửa hàng truyền storeId tường minh.
+// Request: đính token JWT + chi nhánh đang xem. Phạm vi cửa hàng (đa cửa hàng) do BACKEND quyết định:
+// MANAGER/STAFF luôn theo cửa hàng của họ (header bị bỏ qua); ADMIN → theo chi nhánh đã chọn ở
+// StoreScopeContext (header X-Store-Id), bỏ trống = toàn chuỗi. Cấu hình theo cửa hàng vẫn truyền storeId tường minh.
 client.interceptors.request.use((config) => {
   const raw = localStorage.getItem(AUTH_KEY)
   if (raw) {
@@ -20,6 +23,9 @@ client.interceptors.request.use((config) => {
       /* bỏ qua dữ liệu hỏng */
     }
   }
+  // Chi nhánh ADMIN đang "đi sâu" — đính header để backend lọc theo cửa hàng đó (rỗng = toàn chuỗi).
+  const scope = localStorage.getItem(SCOPE_KEY)
+  if (scope) config.headers['X-Store-Id'] = scope
   return config
 })
 

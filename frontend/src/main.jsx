@@ -6,6 +6,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css'
 import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { StoreScopeProvider } from './context/StoreScopeContext.jsx'
 import { CartProvider } from './context/CartContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
@@ -16,9 +17,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <CartProvider>
-              <App />
-            </CartProvider>
+            <StoreScopeProvider>
+              <CartProvider>
+                <App />
+              </CartProvider>
+            </StoreScopeProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
