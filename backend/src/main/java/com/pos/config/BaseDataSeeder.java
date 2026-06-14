@@ -42,6 +42,8 @@ public class BaseDataSeeder implements CommandLineRunner {
     private final CustomerRepository customerRepository;
     private final PromotionRepository promotionRepository;
     private final WorkShiftRepository shiftRepository;
+    private final LoyaltyPointLedgerRepository ledgerRepository;
+    private final com.pos.service.LoyaltyService loyaltyService;
     private final PasswordEncoder passwordEncoder;
 
     public BaseDataSeeder(UserRepository userRepository,
@@ -50,6 +52,8 @@ public class BaseDataSeeder implements CommandLineRunner {
                           CustomerRepository customerRepository,
                           PromotionRepository promotionRepository,
                           WorkShiftRepository shiftRepository,
+                          LoyaltyPointLedgerRepository ledgerRepository,
+                          com.pos.service.LoyaltyService loyaltyService,
                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.storeRepository = storeRepository;
@@ -57,6 +61,8 @@ public class BaseDataSeeder implements CommandLineRunner {
         this.customerRepository = customerRepository;
         this.promotionRepository = promotionRepository;
         this.shiftRepository = shiftRepository;
+        this.ledgerRepository = ledgerRepository;
+        this.loyaltyService = loyaltyService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -150,27 +156,62 @@ public class BaseDataSeeder implements CommandLineRunner {
     }
 
     private void seedCustomers() {
+        // Khách thân thiết đa dạng (điểm tích lũy khác nhau) để minh hoạ CRM / báo cáo / chương trình điểm.
         ensureCustomer("Nguyễn Văn An", "0987654321", "an.nguyen@email.com", 50);
         ensureCustomer("Trần Thị Bình", "0978123456", null, 0);
+        ensureCustomer("Lê Hoàng Cường", "0903456789", "cuong.le@email.com", 320);
+        ensureCustomer("Phạm Thị Dung", "0912345678", "dung.pham@email.com", 145);
+        ensureCustomer("Võ Minh Đức", "0934567890", null, 8);
+        ensureCustomer("Đặng Thị En", "0945678901", "en.dang@email.com", 0);
+        ensureCustomer("Bùi Quốc Phong", "0956789012", null, 210);
+        ensureCustomer("Hoàng Thị Giang", "0967890123", "giang.hoang@email.com", 60);
+        ensureCustomer("Đỗ Văn Hải", "0978901234", null, 25);
+        ensureCustomer("Ngô Thị Hương", "0989012345", "huong.ngo@email.com", 480);
+        ensureCustomer("Trịnh Văn Khoa", "0901112233", null, 95);
+        ensureCustomer("Lý Thị Lan", "0902223344", "lan.ly@email.com", 12);
+        ensureCustomer("Vương Minh Nam", "0903334455", null, 175);
+        ensureCustomer("Châu Thị Oanh", "0904445566", "oanh.chau@email.com", 0);
+        ensureCustomer("Tô Văn Phúc", "0905556677", null, 38);
+        ensureCustomer("Mai Thị Quỳnh", "0906667788", "quynh.mai@email.com", 260);
     }
 
     private void ensureCustomer(String fullName, String phone, String email, int points) {
-        if (customerRepository.existsByPhone(phone)) return;
-        Customer c = new Customer();
-        c.setFullName(fullName);
-        c.setPhone(phone);
-        c.setEmail(email);
-        c.setLoyaltyPoints(points);
-        customerRepository.save(c);
+        Customer c = customerRepository.findByPhone(phone).orElseGet(() -> {
+            Customer x = new Customer();
+            x.setFullName(fullName);
+            x.setPhone(phone);
+            x.setEmail(email);
+            x.setLoyaltyPoints(points);
+            return customerRepository.save(x);
+        });
+        // Sổ cái điểm là NGUỒN SỰ THẬT: số dư ban đầu phải có một dòng sổ cái MỞ tương ứng để
+        // Σ(sổ cái) == số dư (nếu không sẽ bị job đối soát cảnh báo "lệch sổ cái"). Idempotent:
+        // chỉ ghi khi khách CÓ điểm mà CHƯA có dòng sổ cái nào → tự backfill cả CSDL demo cũ.
+        if (points > 0 && ledgerRepository.countByCustomerId(c.getId()) == 0) {
+            loyaltyService.record(c.getId(), null, points, "OPENING", points);
+        }
     }
 
     private void seedPromotions() {
         LocalDateTime start = LocalDate.now().minusMonths(1).atStartOfDay();
         LocalDateTime end = LocalDate.now().plusYears(1).atStartOfDay();
+        // Bộ khuyến mãi đa dạng: % và số tiền, nhiều mức đơn tối thiểu, có/không giới hạn lượt dùng.
         ensurePromotion("SALE10", "Giảm 10% đơn từ 100k", DiscountType.PERCENT,
                 BigDecimal.valueOf(10), BigDecimal.valueOf(100000), start, end, 100);
         ensurePromotion("GIAM20K", "Giảm 20k đơn từ 200k", DiscountType.AMOUNT,
                 BigDecimal.valueOf(20000), BigDecimal.valueOf(200000), start, end, null);
+        ensurePromotion("WELCOME5", "Khách mới giảm 5% đơn từ 50k", DiscountType.PERCENT,
+                BigDecimal.valueOf(5), BigDecimal.valueOf(50000), start, end, 500);
+        ensurePromotion("CUOITUAN8", "Cuối tuần giảm 8% đơn từ 80k", DiscountType.PERCENT,
+                BigDecimal.valueOf(8), BigDecimal.valueOf(80000), start, end, null);
+        ensurePromotion("GIAM50K", "Giảm 50k đơn từ 500k", DiscountType.AMOUNT,
+                BigDecimal.valueOf(50000), BigDecimal.valueOf(500000), start, end, 200);
+        ensurePromotion("SALE15", "Giảm 15% đơn từ 300k", DiscountType.PERCENT,
+                BigDecimal.valueOf(15), BigDecimal.valueOf(300000), start, end, 50);
+        ensurePromotion("FREESHIP15", "Hỗ trợ 15k đơn từ 150k", DiscountType.AMOUNT,
+                BigDecimal.valueOf(15000), BigDecimal.valueOf(150000), start, end, null);
+        ensurePromotion("VIP12", "Khách VIP giảm 12% đơn từ 250k", DiscountType.PERCENT,
+                BigDecimal.valueOf(12), BigDecimal.valueOf(250000), start, end, 80);
     }
 
     private void ensurePromotion(String code, String name, DiscountType type, BigDecimal value,
