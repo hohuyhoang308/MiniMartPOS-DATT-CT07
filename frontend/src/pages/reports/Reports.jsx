@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Tab, Tabs } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import RevenueReport from './RevenueReport'
+import DailyRollup from './DailyRollup'
 import EmployeeReport from './EmployeeReport'
 import ProductReport from './ProductReport'
 import AbcXyz from '../inventory/AbcXyz'
@@ -18,6 +19,9 @@ export default function Reports() {
       <Tabs activeKey={tab} onSelect={setTab} mountOnEnter unmountOnExit className="mb-3">
         <Tab eventKey="revenue" title={<span><i className="bi bi-bar-chart-line-fill me-1"></i>Doanh thu & ca</span>}>
           <RevenueReport embedded />
+        </Tab>
+        <Tab eventKey="rollup" title={<span><i className="bi bi-calendar-week me-1"></i>Tổng hợp ngày</span>}>
+          <DailyRollup embedded />
         </Tab>
         <Tab eventKey="employees" title={<span><i className="bi bi-person-badge me-1"></i>Hiệu suất nhân viên</span>}>
           <EmployeeReport embedded />

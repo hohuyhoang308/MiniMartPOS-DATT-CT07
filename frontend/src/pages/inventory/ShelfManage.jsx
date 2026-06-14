@@ -14,7 +14,7 @@ import { errMsg } from '../../api/client'
 
 const EMPTY = { code: '', name: '', capacity: 200, status: 'ACTIVE' }
 
-export default function ShelfManage() {
+export default function ShelfManage({ embedded = false }) {
   const toast = useToast()
   const [shelves, setShelves] = useState([])
   const [categories, setCategories] = useState([])
@@ -50,9 +50,11 @@ export default function ShelfManage() {
 
   return (
     <div>
-      <PageHeader title="Cấu hình kệ" subtitle="Khai báo các kệ trưng bày trong cửa hàng. Đây là việc của quản lý.">
-        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader title="Cấu hình kệ" subtitle="Khai báo các kệ trưng bày trong cửa hàng. Đây là việc của quản lý.">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
+        </PageHeader>
+      )}
 
       <InfoBanner id="shelfmanage" title="Cấu hình kệ (dành cho quản lý)">
         Đây là nơi <b>quản lý</b> <b>thêm, sửa, xoá kệ</b> và đặt <b>sức chứa</b> cho từng kệ (đặt mã kệ như K01 và tên khu vực).

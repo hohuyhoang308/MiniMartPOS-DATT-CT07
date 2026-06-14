@@ -13,7 +13,7 @@ import { formatMoney, formatDateTime } from '../../utils/format'
 
 const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDate: '', byPack: false })
 
-export default function GoodsReceipts() {
+export default function GoodsReceipts({ embedded = false }) {
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -84,9 +84,11 @@ export default function GoodsReceipts() {
 
   return (
     <div>
-      <PageHeader title="Nhập kho" subtitle="Lập phiếu mỗi khi nhận hàng về. Hệ thống tự cộng hàng vào kho và ghi nhớ hạn sử dụng.">
-        <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader title="Nhập kho" subtitle="Lập phiếu mỗi khi nhận hàng về. Hệ thống tự cộng hàng vào kho và ghi nhớ hạn sử dụng.">
+          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
+        </PageHeader>
+      )}
 
       <InfoBanner id="receipts" title="Nhập kho hoạt động ra sao?">
         Mỗi lần nhận hàng, bạn lập một phiếu nhập. Mỗi phiếu sẽ tạo ra các <b>lô hàng</b>, mỗi lô có

@@ -25,7 +25,7 @@ function validity(p) {
   return { cls: 'pill-success', label: 'Đang áp dụng', icon: 'bi-check-circle-fill' }
 }
 
-export default function Promotions() {
+export default function Promotions({ embedded = false }) {
   const toast = useToast()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -69,9 +69,11 @@ export default function Promotions() {
 
   return (
     <div>
-      <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá dùng khi tính tiền cho khách">
-        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá dùng khi tính tiền cho khách">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
+        </PageHeader>
+      )}
 
       <InfoBanner id="promotions" title="Tạo mã giảm giá">
         Chọn <b>cách giảm</b>: giảm theo phần trăm (%) hoặc giảm một số tiền cố định. Bạn có thể đặt <b>mức mua tối thiểu</b> mới được dùng mã,

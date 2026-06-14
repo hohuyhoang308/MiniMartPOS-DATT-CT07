@@ -27,7 +27,7 @@ function ShelfCell({ s }) {
   return <span className={`fw-semibold ${cls}`}>{shelf}</span>
 }
 
-export default function Inventory() {
+export default function Inventory({ embedded = false }) {
   const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -50,7 +50,7 @@ export default function Inventory() {
 
   return (
     <div className="page-fill">
-      <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Xem tồn theo từng lô và hạn sử dụng, kèm gợi ý nhập hàng. Việc đưa hàng lên kệ làm ở trang Lên kệ." />
+      {!embedded && <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Xem tồn theo từng lô và hạn sử dụng, kèm gợi ý nhập hàng. Việc đưa hàng lên kệ làm ở trang Lên kệ." />}
 
       {tab !== 'adjust' && (
         <InfoBanner id="inventory" title="Cách đọc bảng tồn kho">
@@ -81,8 +81,8 @@ export default function Inventory() {
             <Button size="sm" variant="soft" onClick={() => navigate('/shelf')}><i className="bi bi-arrow-up me-1"></i>Lên kệ ({shelfLow})</Button>
           )}
           {tab === 'suggest' && suggestions.length > 0 && (
-            <Button size="sm" onClick={() => navigate('/receipts', {
-              state: { prefill: suggestions.map((s) => ({ productId: s.productId, quantity: s.suggestedQty })) },
+            <Button size="sm" onClick={() => navigate('/inventory', {
+              state: { hubTab: 'receipts', prefill: suggestions.map((s) => ({ productId: s.productId, quantity: s.suggestedQty })) },
             })}><i className="bi bi-box-arrow-in-down me-1"></i>Lập phiếu nhập ({suggestions.length})</Button>
           )}
         </Card.Body>

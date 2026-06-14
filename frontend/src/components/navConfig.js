@@ -29,18 +29,13 @@ export const NAV_SECTIONS = [
   {
     title: 'Hàng hóa & giá (HQ — toàn chuỗi)',
     items: [
-      { to: '/products', icon: 'bi-box-seam-fill', label: 'Sản phẩm', roles: ['ADMIN'] },
-      { to: '/catalog', icon: 'bi-tags-fill', label: 'Danh mục & Đơn vị', roles: ['ADMIN'] },
-      { to: '/promotions', icon: 'bi-percent', label: 'Khuyến mãi', roles: ['ADMIN'] },
-      { to: '/suppliers', icon: 'bi-truck', label: 'Nhà cung cấp', roles: ['ADMIN'] },
+      { to: '/products', icon: 'bi-box-seam-fill', label: 'Hàng hóa', roles: ['ADMIN'] },
     ],
   },
   {
     title: 'Kho & nhập hàng',
     items: [
-      { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & xuất hủy', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/shelves', icon: 'bi-grid-3x3-gap-fill', label: 'Cấu hình kệ', roles: ['MANAGER'] },
+      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Kho hàng', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

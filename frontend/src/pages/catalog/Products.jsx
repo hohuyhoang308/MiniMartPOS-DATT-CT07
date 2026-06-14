@@ -22,7 +22,7 @@ function StockBadge({ stock, min }) {
   return <span className="pill pill-success"><i className="bi bi-check-circle-fill"></i>{stock}</span>
 }
 
-export default function Products() {
+export default function Products({ embedded = false }) {
   const toast = useToast()
   const [list, setList] = useState([])
   const [cats, setCats] = useState([])
@@ -87,9 +87,11 @@ export default function Products() {
 
   return (
     <div>
-      <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán và mức báo sắp hết">
-        <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán và mức báo sắp hết">
+          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
+        </PageHeader>
+      )}
 
       <InfoBanner id="products" title="Cách quản lý sản phẩm">
         Mỗi mặt hàng cần có <b>mã vạch</b> (để quét nhanh khi bán), thuộc một <b>danh mục</b> và một <b>đơn vị tính</b>.

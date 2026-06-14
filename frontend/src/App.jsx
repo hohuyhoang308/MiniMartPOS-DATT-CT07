@@ -9,15 +9,10 @@ import Dashboard from './pages/dashboard/Dashboard'
 import ChainOverview from './pages/dashboard/ChainOverview'
 import Pos from './pages/pos/Pos'
 import Invoices from './pages/invoices/Invoices'
-import Products from './pages/catalog/Products'
-import Catalog from './pages/catalog/Catalog'
-import Suppliers from './pages/catalog/Suppliers'
-import GoodsReceipts from './pages/inventory/GoodsReceipts'
-import Inventory from './pages/inventory/Inventory'
+import CatalogHub from './pages/catalog/CatalogHub'
+import WarehouseHub from './pages/inventory/WarehouseHub'
 import Shelf from './pages/inventory/Shelf'
-import ShelfManage from './pages/inventory/ShelfManage'
 import Customers from './pages/crm/Customers'
-import Promotions from './pages/crm/Promotions'
 import Reports from './pages/reports/Reports'
 import Shifts from './pages/shifts/Shifts'
 import Users from './pages/admin/Users'
@@ -43,20 +38,14 @@ export default function App() {
 
           {/* Mọi vai trò bán hàng */}
           <Route path="pos" element={<Pos />} />
-          <Route path="shelf" element={<Shelf />} />
+          <Route path="shelf" element={<StoreScopeRequired><Shelf /></StoreScopeRequired>} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="customers" element={<Customers />} />
 
-          {/* Admin + Manager */}
+          {/* Admin + Manager: vận hành cửa hàng */}
           <Route element={<PrivateRoute roles={['ADMIN', 'MANAGER']} />}>
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="products" element={<Products />} />
-            <Route path="catalog" element={<Catalog />} />
-            <Route path="suppliers" element={<Suppliers />} />
-            <Route path="receipts" element={<GoodsReceipts />} />
-            <Route path="inventory" element={<StoreScopeRequired><Inventory /></StoreScopeRequired>} />
-            <Route path="shelves" element={<ShelfManage />} />
-            <Route path="promotions" element={<Promotions />} />
+            <Route path="inventory" element={<StoreScopeRequired><WarehouseHub /></StoreScopeRequired>} />
             <Route path="reports" element={<Reports />} />
             <Route path="shifts" element={<Shifts />} />
             {/* Quản lý nhân viên (STAFF cửa hàng mình) & nhật ký thao tác — backend chốt phạm vi theo cửa hàng */}
@@ -64,13 +53,11 @@ export default function App() {
             <Route path="audit" element={<Audit />} />
           </Route>
 
-          {/* Admin */}
+          {/* Admin: quản trị danh mục cấp CHUỖI (backend ghi = hasRole('ADMIN')) — tránh "mở trang rồi 403". */}
           <Route element={<PrivateRoute roles={['ADMIN']} />}>
+            <Route path="products" element={<CatalogHub />} />
             <Route path="settings" element={<Settings />} />
-          </Route>
-
-          {/* Quản trị viên toàn chuỗi (đa cửa hàng) */}
-          <Route element={<PrivateRoute roles={['ADMIN']} />}>
+            {/* Quản trị viên toàn chuỗi (đa cửa hàng) */}
             <Route path="stores" element={<Stores />} />
             <Route path="chain" element={<ChainOverview />} />
           </Route>

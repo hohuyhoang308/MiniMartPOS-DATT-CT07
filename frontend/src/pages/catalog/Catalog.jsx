@@ -12,10 +12,10 @@ import { errMsg } from '../../api/client'
 const EMPTY_CAT = { name: '', description: '', status: 'ACTIVE' }
 
 /** Gộp "Danh mục" + "Đơn vị tính" vào một màn hình cho gọn (đều là dữ liệu nền của sản phẩm). */
-export default function Catalog() {
+export default function Catalog({ embedded = false }) {
   return (
     <div className="page-fill">
-      <PageHeader title="Danh mục & Đơn vị tính" subtitle="Nhóm hàng và đơn vị tính để phân loại sản phẩm, quản lý chung tại đây" />
+      {!embedded && <PageHeader title="Danh mục & Đơn vị tính" subtitle="Nhóm hàng và đơn vị tính để phân loại sản phẩm, quản lý chung tại đây" />}
       <Row className="g-3 fill-row">
         <Col lg={7}><CategorySection /></Col>
         <Col lg={5}><UnitSection /></Col>

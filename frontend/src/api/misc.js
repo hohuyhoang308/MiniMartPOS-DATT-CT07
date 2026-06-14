@@ -34,6 +34,22 @@ export const stockAdjustmentApi = {
   create: (body) => client.post('/stock-adjustments', body).then(unwrap),
 }
 
+/** Điều chuyển kho giữa các chi nhánh (FR8) — ADMIN & MANAGER. */
+export const transferApi = {
+  list: () => client.get('/stock-transfers').then(unwrap),
+  create: (body) => client.post('/stock-transfers', body).then(unwrap),
+  ship: (id) => client.post(`/stock-transfers/${id}/ship`).then(unwrap),
+  receive: (id) => client.post(`/stock-transfers/${id}/receive`).then(unwrap),
+  cancel: (id, reason) => client.post(`/stock-transfers/${id}/cancel`, { reason }).then(unwrap),
+}
+
+/** Giá bán riêng theo chi nhánh (override giá gốc) — ADMIN & MANAGER, theo cửa hàng đang xem. */
+export const storePriceApi = {
+  list: () => client.get('/store-prices').then(unwrap),
+  set: (productId, salePrice) => client.put('/store-prices', { productId, salePrice }).then(unwrap),
+  clear: (productId) => client.delete(`/store-prices/${productId}`),
+}
+
 /** Kệ vật lý (FR8): xem/lên kệ (mọi vai trò) + CRUD kệ (quản lý). */
 export const shelfApi = {
   list: () => client.get('/shelves').then(unwrap),
@@ -62,6 +78,7 @@ export const reportApi = {
   shifts: () => client.get('/reports/shifts').then(unwrap),
   employees: (from, to) => client.get('/reports/employees', { params: { from, to } }).then(unwrap),
   products: (from, to) => client.get('/reports/products', { params: { from, to } }).then(unwrap),
+  dailyRollup: (from, to) => client.get('/reports/daily-rollup', { params: { from, to } }).then(unwrap),
   exportUrl: (from, to, groupBy = 'DAY') =>
     `/api/reports/export?type=excel&from=${from}&to=${to}&groupBy=${groupBy}`,
 }

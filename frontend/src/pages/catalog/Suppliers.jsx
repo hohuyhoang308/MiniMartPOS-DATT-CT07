@@ -11,7 +11,7 @@ import { errMsg } from '../../api/client'
 
 const EMPTY = { name: '', phone: '', email: '', address: '', status: 'ACTIVE' }
 
-export default function Suppliers() {
+export default function Suppliers({ embedded = false }) {
   const toast = useToast()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -45,9 +45,11 @@ export default function Suppliers() {
 
   return (
     <div>
-      <PageHeader title="Nhà cung cấp" subtitle="Nơi cửa hàng lấy hàng về bán">
-        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader title="Nhà cung cấp" subtitle="Nơi cửa hàng lấy hàng về bán">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
+        </PageHeader>
+      )}
 
       <div className="mb-3" style={{ maxWidth: 340 }}>
         <div className="input-group">
