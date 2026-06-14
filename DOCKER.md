@@ -35,6 +35,45 @@ DB_PASSWORD=<mat-khau-manh>
 JWT_SECRET=<chuoi-ngau-nhien-toi-thieu-32-ky-tu>
 ```
 
+## Vận hành production (ops)
+
+### Health check
+Backend phơi `GET /actuator/health` (công khai, không lộ chi tiết). Docker tự đánh dấu container
+UNHEALTHY nếu app/DB lỗi; `frontend` chỉ khởi động khi `backend` đã **healthy** (`condition: service_healthy`).
+```bash
+curl http://localhost:8080/actuator/health      # {"status":"UP"}
+docker compose ps                               # cột STATUS hiển thị (healthy)
+```
+
+### Sao lưu & khôi phục CSDL
+```bash
+./scripts/backup-db.sh                           # tạo backups/pos-<thời gian>.sql.gz (giữ 7 ngày)
+RETENTION_DAYS=30 ./scripts/backup-db.sh         # đổi số ngày giữ
+./scripts/restore-db.sh backups/pos-XXXX.sql.gz  # khôi phục (hỏi xác nhận trước khi ghi đè)
+```
+Đặt lịch hằng đêm 1h sáng (`crontab -e`):
+```cron
+0 1 * * *  cd /duong/dan/du-an && ./scripts/backup-db.sh >> backups/backup.log 2>&1
+```
+
+### Bật HTTPS (TLS)
+1. Lấy chứng chỉ: production dùng Let's Encrypt (`certbot`); test cục bộ:
+   `./scripts/gen-self-signed-cert.sh ten-mien.cua-ban` → tạo `certs/fullchain.pem` + `certs/privkey.pem`.
+2. Trong `docker-compose.yml`, ở service `frontend`: mount cert + dùng `nginx-tls.conf` + mở cổng 443:
+   ```yaml
+   frontend:
+     ports: ["443:443", "80:80"]
+     volumes:
+       - ./certs:/etc/nginx/certs:ro
+       - ./frontend/nginx-tls.conf:/etc/nginx/conf.d/default.conf:ro
+   ```
+3. Đặt `CORS_ORIGINS=https://ten-mien.cua-ban` cho service `backend`.
+
+### Bật chế độ production (QUAN TRỌNG)
+Mặc định hệ thống chạy profile DEV (seed tài khoản demo `admin/123456` + dữ liệu giả). Khi deploy thật,
+đặt `SPRING_PROFILES_ACTIVE=prod` cho service `backend` để **tắt seed demo** và **bắt buộc** `JWT_SECRET` thật.
+> Lưu ý: ở `prod` seeder demo tắt → cần tạo tài khoản admin đầu tiên (xem mục bootstrap admin trong README/đề xuất).
+
 ## Kiến trúc khi chạy Docker
 ```
 trình duyệt ──> frontend (nginx :80, cổng host 8088)

@@ -58,6 +58,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/error").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()  // health check cho Docker/K8s
                 .anyRequest().authenticated())
             .exceptionHandling(eh -> eh.authenticationEntryPoint(authEntryPoint))
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

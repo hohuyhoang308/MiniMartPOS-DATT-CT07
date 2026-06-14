@@ -53,10 +53,37 @@ app:
     # allowedOriginPatterns: chấp nhận localhost, 127.0.0.1 và mọi IP LAN cổng 5173 (dev)
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://192.168.*:5173}
 
+  # Tài khoản ADMIN đầu tiên — CHỈ dùng ở profile 'prod' (seed demo tắt). Đặt qua biến môi trường khi deploy.
+  # Để trống mật khẩu → KHÔNG tạo admin (xem AdminBootstrapInitializer). Không có mật khẩu mặc định.
+  bootstrap:
+    admin:
+      username: ${ADMIN_USERNAME:admin}
+      password: ${ADMIN_PASSWORD:}
+      full-name: ${ADMIN_FULL_NAME:Quản trị viên}
+
   # Tích hợp — mặc định đọc từ bảng store_config; biến môi trường để override khi deploy
   web2m:
     poll-interval-ms: ${WEB2M_POLL_MS:30000}     # chu kỳ job đối soát WEB2M
     enabled: ${WEB2M_ENABLED:false}              # bật/tắt job nền đối soát
+
+# -------- Health check / observability (ops) --------
+# Chỉ phơi endpoint health (không lộ env/beans...). Docker/K8s gọi /actuator/health để liveness-readiness.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never           # không lộ chi tiết nội bộ ra ngoài (endpoint công khai)
+      probes:
+        enabled: true               # bật /actuator/health/liveness & /readiness
+  health:
+    db:
+      enabled: true                 # health phụ thuộc kết nối DB
+    redis:
+      enabled: false                # Redis chỉ bật ở profile 'redis'; mặc định in-memory → tắt health Redis
+                                     # (nếu không sẽ báo DOWN vì cố ping Redis không chạy). Bật lại trong application-redis nếu cần.
 
 logging:
   level:

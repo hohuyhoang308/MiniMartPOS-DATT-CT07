@@ -47,17 +47,30 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: ${DB_PASSWORD:-root}
       JWT_SECRET: ${JWT_SECRET:-doi-secret-nay-trong-production-toi-thieu-256-bit-de-an-pos-convenience-store-2026}
-      CORS_ORIGINS: "http://localhost:8088,http://localhost"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8088,http://localhost}
+      # Để trống = profile DEV (seed demo). Đặt SPRING_PROFILES_ACTIVE=prod trong .env để deploy thật.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      # Tài khoản admin đầu tiên (chỉ dùng ở prod khi CSDL trống) — đặt trong .env.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-Quản trị viên}
       TZ: Asia/Ho_Chi_Minh
     ports:
       - "8080:8080"            # mở cổng API để test trực tiếp (tuỳ chọn)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s        # cho app thời gian khởi động + seed trước khi tính UNHEALTHY
 
   frontend:
     build: ./frontend
     container_name: minimartpos-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy   # chỉ phục vụ UI khi API đã sẵn sàng (tránh lỗi trắng trang lúc khởi động)
     ports:
       - "8088:80"             # truy cập ứng dụng tại http://localhost:8088
 
