@@ -16,6 +16,7 @@ const ACTION = {
   UPDATE_STORE: { cls: 'pill-info', icon: 'bi-shop', label: 'Sửa chi nhánh' },
   CONFIRM_PAYMENT: { cls: 'pill-success', icon: 'bi-check2-circle', label: 'Xác nhận thanh toán' },
   CREATE_RECEIPT: { cls: 'pill-info', icon: 'bi-box-seam', label: 'Nhập kho' },
+  WRITEOFF_STOCK: { cls: 'pill-danger', icon: 'bi-trash3-fill', label: 'Xuất hủy tồn kho' },
   SHELVE: { cls: 'pill-info', icon: 'bi-box-arrow-in-up', label: 'Lên kệ' },
   SHELF_RETURN: { cls: 'pill-warning', icon: 'bi-box-arrow-down', label: 'Lấy về kho' },
   CLOSE_SHIFT: { cls: 'pill-violet', icon: 'bi-door-closed-fill', label: 'Đóng ca' },
