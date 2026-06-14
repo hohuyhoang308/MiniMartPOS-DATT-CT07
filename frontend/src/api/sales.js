@@ -9,6 +9,13 @@ export const shiftApi = {
   close: (id, closingCash) => client.post(`/shifts/${id}/close`, { closingCash }).then(unwrap),
 }
 
+/** Thu/Chi tiền mặt NGOÀI bán hàng trong ca (petty cash) — đối soát quỹ chính xác. */
+export const cashMovementApi = {
+  byShift: (shiftId) => client.get(`/cash-movements/shift/${shiftId}`).then(unwrap),
+  // body: { type: 'IN'|'OUT', amount, reason }
+  create: (body) => client.post('/cash-movements', body).then(unwrap),
+}
+
 export const invoiceApi = {
   create: (body) => client.post('/invoices', body).then(unwrap),
   list: (params) => client.get('/invoices', { params }).then(unwrap),

@@ -8,6 +8,8 @@ import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
+import com.pos.entity.enums.CashMovementType;
+import com.pos.repository.CashMovementRepository;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.StoreRepository;
 import com.pos.repository.UserRepository;
@@ -33,6 +35,7 @@ public class ShiftService {
     private final StoreRepository storeRepository;
     private final ShiftSummaryViewRepository summaryRepository;
     private final InvoiceRepository invoiceRepository;
+    private final CashMovementRepository cashMovementRepository;
     private final AuditService auditService;
 
     public ShiftService(WorkShiftRepository shiftRepository,
@@ -40,12 +43,14 @@ public class ShiftService {
                         StoreRepository storeRepository,
                         ShiftSummaryViewRepository summaryRepository,
                         InvoiceRepository invoiceRepository,
+                        CashMovementRepository cashMovementRepository,
                         AuditService auditService) {
         this.shiftRepository = shiftRepository;
         this.userRepository = userRepository;
         this.storeRepository = storeRepository;
         this.summaryRepository = summaryRepository;
         this.invoiceRepository = invoiceRepository;
+        this.cashMovementRepository = cashMovementRepository;
         this.auditService = auditService;
     }
 
@@ -103,6 +108,8 @@ public class ShiftService {
     public ShiftResponse close(Long shiftId, BigDecimal closingCash) {
         WorkShift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> NotFoundException.of("ca làm việc", shiftId));
+        // Cô lập đa cửa hàng: không cho đóng ca thuộc cửa hàng khác (CHAIN_ADMIN chưa chọn chi nhánh được bỏ qua).
+        StoreContext.assertSameStore(shift.getStore().getId());
         CustomUserDetails me = SecurityUtils.currentUser();
         boolean isManager = "ADMIN".equals(me.getRole()) || "MANAGER".equals(me.getRole());
         if (!isManager && !shift.getUser().getId().equals(me.getId())) {
@@ -148,10 +155,12 @@ public class ShiftService {
     private ShiftResponse toResponse(WorkShift shift) {
         var summary = summaryRepository.findByShiftId(shift.getId());
         BigDecimal cashSales = invoiceRepository.sumCashSalesByShift(shift.getId());
+        BigDecimal cashIn = cashMovementRepository.sumByShiftAndType(shift.getId(), CashMovementType.IN);
+        BigDecimal cashOut = cashMovementRepository.sumByShiftAndType(shift.getId(), CashMovementType.OUT);
         return ShiftResponse.from(
                 shift, shift.getUser().getFullName(),
                 summary.map(s -> s.getTotalSales()).orElse(BigDecimal.ZERO),
                 summary.map(s -> s.getInvoiceCount()).orElse(0L),
-                cashSales);
+                cashSales, cashIn, cashOut);
     }
 }

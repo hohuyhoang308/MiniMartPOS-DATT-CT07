@@ -59,6 +59,15 @@ export default function CloseShiftModal({ shift, onHide, onClosed, refetchCurren
           <div className="soft-card p-3 mb-3">
             <Recon label="Tiền có sẵn trong két đầu ca" value={info?.openingCash} />
             <Recon label="Tiền mặt thu được trong ca" value={info?.cashSales} icon="bi-plus-lg" />
+            {Number(info?.cashIn || 0) > 0 && (
+              <Recon label="Thu thêm vào quỹ (ngoài bán hàng)" value={info?.cashIn} icon="bi-plus-lg" />
+            )}
+            {Number(info?.cashOut || 0) > 0 && (
+              <div className="d-flex justify-content-between text-danger">
+                <span><i className="bi bi-dash-lg me-1"></i>Chi ra khỏi quỹ (ngoài bán hàng)</span>
+                <span className="num">-{formatMoney(info?.cashOut)}</span>
+              </div>
+            )}
             <hr className="my-2" />
             <Recon label="Tiền mặt dự kiến trong két" value={expected} strong />
             <div className="d-flex justify-content-between text-muted2 small mt-2">
