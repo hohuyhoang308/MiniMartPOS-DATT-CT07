@@ -8,6 +8,10 @@
 --  => Drop database rồi khởi động lại: cấu trúc + view tự dựng, seeders tự nạp.
 -- =====================================================================
 
+-- Ghim charset/collation MẶC ĐỊNH cho database hiện tại → mọi bảng tạo sau tự thừa hưởng,
+-- tránh lệch collation (nguyên nhân gốc của migration "đồng nhất collation" bên dưới). Idempotent.
+ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
 -- 0. CHI NHÁNH / CỬA HÀNG trong chuỗi (đa chuỗi) ----------------------
 --     Phải tạo TRƯỚC mọi bảng tham chiếu store_id. Chi nhánh mặc định id=1 (CH01)
 --     do migration bên dưới chèn (dữ liệu cũ trước đa chuỗi thuộc về chi nhánh này).

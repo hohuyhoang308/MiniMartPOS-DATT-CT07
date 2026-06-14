@@ -4,9 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -37,9 +39,11 @@ public class SchemaTriggersInitializer implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(SchemaTriggersInitializer.class);
 
     private final JdbcTemplate jdbc;
+    private final Environment env;
 
-    public SchemaTriggersInitializer(JdbcTemplate jdbc) {
+    public SchemaTriggersInitializer(JdbcTemplate jdbc, Environment env) {
         this.jdbc = jdbc;
+        this.env = env;
     }
 
     /** Mỗi phần tử: [tên trigger, câu CREATE TRIGGER đầy đủ]. */
@@ -133,6 +137,7 @@ public class SchemaTriggersInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        boolean prod = Arrays.asList(env.getActiveProfiles()).contains("prod");
         int ok = 0;
         for (String[] t : TRIGGERS) {
             try {
@@ -140,6 +145,14 @@ public class SchemaTriggersInitializer implements CommandLineRunner {
                 jdbc.execute(t[1]);
                 ok++;
             } catch (Exception e) {
+                // PROD: KHÔNG cho chạy thiếu trigger toàn vẹn — nếu không, các bất biến quan trọng (không bán âm,
+                // phân bổ chéo cửa hàng, 1 ca/người) chỉ còn được chặn ở tầng service (có thể đua khi tải cao).
+                // Buộc cấp quyền TRIGGER cho tài khoản DB rồi khởi động lại. DEV: chỉ cảnh báo cho tiện.
+                if (prod) {
+                    throw new IllegalStateException("Không tạo được trigger toàn vẹn '" + t[0]
+                            + "' ở môi trường prod (" + e.getMessage()
+                            + "). Hãy cấp quyền TRIGGER cho tài khoản CSDL rồi khởi động lại.", e);
+                }
                 log.warn("Không tạo được trigger {} ({}). Tầng service vẫn chặn vi phạm này.",
                         t[0], e.getMessage());
             }
