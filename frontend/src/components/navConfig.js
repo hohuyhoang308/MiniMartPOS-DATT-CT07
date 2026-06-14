@@ -11,9 +11,9 @@ export const NAV_SECTIONS = [
   {
     title: 'Tổng quan',
     items: [
+      { to: '/chain', icon: 'bi-diagram-3-fill', label: 'So sánh chi nhánh', roles: ['ADMIN'] },
       { to: '/dashboard', icon: 'bi-grid-1x2-fill', label: 'Tổng quan', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/reports', icon: 'bi-bar-chart-line-fill', label: 'Báo cáo doanh thu', roles: ['ADMIN', 'MANAGER'] },
-      { to: '/abc-xyz', icon: 'bi-bar-chart-steps', label: 'Phân loại mặt hàng (ABC/XYZ)', roles: ['MANAGER'] },
+      { to: '/reports', icon: 'bi-bar-chart-line-fill', label: 'Báo cáo & phân tích', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -23,7 +23,7 @@ export const NAV_SECTIONS = [
       { to: '/invoices', icon: 'bi-receipt', label: 'Hóa đơn', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { to: '/shelf', icon: 'bi-arrow-up-square-fill', label: 'Lên kệ / lấy về kho', roles: ['MANAGER', 'STAFF'] },
       { to: '/customers', icon: 'bi-people-fill', label: 'Khách hàng', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-      { to: '/shifts', icon: 'bi-clock-history', label: 'Ca làm việc', roles: ['MANAGER'] },
+      { to: '/shifts', icon: 'bi-clock-history', label: 'Ca làm việc', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {
@@ -38,8 +38,8 @@ export const NAV_SECTIONS = [
   {
     title: 'Kho & nhập hàng',
     items: [
-      { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['MANAGER'] },
-      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & hàng sắp hết', roles: ['MANAGER'] },
+      { to: '/receipts', icon: 'bi-box-arrow-in-down', label: 'Nhập kho', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/inventory', icon: 'bi-clipboard2-pulse-fill', label: 'Tồn kho & xuất hủy', roles: ['ADMIN', 'MANAGER'] },
       { to: '/shelves', icon: 'bi-grid-3x3-gap-fill', label: 'Cấu hình kệ', roles: ['MANAGER'] },
     ],
   },
@@ -47,8 +47,8 @@ export const NAV_SECTIONS = [
     title: 'Hệ thống',
     items: [
       { to: '/stores', icon: 'bi-shop', label: 'Cửa hàng (chuỗi)', roles: ['ADMIN'] },
-      { to: '/audit', icon: 'bi-shield-check', label: 'Nhật ký thao tác', roles: ['ADMIN'] },
-      { to: '/users', icon: 'bi-person-badge-fill', label: 'Tài khoản', roles: ['ADMIN'] },
+      { to: '/users', icon: 'bi-person-badge-fill', label: 'Tài khoản', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/audit', icon: 'bi-shield-check', label: 'Nhật ký thao tác', roles: ['ADMIN', 'MANAGER'] },
       { to: '/settings', icon: 'bi-gear-fill', label: 'Cấu hình', roles: ['ADMIN'] },
     ],
   },
@@ -57,5 +57,7 @@ export const NAV_SECTIONS = [
 export const ALL_NAV = NAV_SECTIONS.flatMap((s) => s.items)
 
 export function findNav(pathname) {
-  return ALL_NAV.find((i) => pathname.startsWith(i.to))
+  // Chọn prefix KHỚP DÀI NHẤT để route con (vd /reports/employees) không bị /reports "nuốt".
+  return ALL_NAV.filter((i) => pathname.startsWith(i.to))
+    .sort((a, b) => b.to.length - a.to.length)[0]
 }

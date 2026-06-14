@@ -7,6 +7,7 @@ import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import ExpiryPill from '../../components/ui/ExpiryPill'
+import StockAdjust from './StockAdjust'
 import { inventoryApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
@@ -51,14 +52,15 @@ export default function Inventory() {
     <div className="page-fill">
       <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Xem tồn theo từng lô và hạn sử dụng, kèm gợi ý nhập hàng. Việc đưa hàng lên kệ làm ở trang Lên kệ." />
 
-      <InfoBanner id="inventory" title="Cách đọc bảng tồn kho">
-        Mỗi sản phẩm có hàng ở <b>KỆ</b> (bán được ngay) và ở <b>KHO</b> (chưa đưa lên kệ). Bấm vào
-        <b> tên sản phẩm</b> để xem các lô và hạn sử dụng (HSD). Tab <b>Sắp hết hạn</b> liệt kê những lô
-        sắp hoặc đã hết hạn, nên ưu tiên bán trước. Tab <b>Gợi ý nhập hàng</b> tự gợi ý nên nhập mặt hàng
-        nào dựa trên việc nó bán chạy hay bán ít, bán đều hay thất thường. Dòng có dấu
-        <i className="bi bi-calendar-x-fill text-warning"></i> nghĩa là đang có lô sắp hết hạn, nên đẩy bán
-        trước khi nhập thêm. Việc đưa hàng lên kệ làm ở trang <b>"Lên kệ"</b>.
-      </InfoBanner>
+      {tab !== 'adjust' && (
+        <InfoBanner id="inventory" title="Cách đọc bảng tồn kho">
+          Mỗi sản phẩm có hàng ở <b>KỆ</b> (bán được ngay) và ở <b>KHO</b> (chưa đưa lên kệ). Bấm vào
+          <b> tên sản phẩm</b> để xem các lô và hạn sử dụng (HSD). Tab <b>Sắp hết hạn</b> liệt kê những lô
+          sắp hoặc đã hết hạn, nên ưu tiên bán trước. Tab <b>Gợi ý nhập hàng</b> tự gợi ý nên nhập mặt hàng
+          nào dựa trên việc nó bán chạy hay bán ít, bán đều hay thất thường. Tab <b>Xuất hủy / Điều chỉnh</b>
+          để rút hàng hết hạn/hư hỏng/thất thoát khỏi tồn kho. Việc đưa hàng lên kệ làm ở trang <b>"Lên kệ"</b>.
+        </InfoBanner>
+      )}
 
       <Row className="g-3 mb-3 stagger">
         <Col md={3}><StatCard icon="bi-shop" chip="sky" label="Tổng mặt hàng" value={stock.length} /></Col>
@@ -73,6 +75,7 @@ export default function Inventory() {
             <Nav.Item><Nav.Link eventKey="all">Tất cả ({stock.length})</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="suggest">Gợi ý nhập hàng ({suggestions.length})</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="expiring">Sắp hết hạn ({expiring.length})</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="adjust"><i className="bi bi-trash3 me-1"></i>Xuất hủy / Điều chỉnh</Nav.Link></Nav.Item>
           </Nav>
           {tab === 'all' && shelfLow > 0 && (
             <Button size="sm" variant="soft" onClick={() => navigate('/shelf')}><i className="bi bi-arrow-up me-1"></i>Lên kệ ({shelfLow})</Button>
@@ -84,7 +87,9 @@ export default function Inventory() {
           )}
         </Card.Body>
         <div className="table-responsive fill-scroll">
-          {tab === 'expiring' ? (
+          {tab === 'adjust' ? (
+            <div className="p-3"><StockAdjust embedded /></div>
+          ) : tab === 'expiring' ? (
             <Table hover className="mb-0">
               <thead><tr><th>Sản phẩm</th><th className="text-center">Còn trong lô</th><th>Hạn sử dụng</th><th className="text-center">Còn mấy ngày</th></tr></thead>
               <tbody>

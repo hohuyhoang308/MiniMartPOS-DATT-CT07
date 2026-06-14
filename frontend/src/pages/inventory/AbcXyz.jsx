@@ -24,7 +24,7 @@ const XYZ_MEAN = {
   Z: 'Bán thất thường, khó đoán. Cần để nhiều hàng dự phòng hơn.',
 }
 
-export default function AbcXyz() {
+export default function AbcXyz({ embedded = false }) {
   const toast = useToast()
   const navigate = useNavigate()
   const [rows, setRows] = useState([])
@@ -40,7 +40,7 @@ export default function AbcXyz() {
 
   return (
     <div className="page-fill">
-      <PageHeader title="Phân loại hàng bán chạy" subtitle="Xếp hàng theo mức doanh thu và theo bán đều hay thất thường (90 ngày gần nhất)" />
+      {!embedded && <PageHeader title="Phân loại hàng bán chạy" subtitle="Xếp hàng theo mức doanh thu và theo bán đều hay thất thường (90 ngày gần nhất)" />}
 
       <InfoBanner id="abcxyz" title="Bảng này nói gì?">
         <div className="mb-2">

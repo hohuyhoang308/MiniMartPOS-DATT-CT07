@@ -28,6 +28,12 @@ export const inventoryApi = {
   abcXyz: () => client.get('/inventory/abc-xyz').then(unwrap),
 }
 
+/** Xuất hủy / điều chỉnh giảm tồn (FR8 — kiểm kê & hao hụt) — ADMIN & MANAGER. */
+export const stockAdjustmentApi = {
+  list: () => client.get('/stock-adjustments').then(unwrap),
+  create: (body) => client.post('/stock-adjustments', body).then(unwrap),
+}
+
 /** Kệ vật lý (FR8): xem/lên kệ (mọi vai trò) + CRUD kệ (quản lý). */
 export const shelfApi = {
   list: () => client.get('/shelves').then(unwrap),
@@ -41,9 +47,11 @@ export const shelfApi = {
 
 export const dashboardApi = {
   get: () => client.get('/dashboard').then(unwrap),
+  /** So sánh KPI giữa các chi nhánh (toàn chuỗi) — chỉ ADMIN. */
+  storeComparison: () => client.get('/dashboard/stores').then(unwrap),
 }
 
-/** Nhật ký kiểm toán (chỉ ADMIN). */
+/** Nhật ký kiểm toán — ADMIN (toàn chuỗi) & MANAGER (chỉ cửa hàng của mình, backend tự lọc). */
 export const auditApi = {
   recent: () => client.get('/audit').then(unwrap),
 }
@@ -52,6 +60,8 @@ export const reportApi = {
   revenue: (from, to, groupBy = 'DAY') =>
     client.get('/reports/revenue', { params: { from, to, groupBy } }).then(unwrap),
   shifts: () => client.get('/reports/shifts').then(unwrap),
+  employees: (from, to) => client.get('/reports/employees', { params: { from, to } }).then(unwrap),
+  products: (from, to) => client.get('/reports/products', { params: { from, to } }).then(unwrap),
   exportUrl: (from, to, groupBy = 'DAY') =>
     `/api/reports/export?type=excel&from=${from}&to=${to}&groupBy=${groupBy}`,
 }
