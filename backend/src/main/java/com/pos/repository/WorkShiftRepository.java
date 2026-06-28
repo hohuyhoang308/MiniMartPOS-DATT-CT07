@@ -3,6 +3,7 @@ package com.pos.repository;
 import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.repository.projection.EmployeeCashRow;
+import com.pos.repository.projection.WorkedHoursRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -56,4 +57,26 @@ public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
     List<EmployeeCashRow> cashAccountabilityByCashier(@Param("from") LocalDateTime from,
                                                       @Param("to") LocalDateTime to,
                                                       @Param("storeId") Long storeId);
+
+    /**
+     * GIỜ CÔNG theo nhân viên trong [from, to) tại MỘT chi nhánh (module Lương): cộng dồn thời lượng các
+     * ca ĐÃ ĐÓNG (closed_at − opened_at) tính bằng GIỜ, kèm số ca. Chỉ lấy người THỰC SỰ có ca đã đóng
+     * trong kỳ (đúng người đã chấm công). Mốc kỳ theo {@code opened_at} (ca thuộc tháng mở ca).
+     */
+    @Query(value = """
+            SELECT s.user_id AS userId,
+                   u.full_name AS fullName,
+                   COALESCE(SUM(TIMESTAMPDIFF(SECOND, s.opened_at, s.closed_at)) / 3600.0, 0) AS workedHours,
+                   COUNT(*) AS shiftCount
+            FROM work_shifts s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.status = 'CLOSED' AND s.closed_at IS NOT NULL
+              AND s.store_id = :storeId
+              AND s.opened_at >= :from AND s.opened_at < :to
+            GROUP BY s.user_id, u.full_name
+            ORDER BY u.full_name
+            """, nativeQuery = true)
+    List<WorkedHoursRow> workedHoursByEmployee(@Param("storeId") Long storeId,
+                                               @Param("from") LocalDateTime from,
+                                               @Param("to") LocalDateTime to);
 }

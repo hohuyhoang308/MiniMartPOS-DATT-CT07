@@ -40,17 +40,20 @@ public class DashboardService {
     private final ProductStockViewRepository stockRepository;
     private final ExpiringBatchViewRepository expiringRepository;
     private final StoreRepository storeRepository;
+    private final com.pos.repository.PayslipRepository payslipRepository;
 
     public DashboardService(InvoiceRepository invoiceRepository,
                             InvoiceItemRepository invoiceItemRepository,
                             ProductStockViewRepository stockRepository,
                             ExpiringBatchViewRepository expiringRepository,
-                            StoreRepository storeRepository) {
+                            StoreRepository storeRepository,
+                            com.pos.repository.PayslipRepository payslipRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.stockRepository = stockRepository;
         this.expiringRepository = expiringRepository;
         this.storeRepository = storeRepository;
+        this.payslipRepository = payslipRepository;
     }
 
     public DashboardResponse getDashboard() {
@@ -67,6 +70,14 @@ public class DashboardService {
         // Lợi nhuận gộp = doanh thu thuần (đã trừ khuyến mãi ở total_amount) − giá vốn hàng bán (COGS).
         BigDecimal profitToday = revenueToday.subtract(invoiceItemRepository.sumCogs(startToday, startTomorrow, storeId));
         BigDecimal profitMonth = revenueMonth.subtract(invoiceItemRepository.sumCogs(startMonth, startTomorrow, storeId));
+
+        // Chi phí nhân sự: tổng quỹ lương (Σ thực lĩnh) của kỳ lương tháng này & tỷ lệ trên doanh thu tháng.
+        String month = today.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+        BigDecimal laborCostMonth = payslipRepository.sumNetByMonth(month, storeId);
+        if (laborCostMonth == null) laborCostMonth = BigDecimal.ZERO;
+        BigDecimal laborCostRatio = revenueMonth.signum() > 0
+                ? laborCostMonth.multiply(BigDecimal.valueOf(100)).divide(revenueMonth, 1, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
         long invoiceCountToday = invoiceRepository.countCompleted(startToday, startTomorrow, storeId);
         long itemsSoldToday = invoiceItemRepository.sumQuantity(startToday, startTomorrow, storeId);
@@ -107,6 +118,7 @@ public class DashboardService {
 
         return new DashboardResponse(
                 revenueToday, revenueYesterday, revenueMonth, profitToday, profitMonth,
+                laborCostMonth, laborCostRatio,
                 invoiceCountToday, itemsSoldToday, customersToday, avgOrder,
                 lowStock, outOfStock, expiring,
                 top, chart, payments, hourly, categories, recent);

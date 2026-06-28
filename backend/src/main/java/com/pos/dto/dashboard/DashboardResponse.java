@@ -11,6 +11,9 @@ public record DashboardResponse(
         BigDecimal revenueMonth,
         BigDecimal profitToday,
         BigDecimal profitMonth,
+        // Chi phí nhân sự: tổng quỹ lương tháng này & tỷ lệ trên doanh thu tháng (%)
+        BigDecimal laborCostMonth,
+        BigDecimal laborCostRatio,
         // Chỉ số bán hàng hôm nay
         long invoiceCountToday,
         long itemsSoldToday,

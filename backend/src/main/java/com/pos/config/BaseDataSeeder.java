@@ -3,6 +3,7 @@ package com.pos.config;
 import com.pos.entity.*;
 import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.enums.DiscountType;
+import com.pos.entity.enums.PayType;
 import com.pos.entity.enums.Role;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.entity.enums.UserStatus;
@@ -43,6 +44,7 @@ public class BaseDataSeeder implements CommandLineRunner {
     private final PromotionRepository promotionRepository;
     private final WorkShiftRepository shiftRepository;
     private final LoyaltyPointLedgerRepository ledgerRepository;
+    private final EmployeePayProfileRepository payProfileRepository;
     private final com.pos.service.LoyaltyService loyaltyService;
     private final PasswordEncoder passwordEncoder;
 
@@ -53,6 +55,7 @@ public class BaseDataSeeder implements CommandLineRunner {
                           PromotionRepository promotionRepository,
                           WorkShiftRepository shiftRepository,
                           LoyaltyPointLedgerRepository ledgerRepository,
+                          EmployeePayProfileRepository payProfileRepository,
                           com.pos.service.LoyaltyService loyaltyService,
                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
@@ -62,6 +65,7 @@ public class BaseDataSeeder implements CommandLineRunner {
         this.promotionRepository = promotionRepository;
         this.shiftRepository = shiftRepository;
         this.ledgerRepository = ledgerRepository;
+        this.payProfileRepository = payProfileRepository;
         this.loyaltyService = loyaltyService;
         this.passwordEncoder = passwordEncoder;
     }
@@ -77,6 +81,31 @@ public class BaseDataSeeder implements CommandLineRunner {
         seedCustomers();
         seedPromotions();
         seedOpenShiftForCashier();
+        seedPayProfiles();
+    }
+
+    /**
+     * Cấu hình lương demo (module Lương) — để màn Tính lương có số liệu ngay trên CSDL mới.
+     * STAFF: lương GIỜ; MANAGER: lương THÁNG + phụ cấp. ADMIN toàn chuỗi không cấu hình (không có ca).
+     * Idempotent: chỉ tạo khi nhân viên chưa có cấu hình.
+     */
+    private void seedPayProfiles() {
+        ensurePayProfile("staff",    PayType.HOURLY,  new BigDecimal("30000"),  BigDecimal.ZERO);
+        ensurePayProfile("staff2",   PayType.HOURLY,  new BigDecimal("32000"),  BigDecimal.ZERO);
+        ensurePayProfile("manager",  PayType.MONTHLY, new BigDecimal("14000000"), new BigDecimal("800000"));
+        ensurePayProfile("manager2", PayType.MONTHLY, new BigDecimal("13000000"), new BigDecimal("800000"));
+    }
+
+    private void ensurePayProfile(String username, PayType payType, BigDecimal baseRate, BigDecimal allowance) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null || payProfileRepository.findByUserId(user.getId()).isPresent()) return;
+        EmployeePayProfile p = new EmployeePayProfile();
+        p.setUser(user);
+        p.setPayType(payType);
+        p.setBaseRate(baseRate);
+        p.setMonthlyAllowance(allowance);
+        payProfileRepository.save(p);
+        log.info("Đã tạo cấu hình lương demo cho '{}' ({} {}đ)", username, payType, baseRate);
     }
 
     /** Chi nhánh: trả về dòng đã có (theo mã) hoặc tạo mới. */
