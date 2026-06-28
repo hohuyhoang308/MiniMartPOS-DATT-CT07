@@ -21,13 +21,14 @@ USE pos_convenience_store;
 -- 0. CHI NHÁNH / CỬA HÀNG trong chuỗi (ĐA CHUỖI). Tạo TRƯỚC mọi bảng tham chiếu store_id.
 -- ---------------------------------------------------------------------
 CREATE TABLE stores (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code       VARCHAR(30)  NOT NULL UNIQUE,              -- CH01, CH02...
-    name       VARCHAR(150) NOT NULL,
-    address    VARCHAR(255),
-    phone      VARCHAR(20),
-    status     ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code         VARCHAR(30)  NOT NULL UNIQUE,            -- CH01, CH02...
+    name         VARCHAR(150) NOT NULL,
+    address      VARCHAR(255),
+    phone        VARCHAR(20),
+    is_warehouse TINYINT(1)   NOT NULL DEFAULT 0,         -- 1 = kho trung tâm của chuỗi (Obj 1.1): chỉ trung chuyển, không bán quầy
+    status       ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -111,7 +112,8 @@ CREATE TABLE goods_receipts (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     code         VARCHAR(30) NOT NULL UNIQUE,              -- mã phiếu nhập
     store_id     BIGINT NOT NULL,                          -- chi nhánh nhập (LÔ thừa hưởng chi nhánh)
-    supplier_id  BIGINT NOT NULL,
+    supplier_id  BIGINT,                                   -- NULL khi nguồn = TRANSFER (nhận điều chuyển nội bộ, không có NCC)
+    source       ENUM('PURCHASE','TRANSFER') NOT NULL DEFAULT 'PURCHASE', -- nguồn gốc: mua NCC / nhận điều chuyển (Obj 1.1)
     created_by   BIGINT NOT NULL,                          -- người lập phiếu
     total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,         -- tổng tiền chứng từ (chốt khi lưu)
     note         VARCHAR(255),
@@ -178,6 +180,7 @@ CREATE TABLE work_shifts (
     user_id      BIGINT NOT NULL,                          -- thu ngân của ca
     opening_cash DECIMAL(12,2) NOT NULL DEFAULT 0,
     closing_cash DECIMAL(12,2),                            -- đối soát cuối ca (NULL khi đang mở)
+    final_cash_sales DECIMAL(14,2),                        -- SNAPSHOT tiền mặt bán chốt lúc ĐÓNG ca (Obj 2): hủy HĐ tiền mặt của ca đã đóng không làm lệch đối soát quỹ
     opened_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at    DATETIME,
     status       ENUM('OPEN','CLOSED') NOT NULL DEFAULT 'OPEN',
@@ -443,7 +446,7 @@ CREATE TABLE stock_adjustments (
     store_id   BIGINT NOT NULL,                            -- chi nhanh phat sinh (= chi nhanh cua lo)
     batch_id   BIGINT NOT NULL,                            -- = goods_receipt_items.id (lo bi giam ton)
     quantity   INT NOT NULL,                               -- so luong GIAM (duong)
-    reason     ENUM('EXPIRED','DAMAGED','LOST','OTHER') NOT NULL,  -- het han / hu hong / that thoat / khac
+    reason     ENUM('EXPIRED','DAMAGED','LOST','OTHER','TRANSFER_OUT') NOT NULL,  -- het han / hu hong / that thoat / khac / xuat dieu chuyen noi bo (Obj 1.1)
     note       VARCHAR(255),
     created_by BIGINT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -473,6 +476,198 @@ CREATE TABLE cash_movements (
     CONSTRAINT fk_cash_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_cash_amount CHECK (amount > 0)
 ) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
+-- 12. GIÁ BÁN RIÊNG THEO CHI NHÁNH (Obj 1.3) — giữ mô hình giá TẬP TRUNG:
+--     products.sale_price là giá CHUẨN toàn chuỗi; mỗi (sản phẩm, chi nhánh) có TỐI ĐA 1
+--     override ACTIVE. Giá bán hiệu lực = COALESCE(override ACTIVE, giá chuẩn), resolve ở SERVER.
+-- ---------------------------------------------------------------------
+CREATE TABLE product_store_prices (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id  BIGINT NOT NULL,
+    store_id    BIGINT NOT NULL,
+    sale_price  DECIMAL(12,2) NOT NULL,                     -- giá bán riêng (đã gồm VAT)
+    status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    updated_by  BIGINT,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_psp UNIQUE (product_id, store_id),        -- 1 override / (sản phẩm, chi nhánh)
+    CONSTRAINT fk_psp_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_psp_store   FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_psp_user    FOREIGN KEY (updated_by) REFERENCES users(id),
+    CONSTRAINT chk_psp_price  CHECK (sale_price >= 0)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
+-- 13. ĐIỀU CHUYỂN HÀNG NỘI BỘ giữa chi nhánh (Obj 1.1) — state machine MỘT CHIỀU:
+--     PENDING → SHIPPING → RECEIVED (hoặc CANCELLED). KHÔNG mutate lô (giữ bất biến + view tồn):
+--       • SHIP (nguồn):  ghi stock_adjustments(reason=TRANSFER_OUT) → trừ tồn nguồn.
+--       • RECEIVE (đích): tạo goods_receipts(source=TRANSFER) mang HSD/giá vốn gốc → tồn xuất hiện
+--                         ở đích như LÔ MỚI; FIFO theo HSD vẫn đúng. dest_receipt_id = phiếu nhập sinh ra.
+-- ---------------------------------------------------------------------
+CREATE TABLE stock_transfers (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30) NOT NULL UNIQUE,            -- mã phiếu điều chuyển (DC...)
+    source_store_id BIGINT NOT NULL,                        -- chi nhánh nguồn (xuất)
+    dest_store_id   BIGINT NOT NULL,                        -- chi nhánh đích (nhận)
+    status          ENUM('PENDING','SHIPPING','RECEIVED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+    created_by      BIGINT,
+    shipped_by      BIGINT, shipped_at   DATETIME,
+    received_by     BIGINT, received_at  DATETIME,
+    cancelled_by    BIGINT, cancelled_at DATETIME, cancel_reason VARCHAR(255),
+    dest_receipt_id BIGINT,                                 -- phiếu nhập sinh ở đích khi RECEIVED (truy vết)
+    note            VARCHAR(255),
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tr_src  FOREIGN KEY (source_store_id) REFERENCES stores(id),
+    CONSTRAINT fk_tr_dst  FOREIGN KEY (dest_store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_tr_rcpt FOREIGN KEY (dest_receipt_id) REFERENCES goods_receipts(id),
+    CONSTRAINT fk_tr_cby  FOREIGN KEY (created_by)  REFERENCES users(id),
+    CONSTRAINT fk_tr_sby  FOREIGN KEY (shipped_by)  REFERENCES users(id),
+    CONSTRAINT fk_tr_rby  FOREIGN KEY (received_by) REFERENCES users(id),
+    CONSTRAINT chk_tr_diff CHECK (source_store_id <> dest_store_id)   -- không tự chuyển cho chính mình
+) ENGINE=InnoDB;
+CREATE INDEX idx_tr_src    ON stock_transfers(source_store_id);
+CREATE INDEX idx_tr_dst    ON stock_transfers(dest_store_id);
+CREATE INDEX idx_tr_status ON stock_transfers(status);
+
+CREATE TABLE stock_transfer_items (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transfer_id  BIGINT NOT NULL,
+    batch_id     BIGINT NOT NULL,                           -- lô NGUỒN (goods_receipt_items.id)
+    product_id   BIGINT NOT NULL,
+    quantity     INT NOT NULL,
+    expiry_date  DATE,                                      -- HSD chốt từ lô nguồn → tái tạo ở đích
+    cost_price   DECIMAL(12,2) NOT NULL,                    -- giá vốn theo lô (chuyển kho KHÔNG đổi giá vốn)
+    CONSTRAINT fk_tri_tr    FOREIGN KEY (transfer_id) REFERENCES stock_transfers(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tri_batch FOREIGN KEY (batch_id)    REFERENCES goods_receipt_items(id),
+    CONSTRAINT fk_tri_prod  FOREIGN KEY (product_id)  REFERENCES products(id),
+    CONSTRAINT chk_tri_qty  CHECK (quantity > 0)
+) ENGINE=InnoDB;
+CREATE INDEX idx_tri_transfer ON stock_transfer_items(transfer_id);
+CREATE INDEX idx_tri_batch    ON stock_transfer_items(batch_id);
+
+-- ---------------------------------------------------------------------
+-- 14. BẢNG TỔNG HỢP DOANH THU NGÀY (Obj 2 — daily rollup) — 1 dòng / (chi nhánh, ngày).
+--     Job nền (cron 00:30 mỗi đêm) tổng hợp từ invoices COMPLETED → báo cáo nhiều năm × nhiều
+--     chi nhánh đọc rollup (độ phức tạp theo SỐ NGÀY) thay vì quét bảng hóa đơn thô (theo SỐ HĐ).
+--     Là dữ liệu SUY RA, dựng lại bất cứ lúc nào bằng upsert idempotent (không có "nguồn sự thật kép").
+-- ---------------------------------------------------------------------
+CREATE TABLE daily_sales_rollup (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id      BIGINT NOT NULL,
+    sales_date    DATE   NOT NULL,
+    revenue       DECIMAL(16,2) NOT NULL DEFAULT 0,         -- Σ total_amount (HĐ COMPLETED)
+    discount      DECIMAL(16,2) NOT NULL DEFAULT 0,
+    tax           DECIMAL(16,2) NOT NULL DEFAULT 0,
+    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn (FIFO) hàng đã bán
+    gross_profit  DECIMAL(16,2) NOT NULL DEFAULT 0,         -- revenue − cogs
+    invoice_count INT NOT NULL DEFAULT 0,
+    items_sold    INT NOT NULL DEFAULT 0,
+    rolled_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_dsr UNIQUE (store_id, sales_date),        -- 1 dòng / (chi nhánh, ngày) → upsert
+    CONSTRAINT fk_dsr_store FOREIGN KEY (store_id) REFERENCES stores(id)
+) ENGINE=InnoDB;
+CREATE INDEX idx_dsr_date ON daily_sales_rollup(sales_date);
+
+-- ---------------------------------------------------------------------
+-- 16. LƯƠNG & BẢNG CÔNG (Payroll). Công suy ra từ work_shifts (ca ĐÃ ĐÓNG):
+--     giờ công = closed_at − opened_at, cộng dồn theo (nhân viên, chi nhánh, tháng).
+--     Xem docs/PAYROLL_DESIGN.md cho nghiệp vụ & công thức.
+-- ---------------------------------------------------------------------
+-- 16a. Cấu hình lương / nhân viên (1 dòng/nhân viên — cấu hình hiện hành).
+CREATE TABLE employee_pay_profiles (
+    id                     BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id                BIGINT NOT NULL,
+    pay_type               ENUM('HOURLY','MONTHLY') NOT NULL DEFAULT 'MONTHLY',
+    base_rate              DECIMAL(12,2) NOT NULL DEFAULT 0,    -- HOURLY: đ/giờ · MONTHLY: đ/tháng
+    standard_monthly_hours DECIMAL(6,2)  NOT NULL DEFAULT 208,  -- công chuẩn/tháng (26 ngày × 8h)
+    ot_multiplier          DECIMAL(4,2)  NOT NULL DEFAULT 1.50, -- hệ số tăng ca
+    monthly_allowance      DECIMAL(12,2) NOT NULL DEFAULT 0,    -- phụ cấp cố định/tháng
+    updated_by             BIGINT,
+    updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_epp_user UNIQUE (user_id),                    -- 1 cấu hình / nhân viên
+    CONSTRAINT fk_epp_user FOREIGN KEY (user_id)    REFERENCES users(id),
+    CONSTRAINT fk_epp_upd  FOREIGN KEY (updated_by) REFERENCES users(id),
+    CONSTRAINT chk_epp_rate CHECK (base_rate >= 0 AND standard_monthly_hours > 0 AND ot_multiplier >= 1)
+) ENGINE=InnoDB;
+
+-- 16b. Kỳ lương: 1 / (chi nhánh, tháng). Vòng đời duyệt 2 bước DRAFT→PENDING_APPROVAL→APPROVED→PAID.
+CREATE TABLE payroll_periods (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id     BIGINT  NOT NULL,
+    period_month CHAR(7) NOT NULL,                              -- 'YYYY-MM'
+    status       ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID') NOT NULL DEFAULT 'DRAFT',
+    note         VARCHAR(255),
+    created_by   BIGINT,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_by BIGINT,                                        -- người lập trình duyệt
+    submitted_at DATETIME,
+    approved_by  BIGINT,                                        -- người duyệt (tách trách nhiệm)
+    approved_at  DATETIME,
+    paid_at      DATETIME,
+    CONSTRAINT uq_pp UNIQUE (store_id, period_month),           -- 1 kỳ / chi nhánh / tháng
+    CONSTRAINT fk_pp_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_pp_user  FOREIGN KEY (created_by) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- 16c. Phiếu lương: 1 / (kỳ, nhân viên). SNAPSHOT mọi số liệu → khóa kỳ là cố định.
+CREATE TABLE payslips (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    period_id       BIGINT NOT NULL,
+    user_id         BIGINT NOT NULL,
+    pay_type        ENUM('HOURLY','MONTHLY') NOT NULL,
+    base_rate       DECIMAL(12,2) NOT NULL,
+    standard_hours  DECIMAL(8,2)  NOT NULL,
+    worked_hours    DECIMAL(8,2)  NOT NULL DEFAULT 0,           -- Σ giờ công ca đã đóng
+    regular_hours   DECIMAL(8,2)  NOT NULL DEFAULT 0,
+    ot_hours        DECIMAL(8,2)  NOT NULL DEFAULT 0,
+    shift_count     INT NOT NULL DEFAULT 0,
+    regular_pay     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    ot_pay          DECIMAL(14,2) NOT NULL DEFAULT 0,
+    allowance       DECIMAL(14,2) NOT NULL DEFAULT 0,
+    gross_pay       DECIMAL(14,2) NOT NULL DEFAULT 0,           -- regular + ot + allowance
+    total_bonus     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_deduction DECIMAL(14,2) NOT NULL DEFAULT 0,
+    net_pay         DECIMAL(14,2) NOT NULL DEFAULT 0,           -- gross + bonus − deduction (thực lĩnh)
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_ps UNIQUE (period_id, user_id),
+    CONSTRAINT fk_ps_period FOREIGN KEY (period_id) REFERENCES payroll_periods(id),
+    CONSTRAINT fk_ps_user   FOREIGN KEY (user_id)   REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- 16d. Điều chỉnh phiếu lương: thưởng/phạt/tạm ứng (cộng/trừ vào thực lĩnh).
+CREATE TABLE payslip_adjustments (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payslip_id  BIGINT NOT NULL,
+    type        ENUM('BONUS','DEDUCTION') NOT NULL,
+    amount      DECIMAL(14,2) NOT NULL,
+    reason      VARCHAR(255) NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pa_payslip FOREIGN KEY (payslip_id) REFERENCES payslips(id),
+    CONSTRAINT fk_pa_user    FOREIGN KEY (created_by)  REFERENCES users(id),
+    CONSTRAINT chk_pa_amount CHECK (amount > 0)
+) ENGINE=InnoDB;
+CREATE INDEX idx_pa_payslip ON payslip_adjustments(payslip_id);
+
+-- 16e. Chấm công thủ công & nghỉ phép — bổ sung công NGOÀI ca thu ngân (NV không mở ca, sửa công,
+--      nghỉ phép). Payroll cộng giờ WORK + LEAVE_PAID vào giờ công khi tính lương.
+CREATE TABLE attendance_entries (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    store_id   BIGINT NOT NULL,
+    work_date  DATE NOT NULL,
+    type       ENUM('WORK','LEAVE_PAID','LEAVE_UNPAID') NOT NULL DEFAULT 'WORK',
+    hours      DECIMAL(5,2) NOT NULL,
+    reason     VARCHAR(255),
+    created_by BIGINT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_att_user  FOREIGN KEY (user_id)    REFERENCES users(id),
+    CONSTRAINT fk_att_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_att_cb    FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_att_hours CHECK (hours > 0 AND hours <= 24)
+) ENGINE=InnoDB;
+CREATE INDEX idx_att_user_date  ON attendance_entries(user_id, work_date);
+CREATE INDEX idx_att_store_date ON attendance_entries(store_id, work_date);
 
 -- =====================================================================
 --  VIEW (suy ra tồn kho & các tổng - thay cột dư thừa)

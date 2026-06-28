@@ -485,6 +485,117 @@ CREATE TABLE IF NOT EXISTS daily_sales_rollup (
     CONSTRAINT fk_dsr_store FOREIGN KEY (store_id) REFERENCES stores(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 16. LƯƠNG & BẢNG CÔNG (Payroll) — công suy ra từ work_shifts (ca ĐÃ ĐÓNG). Xem docs/PAYROLL_DESIGN.md
+-- 16a. Cấu hình lương / nhân viên (1 dòng/nhân viên — cấu hình hiện hành; đổi mức ghi audit_logs).
+CREATE TABLE IF NOT EXISTS employee_pay_profiles (
+    id                     BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id                BIGINT NOT NULL,
+    pay_type               ENUM('HOURLY','MONTHLY') NOT NULL DEFAULT 'MONTHLY',
+    base_rate              DECIMAL(12,2) NOT NULL DEFAULT 0,    -- HOURLY: đ/giờ · MONTHLY: đ/tháng
+    standard_monthly_hours DECIMAL(6,2)  NOT NULL DEFAULT 208,  -- công chuẩn/tháng (26 ngày × 8h)
+    ot_multiplier          DECIMAL(4,2)  NOT NULL DEFAULT 1.50, -- hệ số tăng ca
+    monthly_allowance      DECIMAL(12,2) NOT NULL DEFAULT 0,    -- phụ cấp cố định/tháng
+    updated_by             BIGINT,
+    updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_epp_user UNIQUE (user_id),                    -- 1 cấu hình / nhân viên
+    CONSTRAINT fk_epp_user FOREIGN KEY (user_id)    REFERENCES users(id),
+    CONSTRAINT fk_epp_upd  FOREIGN KEY (updated_by) REFERENCES users(id),
+    CONSTRAINT chk_epp_rate CHECK (base_rate >= 0 AND standard_monthly_hours > 0 AND ot_multiplier >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16b. Kỳ lương: 1 / (chi nhánh, tháng). Vòng đời duyệt 2 bước DRAFT→PENDING_APPROVAL→APPROVED→PAID.
+CREATE TABLE IF NOT EXISTS payroll_periods (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id     BIGINT  NOT NULL,
+    period_month CHAR(7) NOT NULL,                              -- 'YYYY-MM'
+    status       ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID') NOT NULL DEFAULT 'DRAFT',
+    note         VARCHAR(255),
+    created_by   BIGINT,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_by BIGINT,                                        -- người lập trình duyệt
+    submitted_at DATETIME,
+    approved_by  BIGINT,                                        -- người duyệt (tách trách nhiệm)
+    approved_at  DATETIME,
+    paid_at      DATETIME,
+    CONSTRAINT uq_pp UNIQUE (store_id, period_month),           -- 1 kỳ / chi nhánh / tháng
+    CONSTRAINT fk_pp_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_pp_user  FOREIGN KEY (created_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- MIGRATION (idempotent) cho CSDL CŨ có payroll_periods kiểu DRAFT→LOCKED→PAID:
+--   thêm cột duyệt 2 bước + mở rộng enum trạng thái + chuyển 'LOCKED' → 'APPROVED'.
+SET @pp_add_cols := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE()
+           AND table_name = 'payroll_periods' AND column_name = 'submitted_by'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD COLUMN submitted_by BIGINT NULL, ADD COLUMN submitted_at DATETIME NULL, ADD COLUMN approved_by BIGINT NULL, ADD COLUMN approved_at DATETIME NULL'));
+PREPARE pp1 FROM @pp_add_cols; EXECUTE pp1; DEALLOCATE PREPARE pp1;
+ALTER TABLE payroll_periods MODIFY COLUMN status
+    ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID','LOCKED') NOT NULL DEFAULT 'DRAFT';
+UPDATE payroll_periods SET status = 'APPROVED' WHERE status = 'LOCKED';
+ALTER TABLE payroll_periods MODIFY COLUMN status
+    ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID') NOT NULL DEFAULT 'DRAFT';
+
+-- 16c. Phiếu lương: 1 / (kỳ, nhân viên). SNAPSHOT mọi số liệu → khóa kỳ là cố định.
+CREATE TABLE IF NOT EXISTS payslips (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    period_id       BIGINT NOT NULL,
+    user_id         BIGINT NOT NULL,
+    pay_type        ENUM('HOURLY','MONTHLY') NOT NULL,
+    base_rate       DECIMAL(12,2) NOT NULL,
+    standard_hours  DECIMAL(8,2)  NOT NULL,
+    worked_hours    DECIMAL(8,2)  NOT NULL DEFAULT 0,           -- Σ giờ công ca đã đóng
+    regular_hours   DECIMAL(8,2)  NOT NULL DEFAULT 0,
+    ot_hours        DECIMAL(8,2)  NOT NULL DEFAULT 0,
+    shift_count     INT NOT NULL DEFAULT 0,
+    regular_pay     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    ot_pay          DECIMAL(14,2) NOT NULL DEFAULT 0,
+    allowance       DECIMAL(14,2) NOT NULL DEFAULT 0,
+    gross_pay       DECIMAL(14,2) NOT NULL DEFAULT 0,           -- regular + ot + allowance
+    total_bonus     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_deduction DECIMAL(14,2) NOT NULL DEFAULT 0,
+    net_pay         DECIMAL(14,2) NOT NULL DEFAULT 0,           -- gross + bonus − deduction (thực lĩnh)
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_ps UNIQUE (period_id, user_id),
+    CONSTRAINT fk_ps_period FOREIGN KEY (period_id) REFERENCES payroll_periods(id),
+    CONSTRAINT fk_ps_user   FOREIGN KEY (user_id)   REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16d. Điều chỉnh phiếu lương: thưởng/phạt/tạm ứng (cộng/trừ vào thực lĩnh).
+CREATE TABLE IF NOT EXISTS payslip_adjustments (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payslip_id  BIGINT NOT NULL,
+    type        ENUM('BONUS','DEDUCTION') NOT NULL,
+    amount      DECIMAL(14,2) NOT NULL,
+    reason      VARCHAR(255) NOT NULL,
+    created_by  BIGINT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_pa_payslip (payslip_id),
+    CONSTRAINT fk_pa_payslip FOREIGN KEY (payslip_id) REFERENCES payslips(id),
+    CONSTRAINT fk_pa_user    FOREIGN KEY (created_by)  REFERENCES users(id),
+    CONSTRAINT chk_pa_amount CHECK (amount > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16e. CHẤM CÔNG THỦ CÔNG & NGHỈ PHÉP — bổ sung công NGOÀI ca thu ngân (NV kho/bảo vệ không mở ca,
+--      sửa công, nghỉ phép). Payroll cộng giờ WORK + LEAVE_PAID vào giờ công khi tính lương.
+CREATE TABLE IF NOT EXISTS attendance_entries (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    store_id   BIGINT NOT NULL,
+    work_date  DATE NOT NULL,
+    type       ENUM('WORK','LEAVE_PAID','LEAVE_UNPAID') NOT NULL DEFAULT 'WORK',
+    hours      DECIMAL(5,2) NOT NULL,                  -- WORK/LEAVE_PAID: tính lương; LEAVE_UNPAID: chỉ ghi nhận
+    reason     VARCHAR(255),
+    created_by BIGINT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_att_user_date (user_id, work_date),
+    KEY idx_att_store_date (store_id, work_date),
+    CONSTRAINT fk_att_user  FOREIGN KEY (user_id)    REFERENCES users(id),
+    CONSTRAINT fk_att_store FOREIGN KEY (store_id)   REFERENCES stores(id),
+    CONSTRAINT fk_att_cb    FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_att_hours CHECK (hours > 0 AND hours <= 24)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- =====================================================================
 --  MIGRATION nhẹ cho CSDL CŨ (idempotent): thêm cột points_used nếu thiếu.
 --  (MySQL không có ADD COLUMN IF NOT EXISTS → kiểm tra qua information_schema.)
