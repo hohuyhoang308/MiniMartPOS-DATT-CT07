@@ -15,6 +15,8 @@ import Shelf from './pages/inventory/Shelf'
 import Customers from './pages/crm/Customers'
 import Reports from './pages/reports/Reports'
 import Shifts from './pages/shifts/Shifts'
+import Payroll from './pages/payroll/Payroll'
+import MyPayslips from './pages/payroll/MyPayslips'
 import Users from './pages/admin/Users'
 import Settings from './pages/admin/Settings'
 import Audit from './pages/admin/Audit'
@@ -41,6 +43,8 @@ export default function App() {
           <Route path="shelf" element={<StoreScopeRequired><Shelf /></StoreScopeRequired>} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="customers" element={<Customers />} />
+          {/* Phiếu lương của chính nhân viên — mọi vai trò xem được */}
+          <Route path="my-payslips" element={<MyPayslips />} />
 
           {/* Admin + Manager: vận hành cửa hàng */}
           <Route element={<PrivateRoute roles={['ADMIN', 'MANAGER']} />}>
@@ -48,6 +52,7 @@ export default function App() {
             <Route path="inventory" element={<StoreScopeRequired><WarehouseHub /></StoreScopeRequired>} />
             <Route path="reports" element={<Reports />} />
             <Route path="shifts" element={<Shifts />} />
+            <Route path="payroll" element={<Payroll />} />
             {/* Quản lý nhân viên (STAFF cửa hàng mình) & nhật ký thao tác — backend chốt phạm vi theo cửa hàng */}
             <Route path="users" element={<Users />} />
             <Route path="audit" element={<Audit />} />

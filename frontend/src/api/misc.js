@@ -92,6 +92,32 @@ export const userApi = {
   lock: (id) => client.delete(`/users/${id}`),
 }
 
+/**
+ * Lương & bảng công (module Lương). Phạm vi chi nhánh do backend chốt theo X-Store-Id.
+ * Quản lý: cấu hình lương + tính/chốt kỳ + thưởng/phạt. Mọi vai trò: phiếu lương của tôi.
+ */
+export const payrollApi = {
+  payProfiles: () => client.get('/payroll/pay-profiles').then(unwrap),
+  setPayProfile: (userId, body) => client.put(`/payroll/pay-profiles/${userId}`, body).then(unwrap),
+  periods: () => client.get('/payroll/periods').then(unwrap),
+  compute: (month) => client.post('/payroll/periods/compute', { month }).then(unwrap),
+  period: (id) => client.get(`/payroll/periods/${id}`).then(unwrap),
+  submit: (id) => client.post(`/payroll/periods/${id}/submit`).then(unwrap),
+  approve: (id) => client.post(`/payroll/periods/${id}/approve`).then(unwrap),
+  reject: (id, reason) => client.post(`/payroll/periods/${id}/reject`, { reason }).then(unwrap),
+  pay: (id) => client.post(`/payroll/periods/${id}/pay`).then(unwrap),
+  addAdjustment: (payslipId, body) => client.post(`/payroll/payslips/${payslipId}/adjustments`, body).then(unwrap),
+  removeAdjustment: (id) => client.delete(`/payroll/adjustments/${id}`).then(unwrap),
+  myPayslips: () => client.get('/payroll/my-payslips').then(unwrap),
+  // Chấm công thủ công & nghỉ phép
+  attendance: (month) => client.get('/payroll/attendance', { params: { month } }).then(unwrap),
+  addAttendance: (body) => client.post('/payroll/attendance', body).then(unwrap),
+  removeAttendance: (id) => client.delete(`/payroll/attendance/${id}`),
+  // Xuất file (blob): bảng lương Excel cả kỳ, phiếu lương PDF cá nhân
+  exportPeriod: (id) => client.get(`/payroll/periods/${id}/export`, { responseType: 'blob' }).then((r) => r.data),
+  payslipPdf: (id) => client.get(`/payroll/payslips/${id}/pdf`, { responseType: 'blob' }).then((r) => r.data),
+}
+
 /** Cấu hình theo TỪNG cửa hàng — admin truyền storeId để chọn cửa hàng cần cấu hình. */
 export const storeConfigApi = {
   get: (storeId) => client.get('/store-config', { params: { storeId } }).then(unwrap),

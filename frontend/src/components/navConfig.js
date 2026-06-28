@@ -24,6 +24,13 @@ export const NAV_SECTIONS = [
       { to: '/shelf', icon: 'bi-arrow-up-square-fill', label: 'Lên kệ / lấy về kho', roles: ['MANAGER', 'STAFF'] },
       { to: '/customers', icon: 'bi-people-fill', label: 'Khách hàng', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { to: '/shifts', icon: 'bi-clock-history', label: 'Ca làm việc', roles: ['ADMIN', 'MANAGER'] },
+      { to: '/my-payslips', icon: 'bi-wallet2', label: 'Phiếu lương của tôi', roles: ['STAFF'] },
+    ],
+  },
+  {
+    title: 'Nhân sự & lương',
+    items: [
+      { to: '/payroll', icon: 'bi-cash-coin', label: 'Lương & công', roles: ['ADMIN', 'MANAGER'] },
     ],
   },
   {

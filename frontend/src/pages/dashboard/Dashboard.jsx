@@ -99,6 +99,9 @@ export default function Dashboard() {
   const hourData = (d.hourlySales || []).map((h) => ({ label: `${String(h.hour).padStart(2, '0')}h`, revenue: Number(h.revenue || 0) }))
   const catData = (d.categorySales || []).map((c) => ({ name: c.categoryName, value: Number(c.revenue || 0) }))
   const maxQty = Math.max(1, ...(d.topProducts || []).map((p) => p.quantitySold))
+  // Màu cảnh báo theo tỷ lệ quỹ lương/doanh thu: <25% tốt, 25–40% trung bình, >40% cao.
+  const laborRatio = Number(d.laborCostRatio || 0)
+  const laborColor = laborRatio > 40 ? '#f43f5e' : laborRatio >= 25 ? '#f59e0b' : '#10b981'
 
   return (
     <div>
@@ -127,6 +130,26 @@ export default function Dashboard() {
         <Col xl={3} md={6}>
           <KpiCard icon="bi-basket3" chip="amber" label="Trung bình / hóa đơn" value={formatMoney(d.avgOrderValue)}
             sub={<span className="pill pill-muted">{d.customersToday} lượt khách</span>} />
+        </Col>
+      </Row>
+
+      {/* Chi phí nhân sự (quỹ lương) trên doanh thu tháng */}
+      <Row className="g-3 mb-3">
+        <Col md={12}>
+          <div className="soft-card p-3 d-flex flex-wrap align-items-center gap-3" style={{ borderLeft: `4px solid ${laborColor}` }}>
+            <div className="stat-chip chip-rose"><i className="bi bi-people-fill"></i></div>
+            <div>
+              <div className="stat-label">Chi phí nhân sự tháng này (quỹ lương đã tính)</div>
+              <div className="stat-value">{formatMoney(d.laborCostMonth)}</div>
+            </div>
+            <div className="text-muted2 small ms-3" style={{ maxWidth: 320 }}>
+              Tỷ lệ quỹ lương trên doanh thu tháng — chỉ số kiểm soát chi phí nhân sự của chuỗi bán lẻ.
+            </div>
+            <div className="ms-auto text-end">
+              <div className="small text-muted2">Quỹ lương / doanh thu tháng</div>
+              <div className="fs-3 fw-bold" style={{ color: laborColor, lineHeight: 1.1 }}>{Number(d.laborCostRatio || 0)}%</div>
+            </div>
+          </div>
         </Col>
       </Row>
 
