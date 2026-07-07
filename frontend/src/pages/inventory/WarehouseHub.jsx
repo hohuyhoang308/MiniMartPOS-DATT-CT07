@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Tab, Tabs } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
@@ -19,6 +19,11 @@ export default function WarehouseHub() {
   const location = useLocation()
   // dùng key RIÊNG `hubTab` cho tab ngoài để không đụng `state.tab` (tab NỘI BỘ của trang Tồn kho từ ABC/XYZ).
   const [tab, setTab] = useState(location.state?.hubTab || 'stock')
+  // Điều hướng tới /inventory với hubTab MỚI khi hub ĐÃ mount (vd "Gợi ý nhập hàng" → "Lập phiếu nhập"):
+  // useState init chỉ chạy 1 lần nên phải đồng bộ tab qua effect, nếu không tab Nhập kho không mở và prefill không chạy.
+  useEffect(() => {
+    if (location.state?.hubTab) setTab(location.state.hubTab)
+  }, [location.state])
   return (
     <div>
       <PageHeader title="Kho hàng" subtitle="Tồn kho, nhập kho, điều chuyển, giá theo chi nhánh và cấu hình kệ — theo từng chi nhánh" />
