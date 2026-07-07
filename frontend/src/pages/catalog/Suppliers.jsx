@@ -45,7 +45,11 @@ export default function Suppliers({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
+        </div>
+      ) : (
         <PageHeader title="Nhà cung cấp" subtitle="Nơi cửa hàng lấy hàng về bán">
           <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
         </PageHeader>

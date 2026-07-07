@@ -84,7 +84,11 @@ export default function GoodsReceipts({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
+        </div>
+      ) : (
         <PageHeader title="Nhập kho" subtitle="Lập phiếu mỗi khi nhận hàng về. Hệ thống tự cộng hàng vào kho và ghi nhớ hạn sử dụng.">
           <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
         </PageHeader>

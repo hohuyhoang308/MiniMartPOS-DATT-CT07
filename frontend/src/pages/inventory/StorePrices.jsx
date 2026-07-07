@@ -41,7 +41,11 @@ export default function StorePrices({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={() => setEditing({})}><i className="bi bi-plus-lg me-1"></i>Thêm giá riêng</Button>
+        </div>
+      ) : (
         <PageHeader title="Giá theo chi nhánh" subtitle="Đặt giá bán riêng cho cửa hàng này, khác với giá gốc của toàn chuỗi.">
           <Button onClick={() => setEditing({})}><i className="bi bi-plus-lg me-1"></i>Thêm giá riêng</Button>
         </PageHeader>

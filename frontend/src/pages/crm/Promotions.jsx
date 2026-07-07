@@ -69,7 +69,11 @@ export default function Promotions({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
+        </div>
+      ) : (
         <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá dùng khi tính tiền cho khách">
           <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
         </PageHeader>

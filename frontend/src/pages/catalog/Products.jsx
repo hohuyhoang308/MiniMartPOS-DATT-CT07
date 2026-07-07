@@ -87,7 +87,11 @@ export default function Products({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
+        </div>
+      ) : (
         <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán và mức báo sắp hết">
           <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
         </PageHeader>

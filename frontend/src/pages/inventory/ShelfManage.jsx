@@ -50,7 +50,11 @@ export default function ShelfManage({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
+        </div>
+      ) : (
         <PageHeader title="Cấu hình kệ" subtitle="Khai báo các kệ trưng bày trong cửa hàng. Đây là việc của quản lý.">
           <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
         </PageHeader>

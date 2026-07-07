@@ -64,7 +64,11 @@ export default function Transfers({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
+      {embedded ? (
+        <div className="d-flex justify-content-end mb-3">
+          <Button onClick={() => setCreating(true)}><i className="bi bi-plus-lg me-1"></i>Tạo phiếu điều chuyển</Button>
+        </div>
+      ) : (
         <PageHeader title="Điều chuyển kho" subtitle="Chuyển hàng giữa các chi nhánh: chi nhánh nguồn xuất hàng, chi nhánh đích nhận hàng vào kho.">
           <Button onClick={() => setCreating(true)}><i className="bi bi-plus-lg me-1"></i>Tạo phiếu điều chuyển</Button>
         </PageHeader>
