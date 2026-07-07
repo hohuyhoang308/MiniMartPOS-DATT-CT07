@@ -44,6 +44,7 @@ public class ProductService {
     private final BatchStockViewRepository batchStockRepository;
     private final ShelfRepository shelfRepository;
     private final AuditService auditService;
+    private final ProductPricingService pricingService;
 
     public ProductService(ProductRepository productRepository,
                           CategoryRepository categoryRepository,
@@ -52,7 +53,8 @@ public class ProductService {
                           InvoiceItemRepository invoiceItemRepository,
                           BatchStockViewRepository batchStockRepository,
                           ShelfRepository shelfRepository,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          ProductPricingService pricingService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
@@ -61,6 +63,16 @@ public class ProductService {
         this.batchStockRepository = batchStockRepository;
         this.shelfRepository = shelfRepository;
         this.auditService = auditService;
+        this.pricingService = pricingService;
+    }
+
+    /** Overlay giá override của chi nhánh ĐANG XEM lên 1 DTO (dùng cho tra cứu đơn lẻ: mã vạch, chi tiết). */
+    private ProductResponse withStorePrice(ProductResponse dto, Product p) {
+        Long storeId = com.pos.security.StoreContext.currentStoreId();
+        if (storeId == null) return dto;
+        java.math.BigDecimal eff = pricingService.effectiveSalePrice(p, storeId);
+        // Chỉ đính khi KHÁC giá gốc (có override) — giữ payload gọn, POS tự fallback về salePrice.
+        return eff.compareTo(p.getSalePrice()) != 0 ? dto.withStoreSalePrice(eff) : dto;
     }
 
     /** Bản đồ sản phẩm → mã kệ đang bày của MỘT chi nhánh (kệ có tồn &gt; 0) — danh sách/POS biết hàng ở kệ nào. */
@@ -119,7 +131,7 @@ public class ProductService {
             }
         }
         return picked.values().stream()
-                .map(p -> ProductResponse.from(p, stock.get(p.getId())))
+                .map(p -> withStorePrice(ProductResponse.from(p, stock.get(p.getId())), p))
                 .toList();
     }
 
@@ -142,8 +154,14 @@ public class ProductService {
             Map<Long, ProductStockView> stockMap = stockRepository.findByStoreId(storeId).stream()
                     .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
             Map<Long, String> shelfByProduct = productShelfCode(storeId);
+            // Giá override theo chi nhánh — POS phải thấy đúng giá server sẽ tính tiền (không thì hiển thị ≠ thu tiền).
+            Map<Long, java.math.BigDecimal> overrides = pricingService.activeOverridesForStore(storeId);
             return products.stream()
-                    .map(p -> ProductResponse.from(p, stockMap.get(p.getId()), shelfByProduct.get(p.getId())))
+                    .map(p -> {
+                        ProductResponse dto = ProductResponse.from(p, stockMap.get(p.getId()), shelfByProduct.get(p.getId()));
+                        java.math.BigDecimal ov = overrides.get(p.getId());
+                        return ov != null ? dto.withStoreSalePrice(ov) : dto;
+                    })
                     .toList();
         }
 
@@ -176,7 +194,7 @@ public class ProductService {
     public ProductResponse findByBarcode(String barcode) {
         Product p = productRepository.findByBarcode(barcode)
                 .orElseThrow(() -> new NotFoundException("Sản phẩm không tồn tại (mã vạch: " + barcode + ")"));
-        return ProductResponse.from(p, stockView(p.getId()));
+        return withStorePrice(ProductResponse.from(p, stockView(p.getId())), p);
     }
 
     @Transactional

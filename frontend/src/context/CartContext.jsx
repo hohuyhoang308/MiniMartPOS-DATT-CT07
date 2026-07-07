@@ -52,7 +52,8 @@ export function CartProvider({ children }) {
           productId: p.id,
           barcode: p.barcode,
           name: p.name,
-          salePrice: p.salePrice,
+          // Giá HIỆU LỰC tại chi nhánh (override) nếu có — khớp với giá server tính tiền; không thì giá gốc.
+          salePrice: p.storeSalePrice ?? p.salePrice,
           quantity: 1,
           currentStock: p.currentStock,
         },

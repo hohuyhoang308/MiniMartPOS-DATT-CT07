@@ -284,7 +284,7 @@ function PosBoard({ shift, onShiftClosed }) {
                     </div>
                     <div className="pt-name">{p.name}</div>
                     <div className="pt-foot">
-                      <span className="pt-price">{formatMoney(p.salePrice)}</span>
+                      <span className="pt-price">{formatMoney(p.storeSalePrice ?? p.salePrice)}</span>
                       <span className="pt-add" aria-hidden="true"><i className="bi bi-plus-lg"></i></span>
                     </div>
                   </div>
@@ -334,7 +334,7 @@ function PosBoard({ shift, onShiftClosed }) {
                         style={{ fontSize: '.78rem' }} onClick={() => add(r)} title={`Thêm ${r.name}`}>
                         <i className="bi bi-plus-circle"></i>
                         <span className="text-truncate" style={{ maxWidth: 120 }}>{r.name}</span>
-                        <span className="text-muted2">{formatMoney(r.salePrice)}</span>
+                        <span className="text-muted2">{formatMoney(r.storeSalePrice ?? r.salePrice)}</span>
                       </button>
                     ))}
                   </div>

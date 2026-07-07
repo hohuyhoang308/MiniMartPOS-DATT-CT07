@@ -62,6 +62,18 @@ public class ProductPricingService {
                 .orElse(product.getSalePrice());
     }
 
+    /**
+     * Map productId → giá override ACTIVE tại 1 chi nhánh, để OVERLAY hàng loạt lên danh sách sản phẩm ở POS
+     * (tránh N truy vấn). storeId null (ADMIN toàn chuỗi) → rỗng (mọi sản phẩm dùng giá chuẩn).
+     */
+    public java.util.Map<Long, BigDecimal> activeOverridesForStore(Long storeId) {
+        if (storeId == null) return java.util.Map.of();
+        return priceRepository.findByStoreId(storeId).stream()
+                .filter(psp -> psp.getStatus() == CommonStatus.ACTIVE)
+                .collect(java.util.stream.Collectors.toMap(
+                        psp -> psp.getProduct().getId(), ProductStorePrice::getSalePrice, (a, b) -> a));
+    }
+
     /** Danh sách override của chi nhánh đang xem (StoreContext); ADMIN phải chọn chi nhánh.
      *  Map sang DTO NGAY trong transaction để tránh LazyInitializationException khi controller đọc quan hệ lazy. */
     public List<StorePriceResponse> listForCurrentStore() {

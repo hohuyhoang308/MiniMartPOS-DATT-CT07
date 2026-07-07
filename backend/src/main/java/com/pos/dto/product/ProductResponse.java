@@ -26,7 +26,9 @@ public record ProductResponse(
         Long currentStock,    // tổng tồn (kho + kệ)
         Long shelfStock,      // tồn trên KỆ (bán được tại POS)
         Long warehouseStock,  // tồn trong KHO (chưa lên kệ)
-        String shelfCode      // mã kệ đang bày (vd K06) — null nếu chưa lên kệ
+        String shelfCode,     // mã kệ đang bày (vd K06) — null nếu chưa lên kệ
+        BigDecimal storeSalePrice // giá bán HIỆU LỰC tại chi nhánh đang xem (override); null = dùng salePrice gốc.
+                                  // POS phải tính/hiển thị theo (storeSalePrice ?? salePrice) để KHỚP với giá server tính tiền.
 ) {
     public static ProductResponse from(Product p, Long currentStock, Long shelfStock, Long warehouseStock,
                                         String shelfCode) {
@@ -40,7 +42,16 @@ public record ProductResponse(
                 p.getPackUnit() != null ? p.getPackUnit().getName() : null,
                 p.getImageUrl(),
                 p.getMinStock(), p.getStatus(),
-                nz(currentStock), nz(shelfStock), nz(warehouseStock), shelfCode);
+                nz(currentStock), nz(shelfStock), nz(warehouseStock), shelfCode, null);
+    }
+
+    /** Bản sao đính GIÁ HIỆU LỰC theo chi nhánh (override). {@code salePrice} gốc GIỮ NGUYÊN để trang
+     *  danh mục (HQ) sửa đúng giá chuẩn; chỉ POS đọc {@code storeSalePrice}. */
+    public ProductResponse withStoreSalePrice(BigDecimal effective) {
+        return new ProductResponse(
+                id, barcode, name, categoryId, categoryName, unitId, unitName,
+                costPrice, salePrice, taxRate, packSize, packUnitId, packUnitName, imageUrl,
+                minStock, status, currentStock, shelfStock, warehouseStock, shelfCode, effective);
     }
 
     public static ProductResponse from(Product p, Long currentStock, Long shelfStock, Long warehouseStock) {
