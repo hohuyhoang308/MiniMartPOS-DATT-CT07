@@ -6,14 +6,18 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.enums.DiscountType;
 import com.pos.exception.BadRequestException;
 import com.pos.repository.PromotionRepository;
+import com.pos.service.promotion.AmountDiscountStrategy;
+import com.pos.service.promotion.DiscountStrategyFactory;
+import com.pos.service.promotion.PercentDiscountStrategy;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +29,16 @@ import static org.mockito.Mockito.when;
 class PromotionServiceTest {
 
     @Mock PromotionRepository repository;
-    @InjectMocks PromotionService service;
+    @Mock AuditService auditService;
+    PromotionService service;
+
+    // Dựng service với FACTORY THẬT (strategy PERCENT/AMOUNT là logic thuần, không cần CSDL) để kiểm
+    // đúng cách tính số tiền giảm — thay vì mock factory. auditService chỉ dùng ở luồng ghi (không đụng ở đây).
+    @BeforeEach
+    void setUp() {
+        service = new PromotionService(repository, auditService,
+                new DiscountStrategyFactory(List.of(new PercentDiscountStrategy(), new AmountDiscountStrategy())));
+    }
 
     private Promotion base(DiscountType type, BigDecimal value, BigDecimal minOrder) {
         Promotion p = new Promotion();
