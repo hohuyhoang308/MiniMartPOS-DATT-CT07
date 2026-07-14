@@ -11,27 +11,21 @@ import { shelfApi } from '../../api/misc'
 import { categoryApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
+import { useList } from '../../hooks/useList'
 
 const EMPTY = { code: '', name: '', capacity: 200, status: 'ACTIVE' }
 
 export default function ShelfManage({ embedded = false }) {
   const toast = useToast()
-  const [shelves, setShelves] = useState([])
+  const { data: shelves, loading, reload: load } = useList(shelfApi.list)
   const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [del, setDel] = useState(null)
   const [detail, setDetail] = useState(null)
 
-  function load() {
-    setLoading(true)
-    shelfApi.list().then(setShelves).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-  }
-  useEffect(() => {
-    load()
-    categoryApi.list().then(setCategories).catch(() => {}) // để gợi ý "khu vực" theo nhóm hàng
-  }, [])
+  // Danh mục để gợi ý "khu vực" theo nhóm hàng (tải nền, không chặn hiển thị kệ).
+  useEffect(() => { categoryApi.list().then(setCategories).catch(() => {}) }, [])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)

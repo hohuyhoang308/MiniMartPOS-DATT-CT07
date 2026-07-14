@@ -11,6 +11,7 @@ import { productApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 /**
  * Giá bán RIÊNG theo chi nhánh — đặt giá khác giá gốc cho cửa hàng đang xem.
@@ -18,17 +19,10 @@ import { formatMoney } from '../../utils/format'
  */
 export default function StorePrices({ embedded = false }) {
   const toast = useToast()
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: rows, loading, reload: load } = useList(storePriceApi.list)
   const [editing, setEditing] = useState(null) // override đang sửa (null = không), {} = thêm mới
   const [clearTarget, setClearTarget] = useState(null)
   const [clearing, setClearing] = useState(false)
-
-  async function load() {
-    setLoading(true)
-    try { setRows(await storePriceApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   async function doClear() {
     setClearing(true)

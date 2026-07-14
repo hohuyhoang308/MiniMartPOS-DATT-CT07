@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import StatusPill from '../../components/ui/StatusPill'
@@ -8,23 +8,17 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import { supplierApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
+import { useList } from '../../hooks/useList'
 
 const EMPTY = { name: '', phone: '', email: '', address: '', status: 'ACTIVE' }
 
 export default function Suppliers({ embedded = false }) {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(supplierApi.list)
   const [q, setQ] = useState('')
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [del, setDel] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await supplierApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   const filtered = list.filter((s) =>
     s.name.toLowerCase().includes(q.toLowerCase()) || (s.phone || '').includes(q))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Badge, Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
@@ -11,6 +11,8 @@ import { useStoreScope } from '../../context/StoreScopeContext'
 import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
 import { formatMoney, formatDateTime } from '../../utils/format'
+import { downloadBlob, openBlob } from '../../utils/download'
+import { useList } from '../../hooks/useList'
 
 /** Tháng hiện tại dạng 'YYYY-MM' (theo giờ máy). */
 function thisMonth() {
@@ -23,20 +25,13 @@ export default function PayrollPeriods() {
   const toast = useToast()
   const { isChainScope } = useStoreScope() // ADMIN: true = đang xem toàn chuỗi (chưa chọn chi nhánh)
   const { isAdmin } = useAuth()
-  const [periods, setPeriods] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: periods, loading, reload: load } = useList(payrollApi.periods)
   const [month, setMonth] = useState(thisMonth())
   const [busy, setBusy] = useState(false)
   const [detail, setDetail] = useState(null)       // kỳ đang xem chi tiết (kèm payslips)
   const [adjFor, setAdjFor] = useState(null)        // phiếu lương đang thêm thưởng/phạt
   const [adjForm, setAdjForm] = useState({ type: 'BONUS', amount: '', reason: '' })
   const [confirm, setConfirm] = useState(null)      // { kind:'lock'|'pay', period }
-
-  async function load() {
-    setLoading(true)
-    try { setPeriods(await payrollApi.periods()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   // ADMIN toàn chuỗi phải chọn một chi nhánh cụ thể mới tính được lương (ghi cần X-Store-Id);
   // MANAGER luôn gắn cửa hàng nên không cần chọn.
@@ -53,20 +48,10 @@ export default function PayrollPeriods() {
   async function openDetail(id) {
     try { setDetail(await payrollApi.period(id)) } catch (e) { toast.error(errMsg(e)) }
   }
-  async function doSubmit(period) {
-    try { const d = await payrollApi.submit(period.id); toast.success('Đã trình duyệt bảng lương'); setDetail(d); load() }
-    catch (e) { toast.error(errMsg(e)) } finally { setConfirm(null) }
-  }
-  async function doApprove(period) {
-    try { const d = await payrollApi.approve(period.id); toast.success('Đã duyệt bảng lương'); setDetail(d); load() }
-    catch (e) { toast.error(errMsg(e)) } finally { setConfirm(null) }
-  }
-  async function doReject(period) {
-    try { const d = await payrollApi.reject(period.id, 'Trả lại để chỉnh sửa'); toast.success('Đã trả lại bản nháp'); setDetail(d); load() }
-    catch (e) { toast.error(errMsg(e)) } finally { setConfirm(null) }
-  }
-  async function doPay(period) {
-    try { const d = await payrollApi.pay(period.id); toast.success('Đã ghi nhận chi lương'); setDetail(d); load() }
+  // Hành động chuyển trạng thái bảng lương (trình/duyệt/trả lại/chi): gọi API trên kỳ đang xác nhận,
+  // báo thành công rồi làm tươi chi tiết + danh sách. Đóng hộp xác nhận dù thành công hay lỗi.
+  async function runAction(fn, successMsg) {
+    try { const d = await fn(confirm.period.id); toast.success(successMsg); setDetail(d); load() }
     catch (e) { toast.error(errMsg(e)) } finally { setConfirm(null) }
   }
   async function addAdjustment(e) {
@@ -93,19 +78,12 @@ export default function PayrollPeriods() {
 
   async function exportExcel() {
     try {
-      const blob = await payrollApi.exportPeriod(detail.id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `bang-luong-${detail.periodMonth}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(await payrollApi.exportPeriod(detail.id), `bang-luong-${detail.periodMonth}.xlsx`)
     } catch (e) { toast.error(errMsg(e)) }
   }
   async function printPayslip(id) {
     try {
-      const blob = await payrollApi.payslipPdf(id)
-      window.open(URL.createObjectURL(blob), '_blank')
+      openBlob(await payrollApi.payslipPdf(id))
     } catch (e) { toast.error(errMsg(e)) }
   }
 
@@ -284,16 +262,16 @@ export default function PayrollPeriods() {
         </Modal.Body>
       </Modal>
 
-      <ConfirmModal show={confirm?.kind === 'submit'} onHide={() => setConfirm(null)} onConfirm={() => doSubmit(confirm.period)}
+      <ConfirmModal show={confirm?.kind === 'submit'} onHide={() => setConfirm(null)} onConfirm={() => runAction(payrollApi.submit, 'Đã trình duyệt bảng lương')}
         title="Trình duyệt bảng lương" message={`Gửi bảng lương kỳ ${confirm?.period?.periodMonth} cho quản trị viên duyệt? Sau khi trình, số liệu đóng băng và không sửa được cho tới khi được duyệt hoặc trả lại.`}
         confirmText="Trình duyệt" icon="bi-send" variant="warning" />
-      <ConfirmModal show={confirm?.kind === 'approve'} onHide={() => setConfirm(null)} onConfirm={() => doApprove(confirm.period)}
+      <ConfirmModal show={confirm?.kind === 'approve'} onHide={() => setConfirm(null)} onConfirm={() => runAction(payrollApi.approve, 'Đã duyệt bảng lương')}
         title="Duyệt bảng lương" message={`Duyệt (chốt) bảng lương kỳ ${confirm?.period?.periodMonth}? Hệ thống sẽ gửi thông báo tới chi nhánh.`}
         confirmText="Duyệt" icon="bi-patch-check" variant="success" />
-      <ConfirmModal show={confirm?.kind === 'reject'} onHide={() => setConfirm(null)} onConfirm={() => doReject(confirm.period)}
+      <ConfirmModal show={confirm?.kind === 'reject'} onHide={() => setConfirm(null)} onConfirm={() => runAction((id) => payrollApi.reject(id, 'Trả lại để chỉnh sửa'), 'Đã trả lại bản nháp')}
         title="Trả lại bản nháp" message={`Trả bảng lương kỳ ${confirm?.period?.periodMonth} về bản nháp để chỉnh sửa lại?`}
         confirmText="Trả lại" icon="bi-arrow-counterclockwise" />
-      <ConfirmModal show={confirm?.kind === 'pay'} onHide={() => setConfirm(null)} onConfirm={() => doPay(confirm.period)}
+      <ConfirmModal show={confirm?.kind === 'pay'} onHide={() => setConfirm(null)} onConfirm={() => runAction(payrollApi.pay, 'Đã ghi nhận chi lương')}
         title="Xác nhận chi lương" message={`Ghi nhận đã CHI LƯƠNG cho kỳ ${confirm?.period?.periodMonth}? Hệ thống sẽ gửi thông báo tới chi nhánh.`}
         confirmText="Đã chi lương" icon="bi-cash-stack" variant="success" />
     </div>

@@ -235,7 +235,7 @@ public class SaleService {
                     + "\" vừa hết lượt sử dụng — hãy bỏ mã rồi thử lại");
         }
 
-        // 10) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M
+        // 9) Thanh toán QR → tạo giao dịch chờ đối soát WEB2M
         PaymentTransaction pt = null;
         String qrUrl = null;
         if (req.paymentMethod() == PaymentMethod.QR) {

@@ -15,6 +15,7 @@ import client from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { downloadBlob } from '../../utils/download'
 
 const GROUPS = [
   { key: 'DAY', label: 'Ngày' },
@@ -138,10 +139,7 @@ export default function RevenueReport({ embedded = false }) {
     setExporting(true)
     try {
       const res = await client.get(reportApi.exportUrl(from, to, groupBy).replace('/api', ''), { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url; a.download = `bao-cao-${groupBy.toLowerCase()}-${from}_${to}.xlsx`; a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(res.data, `bao-cao-${groupBy.toLowerCase()}-${from}_${to}.xlsx`)
       toast.success('Đã xuất file Excel')
     } catch (e) { toast.error(errMsg(e)) } finally { setExporting(false) }
   }

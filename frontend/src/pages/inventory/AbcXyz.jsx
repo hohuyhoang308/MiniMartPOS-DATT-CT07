@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Col, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
@@ -6,9 +5,8 @@ import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import { inventoryApi } from '../../api/misc'
-import { useToast } from '../../context/ToastContext'
-import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 const ABC_COLOR = { A: 'success', B: 'warning', C: 'secondary' }
 const XYZ_COLOR = { X: 'primary', Y: 'info', Z: 'danger' }
@@ -25,14 +23,8 @@ const XYZ_MEAN = {
 }
 
 export default function AbcXyz({ embedded = false }) {
-  const toast = useToast()
   const navigate = useNavigate()
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    inventoryApi.abcXyz().then(setRows).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-  }, [])
+  const { data: rows, loading } = useList(inventoryApi.abcXyz)
 
   if (loading) return <Loading />
 

@@ -10,6 +10,7 @@ import { receiptApi, supplierApi, productApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney, formatDateTime } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDate: '', byPack: false })
 
@@ -18,8 +19,7 @@ export default function GoodsReceipts({ embedded = false }) {
   const location = useLocation()
   const navigate = useNavigate()
   const prefilledRef = useRef(false)
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(receiptApi.list)
   const [suppliers, setSuppliers] = useState([])
   const [products, setProducts] = useState([])
   const [creating, setCreating] = useState(false)
@@ -27,12 +27,8 @@ export default function GoodsReceipts({ embedded = false }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(null)
 
-  async function load() {
-    setLoading(true)
-    try { setList(await receiptApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
+  // Nhà cung cấp + sản phẩm phục vụ form tạo phiếu (tải nền).
   useEffect(() => {
-    load()
     supplierApi.list().then(setSuppliers).catch(() => {})
     productApi.list().then(setProducts).catch(() => {})
   }, [])

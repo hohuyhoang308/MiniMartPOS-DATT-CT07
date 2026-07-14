@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -7,22 +7,16 @@ import Loading from '../../components/ui/Loading'
 import { storeApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
+import { useList } from '../../hooks/useList'
 
 const EMPTY = { code: '', name: '', address: '', phone: '', status: 'ACTIVE' }
 
 /** Quản lý CHI NHÁNH trong chuỗi (đa chuỗi) — chỉ quản trị toàn chuỗi. */
 export default function Stores() {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(storeApi.list)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  function load() {
-    setLoading(true)
-    storeApi.list().then(setList).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)

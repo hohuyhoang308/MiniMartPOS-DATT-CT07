@@ -10,26 +10,21 @@ import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
 import { formatDateTime } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 export default function Users() {
   const toast = useToast()
   const { isAdmin, isManager } = useAuth()
-  const [list, setList] = useState([])
+  const { data: list, loading, reload: load } = useList(userApi.list)
   const [stores, setStores] = useState([])
-  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(null)         // create/edit
   const [pwd, setPwd] = useState(null)            // reset password target
   const [newPwd, setNewPwd] = useState('')
   const [lockTarget, setLockTarget] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  async function load() {
-    setLoading(true)
-    try { setList(await userApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
+  // ADMIN toàn chuỗi cần danh sách cửa hàng để gán khi tạo MANAGER/STAFF (gọi /stores).
   useEffect(() => {
-    load()
-    // ADMIN toàn chuỗi chọn cửa hàng khi tạo MANAGER/STAFF (gọi /stores).
     if (isAdmin) storeApi.list().then(setStores).catch(() => {})
   }, [isAdmin])
 

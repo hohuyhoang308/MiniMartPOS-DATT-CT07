@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Card, Col, Row, Table } from 'react-bootstrap'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,10 +11,9 @@ import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import { dashboardApi } from '../../api/misc'
-import { useToast } from '../../context/ToastContext'
 import { useStoreScope } from '../../context/StoreScopeContext'
-import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 const BAR_COLORS = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#f43f5e', '#14b8a6', '#6366f1']
 
@@ -24,17 +23,9 @@ const BAR_COLORS = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#f43f5e', '#14b
  * Bấm 1 cửa hàng → chọn phạm vi cửa hàng đó và mở Tổng quan để đi sâu.
  */
 export default function ChainOverview() {
-  const toast = useToast()
   const navigate = useNavigate()
   const { setScopeStoreId } = useStoreScope()
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    dashboardApi.storeComparison()
-      .then(setRows).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const { data: rows, loading } = useList(dashboardApi.storeComparison)
 
   const totals = useMemo(() => rows.reduce((a, r) => ({
     revenueToday: a.revenueToday + Number(r.revenueToday || 0),

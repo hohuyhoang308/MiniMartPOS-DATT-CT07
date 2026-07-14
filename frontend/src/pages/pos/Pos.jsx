@@ -113,6 +113,10 @@ function PosBoard({ shift, onShiftClosed }) {
   async function loadProducts() {
     try { setProducts(await productApi.list()) } catch (e) { toast.error(errMsg(e)) }
   }
+  // Đồng bộ lại thông tin ca hiện tại (doanh thu/số HĐ) sau khi bán, thu/chi quỹ, hoặc thu tiền QR.
+  function refreshShift() {
+    shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {})
+  }
   useEffect(() => {
     loadProducts()
     categoryApi.list().then(setCategories).catch(() => {})
@@ -190,7 +194,7 @@ function PosBoard({ shift, onShiftClosed }) {
       setResult(inv)
       cart.reset(); setPhone(''); setPromoCode(''); setCustomerPaid('')
       loadProducts()
-      shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {})
+      refreshShift()
       toast.success(`Đã tạo hóa đơn ${inv.code}`)
     } catch (e) { toast.error(errMsg(e, 'Thanh toán không thành công, vui lòng thử lại')) } // giữ idemRef để thử lại an toàn
     finally { setProcessing(false) }
@@ -267,30 +271,7 @@ function PosBoard({ shift, onShiftClosed }) {
           {products.length === 0 ? <Loading /> : filtered.length === 0 ? (
             <div className="soft-card"><EmptyState icon="bi-search" title="Không tìm thấy sản phẩm" /></div>
           ) : (
-            <div className="pos-products">
-              {filtered.map((p) => {
-                const shelf = p.shelfStock ?? 0
-                const out = shelf <= 0
-                const low = !out && shelf <= (p.minStock ?? 0)
-                return (
-                  <div key={p.id} className={`product-tile ${out ? 'disabled' : ''}`} onClick={() => add(p)}
-                    title={`Vị trí kệ ${p.shelfCode ?? '—'} · Còn ${shelf} trên kệ (bán được ngay) · Còn ${p.warehouseStock ?? 0} trong kho`}>
-                    <div className="pt-thumb">
-                      {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box-seam"></i>}
-                      {p.shelfCode && !out && <span className="pt-shelf"><i className="bi bi-geo-alt-fill"></i>{p.shelfCode}</span>}
-                      <span className={`pt-stock ${out ? 'out' : low ? 'low' : ''}`}>
-                        {out ? 'Hết kệ' : <><span className="dot"></span>{shelf}</>}
-                      </span>
-                    </div>
-                    <div className="pt-name">{p.name}</div>
-                    <div className="pt-foot">
-                      <span className="pt-price">{formatMoney(p.storeSalePrice ?? p.salePrice)}</span>
-                      <span className="pt-add" aria-hidden="true"><i className="bi bi-plus-lg"></i></span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <ProductGrid products={filtered} onAdd={add} />
           )}
         </div>
 
@@ -303,27 +284,7 @@ function PosBoard({ shift, onShiftClosed }) {
                 {cart.count > 0 && <span className="pill pill-success">{cart.count} món</span>}
               </div>
 
-              <div className="ticket-items mb-2">
-                {cart.items.length === 0 ? (
-                  <div className="text-center text-muted2 py-4"><i className="bi bi-cart3 fs-3 d-block mb-1 opacity-50"></i>Giỏ hàng trống</div>
-                ) : cart.items.map((i) => (
-                  <div className="ticket-line" key={i.productId}>
-                    <div className="flex-grow-1 min-w-0">
-                      <div className="fw-semibold text-truncate" style={{ fontSize: '.88rem' }}>{i.name}</div>
-                      <small className="text-muted2">{formatMoney(i.salePrice)}</small>
-                    </div>
-                    <div className="qty-stepper">
-                      <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity - 1)}>−</button>
-                      <input className="q" type="number" min={1} value={i.quantity}
-                        style={{ width: 44, textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 600 }}
-                        onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) cart.setQuantity(i.productId, Math.max(1, v)) }} />
-                      <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity + 1)}>+</button>
-                    </div>
-                    <div className="num fw-semibold text-end" style={{ width: 78, fontSize: '.85rem' }}>{formatMoney(i.salePrice * i.quantity)}</div>
-                    <button type="button" className="btn btn-sm btn-link text-danger p-0" onClick={() => cart.removeItem(i.productId)}><i className="bi bi-x-lg"></i></button>
-                  </div>
-                ))}
-              </div>
+              <div className="ticket-items mb-2"><CartLines /></div>
 
               {relatedShow.length > 0 && (
                 <div className="mb-2">
@@ -423,15 +384,70 @@ function PosBoard({ shift, onShiftClosed }) {
         held={cart.heldOrders} onResume={resume} onRemove={cart.removeHeld} blocked={cart.items.length > 0} />
 
       <CashMovementModal show={showCash} onHide={() => setShowCash(false)}
-        onRecorded={() => shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {})} />
+        onRecorded={refreshShift} />
 
       <PaymentResultModal invoice={result} onClose={() => setResult(null)}
-        onPaid={() => { loadProducts(); shiftApi.current().then((s) => { if (s) setShiftInfo(s) }).catch(() => {}) }} />
+        onPaid={() => { loadProducts(); refreshShift() }} />
       <CloseShiftModal shift={closing ? shiftInfo : null} refetchCurrent
         onHide={() => setClosing(false)} onClosed={onShiftClosed} />
       <Calculator show={showCalc} onHide={() => setShowCalc(false)} />
     </div>
   )
+}
+
+/* ---------------- Lưới sản phẩm (cột trái) ---------------- */
+function ProductGrid({ products, onAdd }) {
+  return (
+    <div className="pos-products">
+      {products.map((p) => {
+        const shelf = p.shelfStock ?? 0
+        const out = shelf <= 0
+        const low = !out && shelf <= (p.minStock ?? 0)
+        return (
+          <div key={p.id} className={`product-tile ${out ? 'disabled' : ''}`} onClick={() => onAdd(p)}
+            title={`Vị trí kệ ${p.shelfCode ?? '—'} · Còn ${shelf} trên kệ (bán được ngay) · Còn ${p.warehouseStock ?? 0} trong kho`}>
+            <div className="pt-thumb">
+              {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box-seam"></i>}
+              {p.shelfCode && !out && <span className="pt-shelf"><i className="bi bi-geo-alt-fill"></i>{p.shelfCode}</span>}
+              <span className={`pt-stock ${out ? 'out' : low ? 'low' : ''}`}>
+                {out ? 'Hết kệ' : <><span className="dot"></span>{shelf}</>}
+              </span>
+            </div>
+            <div className="pt-name">{p.name}</div>
+            <div className="pt-foot">
+              <span className="pt-price">{formatMoney(p.storeSalePrice ?? p.salePrice)}</span>
+              <span className="pt-add" aria-hidden="true"><i className="bi bi-plus-lg"></i></span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------------- Các dòng trong giỏ (cột phải) ---------------- */
+function CartLines() {
+  const cart = useCart()
+  if (cart.items.length === 0) {
+    return <div className="text-center text-muted2 py-4"><i className="bi bi-cart3 fs-3 d-block mb-1 opacity-50"></i>Giỏ hàng trống</div>
+  }
+  return cart.items.map((i) => (
+    <div className="ticket-line" key={i.productId}>
+      <div className="flex-grow-1 min-w-0">
+        <div className="fw-semibold text-truncate" style={{ fontSize: '.88rem' }}>{i.name}</div>
+        <small className="text-muted2">{formatMoney(i.salePrice)}</small>
+      </div>
+      <div className="qty-stepper">
+        <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity - 1)}>−</button>
+        <input className="q" type="number" min={1} value={i.quantity}
+          style={{ width: 44, textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 600 }}
+          onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) cart.setQuantity(i.productId, Math.max(1, v)) }} />
+        <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity + 1)}>+</button>
+      </div>
+      <div className="num fw-semibold text-end" style={{ width: 78, fontSize: '.85rem' }}>{formatMoney(i.salePrice * i.quantity)}</div>
+      <button type="button" className="btn btn-sm btn-link text-danger p-0" onClick={() => cart.removeItem(i.productId)}><i className="bi bi-x-lg"></i></button>
+    </div>
+  ))
 }
 
 /* ---------------- Thu/Chi quỹ tiền mặt ---------------- */

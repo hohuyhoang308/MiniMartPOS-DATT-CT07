@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Col, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -8,24 +7,19 @@ import { payrollApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
+import { openBlob } from '../../utils/download'
 
 const fmtH = (h) => `${Number(h || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}h`
 
 /** Phiếu lương của chính nhân viên đăng nhập (chỉ các kỳ đã khóa/đã chi). */
 export default function MyPayslips() {
   const toast = useToast()
-  const [slips, setSlips] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    payrollApi.myPayslips().then(setSlips).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const { data: slips, loading } = useList(payrollApi.myPayslips)
 
   async function printPdf(id) {
     try {
-      const blob = await payrollApi.payslipPdf(id)
-      window.open(URL.createObjectURL(blob), '_blank')
+      openBlob(await payrollApi.payslipPdf(id))
     } catch (e) { toast.error(errMsg(e)) }
   }
 

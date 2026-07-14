@@ -21,6 +21,7 @@ import com.pos.repository.PayslipAdjustmentRepository;
 import com.pos.repository.PayslipRepository;
 import com.pos.repository.StoreConfigRepository;
 import com.pos.security.StoreContext;
+import com.pos.util.PdfFonts;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
@@ -31,7 +32,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.List;
@@ -150,7 +150,7 @@ public class PayrollExportService {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PdfWriter.getInstance(doc, out);
             doc.open();
-            BaseFont bf = loadUnicodeFont();
+            BaseFont bf = PdfFonts.unicode();
             Font fTitle = new Font(bf, 14, Font.BOLD);
             Font fSub = new Font(bf, 9, Font.NORMAL);
             Font fNormal = new Font(bf, 10, Font.NORMAL);
@@ -246,22 +246,4 @@ public class PayrollExportService {
         doc.add(p);
     }
 
-    /** Font Unicode để render tiếng Việt (giống InvoicePdfService). */
-    private BaseFont loadUnicodeFont() {
-        String[] candidates = {
-                "C:/Windows/Fonts/arial.ttf",
-                "C:/Windows/Fonts/segoeui.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        };
-        try {
-            for (String path : candidates) {
-                if (new File(path).exists()) {
-                    return BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-                }
-            }
-            return BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-        } catch (Exception e) {
-            throw new IllegalStateException("Không nạp được font PDF: " + e.getMessage(), e);
-        }
-    }
 }

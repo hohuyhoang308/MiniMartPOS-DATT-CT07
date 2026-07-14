@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, Card, Col, Row, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -9,9 +9,8 @@ import Loading from '../../components/ui/Loading'
 import DiffBadge from '../../components/ui/DiffBadge'
 import CloseShiftModal from '../../components/CloseShiftModal'
 import { shiftApi } from '../../api/sales'
-import { useToast } from '../../context/ToastContext'
-import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 /** Phiên gợi ý theo giờ mở ca (giúp chia ca hợp lý: Sáng/Chiều/Tối). */
 function sessionOf(openedAt) {
@@ -46,16 +45,8 @@ function staleOpen(s) {
 }
 
 export default function Shifts() {
-  const toast = useToast()
-  const [shifts, setShifts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: shifts, loading, reload: load } = useList(shiftApi.list)
   const [closing, setClosing] = useState(null) // ca đang đóng
-
-  function load() {
-    setLoading(true)
-    shiftApi.list().then(setShifts).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [])
 
   const stats = useMemo(() => {
     const open = shifts.filter((s) => s.status === 'OPEN').length

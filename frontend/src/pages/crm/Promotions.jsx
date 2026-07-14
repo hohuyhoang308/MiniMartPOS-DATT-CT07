@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
@@ -10,6 +10,7 @@ import { promotionApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 const EMPTY = {
   code: '', name: '', discountType: 'PERCENT', discountValue: 0,
@@ -27,17 +28,10 @@ function validity(p) {
 
 export default function Promotions({ embedded = false }) {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(promotionApi.list)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [del, setDel] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await promotionApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)

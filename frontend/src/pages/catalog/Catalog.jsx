@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import StatusPill from '../../components/ui/StatusPill'
@@ -8,6 +8,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal'
 import { categoryApi, unitApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
+import { useList } from '../../hooks/useList'
 
 const EMPTY_CAT = { name: '', description: '', status: 'ACTIVE' }
 
@@ -27,18 +28,11 @@ export default function Catalog({ embedded = false }) {
 /* ---------------- Danh mục ---------------- */
 function CategorySection() {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(categoryApi.list)
   const [q, setQ] = useState('')
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [del, setDel] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await categoryApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   const filtered = list.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
 
@@ -125,17 +119,10 @@ function CategorySection() {
 /* ---------------- Đơn vị tính ---------------- */
 function UnitSection() {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(unitApi.list)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [del, setDel] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await unitApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   async function save(e) {
     e.preventDefault(); setSaving(true)

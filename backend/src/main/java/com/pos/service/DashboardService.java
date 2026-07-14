@@ -4,6 +4,7 @@ import com.pos.dto.dashboard.DashboardResponse;
 import com.pos.dto.dashboard.StoreKpiResponse;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.InvoiceRepository;
+import com.pos.repository.PayslipRepository;
 import com.pos.repository.StoreRepository;
 import com.pos.repository.projection.StoreAmountRow;
 import com.pos.repository.projection.StoreCountRow;
@@ -40,14 +41,14 @@ public class DashboardService {
     private final ProductStockViewRepository stockRepository;
     private final ExpiringBatchViewRepository expiringRepository;
     private final StoreRepository storeRepository;
-    private final com.pos.repository.PayslipRepository payslipRepository;
+    private final PayslipRepository payslipRepository;
 
     public DashboardService(InvoiceRepository invoiceRepository,
                             InvoiceItemRepository invoiceItemRepository,
                             ProductStockViewRepository stockRepository,
                             ExpiringBatchViewRepository expiringRepository,
                             StoreRepository storeRepository,
-                            com.pos.repository.PayslipRepository payslipRepository) {
+                            PayslipRepository payslipRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.stockRepository = stockRepository;

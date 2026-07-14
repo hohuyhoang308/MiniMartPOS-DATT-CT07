@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Card, Form, Table } from 'react-bootstrap'
 import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import { auditApi } from '../../api/misc'
-import { useToast } from '../../context/ToastContext'
-import { errMsg } from '../../api/client'
+import { useList } from '../../hooks/useList'
 
 const ACTION = {
   CANCEL_INVOICE: { cls: 'pill-danger', icon: 'bi-x-circle-fill', label: 'Hủy hóa đơn' },
@@ -63,14 +62,8 @@ function fmtTime(t) {
 }
 
 export default function Audit() {
-  const toast = useToast()
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: rows, loading } = useList(auditApi.recent)
   const [filter, setFilter] = useState('')
-
-  useEffect(() => {
-    auditApi.recent().then(setRows).catch((e) => toast.error(errMsg(e))).finally(() => setLoading(false))
-  }, [])
 
   if (loading) return <Loading />
 

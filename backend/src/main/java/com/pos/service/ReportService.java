@@ -1,17 +1,25 @@
 package com.pos.service;
 
+import com.pos.dto.report.DailyRollupResponse;
 import com.pos.dto.report.EmployeeReportResponse;
 import com.pos.dto.report.ProductReportResponse;
 import com.pos.dto.report.ReportPeriod;
 import com.pos.dto.report.RevenueReportResponse;
 import com.pos.dto.report.ShiftReportResponse;
+import com.pos.entity.DailySalesRollup;
+import com.pos.entity.WorkShift;
+import com.pos.entity.enums.ShiftStatus;
+import com.pos.entity.view.ProductStockView;
+import com.pos.repository.CashMovementRepository;
+import com.pos.repository.DailySalesRollupRepository;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.InvoiceRepository;
+import com.pos.repository.WorkShiftRepository;
 import com.pos.repository.projection.EmployeeCashRow;
 import com.pos.repository.projection.ProductCogsRow;
 import com.pos.repository.projection.ShiftCashRow;
 import com.pos.repository.projection.UserQtyRow;
-import com.pos.entity.view.ProductStockView;
+import com.pos.repository.view.ProductStockViewRepository;
 import com.pos.repository.view.ShiftSummaryViewRepository;
 import com.pos.security.StoreContext;
 import org.apache.poi.ss.usermodel.*;
@@ -21,10 +29,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** Báo cáo doanh thu/ca + xuất Excel (FR9.2, FR9.3). */
@@ -35,18 +49,18 @@ public class ReportService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final ShiftSummaryViewRepository shiftSummaryRepository;
-    private final com.pos.repository.CashMovementRepository cashMovementRepository;
-    private final com.pos.repository.WorkShiftRepository workShiftRepository;
-    private final com.pos.repository.view.ProductStockViewRepository productStockRepository;
-    private final com.pos.repository.DailySalesRollupRepository rollupRepository;
+    private final CashMovementRepository cashMovementRepository;
+    private final WorkShiftRepository workShiftRepository;
+    private final ProductStockViewRepository productStockRepository;
+    private final DailySalesRollupRepository rollupRepository;
 
     public ReportService(InvoiceRepository invoiceRepository,
                          InvoiceItemRepository invoiceItemRepository,
                          ShiftSummaryViewRepository shiftSummaryRepository,
-                         com.pos.repository.CashMovementRepository cashMovementRepository,
-                         com.pos.repository.WorkShiftRepository workShiftRepository,
-                         com.pos.repository.view.ProductStockViewRepository productStockRepository,
-                         com.pos.repository.DailySalesRollupRepository rollupRepository) {
+                         CashMovementRepository cashMovementRepository,
+                         WorkShiftRepository workShiftRepository,
+                         ProductStockViewRepository productStockRepository,
+                         DailySalesRollupRepository rollupRepository) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.shiftSummaryRepository = shiftSummaryRepository;
@@ -65,13 +79,13 @@ public class ReportService {
      * Upsert là 1 truy vấn gộp theo (chi nhánh, ngày) nên rẻ; cron đêm vẫn giữ vai trò tổng hợp định kỳ.</p>
      */
     @Transactional
-    public List<com.pos.dto.report.DailyRollupResponse> dailyRollup(LocalDate from, LocalDate to) {
+    public List<DailyRollupResponse> dailyRollup(LocalDate from, LocalDate to) {
         rollupRepository.upsertRange(from, to);   // làm tươi khoảng ngày yêu cầu (gồm hôm nay) trước khi đọc
         Long storeId = StoreContext.currentStoreId();
-        List<com.pos.entity.DailySalesRollup> rows = storeId != null
+        List<DailySalesRollup> rows = storeId != null
                 ? rollupRepository.findByStoreIdAndSalesDateBetweenOrderBySalesDate(storeId, from, to)
                 : rollupRepository.findBySalesDateBetween(from, to);
-        return rows.stream().map(com.pos.dto.report.DailyRollupResponse::from).toList();
+        return rows.stream().map(DailyRollupResponse::from).toList();
     }
 
     public RevenueReportResponse revenue(LocalDate from, LocalDate to, ReportPeriod period) {
@@ -80,12 +94,12 @@ public class ReportService {
         LocalDateTime end = to.plusDays(1).atStartOfDay();
         String fmt = period.sqlFormat();
 
-        java.util.List<RevenueReportResponse.PeriodPoint> points = new java.util.ArrayList<>(invoiceRepository
+        List<RevenueReportResponse.PeriodPoint> points = new ArrayList<>(invoiceRepository
                 .revenueByPeriod(start, end, fmt, storeId).stream()
                 .map(r -> new RevenueReportResponse.PeriodPoint(
                         r.getBucket(), nz(r.getRevenue()), nz(r.getProfit()), r.getInvoiceCount()))
                 .toList());
-        points.sort(java.util.Comparator.comparing(RevenueReportResponse.PeriodPoint::label));
+        points.sort(Comparator.comparing(RevenueReportResponse.PeriodPoint::label));
 
         // Tổng tính từ các kỳ để luôn khớp tuyệt đối với bảng/biểu đồ hiển thị.
         BigDecimal totalRevenue = points.stream().map(RevenueReportResponse.PeriodPoint::revenue)
@@ -109,14 +123,14 @@ public class ReportService {
                                         : shiftSummaryRepository.findByStoreId(storeId);
         // Tiền mặt thực thu của tất cả ca trong 1 truy vấn gộp (bỏ N+1).
         List<Long> shiftIds = summaries.stream().map(v -> v.getShiftId()).toList();
-        Map<Long, BigDecimal> cashByShift = shiftIds.isEmpty() ? new java.util.HashMap<>()
-                : new java.util.HashMap<>(invoiceRepository.cashSalesByShiftIds(shiftIds).stream()
+        Map<Long, BigDecimal> cashByShift = shiftIds.isEmpty() ? new HashMap<>()
+                : new HashMap<>(invoiceRepository.cashSalesByShiftIds(shiftIds).stream()
                         .collect(Collectors.toMap(ShiftCashRow::getShiftId, r -> nz(r.getAmount()))));
         // Ca ĐÃ ĐÓNG: thay tiền-mặt-bán bằng SNAPSHOT đã chốt lúc đóng (finding #3) để đối soát quỹ cố định,
         // không lệch khi HĐ tiền mặt bị hủy về sau. Ca đang mở: giữ giá trị tính theo thời gian thực ở trên.
         if (!shiftIds.isEmpty()) {
-            for (com.pos.entity.WorkShift ws : workShiftRepository.findAllById(shiftIds)) {
-                if (ws.getStatus() == com.pos.entity.enums.ShiftStatus.CLOSED && ws.getFinalCashSales() != null) {
+            for (WorkShift ws : workShiftRepository.findAllById(shiftIds)) {
+                if (ws.getStatus() == ShiftStatus.CLOSED && ws.getFinalCashSales() != null) {
                     cashByShift.put(ws.getId(), ws.getFinalCashSales());
                 }
             }
@@ -146,8 +160,8 @@ public class ReportService {
         Map<Long, EmployeeCashRow> cashByUser = workShiftRepository.cashAccountabilityByCashier(start, end, storeId)
                 .stream().collect(Collectors.toMap(EmployeeCashRow::getUserId, r -> r));
 
-        java.util.List<EmployeeReportResponse> out = new java.util.ArrayList<>();
-        java.util.Set<Long> seen = new java.util.HashSet<>();
+        List<EmployeeReportResponse> out = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
         // 1) Thu ngân CÓ bán hàng (đã sắp theo doanh thu giảm dần ở query).
         for (var s : invoiceRepository.salesByCashier(start, end, storeId)) {
             long invoices = s.getInvoiceCount() != null ? s.getInvoiceCount() : 0L;
@@ -156,7 +170,7 @@ public class ReportService {
             out.add(new EmployeeReportResponse(
                     s.getUserId(), s.getCashierName(), invoices, revenue,
                     itemsByUser.getOrDefault(s.getUserId(), 0L),
-                    invoices > 0 ? revenue.divide(BigDecimal.valueOf(invoices), 0, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO,
+                    invoices > 0 ? revenue.divide(BigDecimal.valueOf(invoices), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO,
                     cash != null && cash.getTotalShifts() != null ? cash.getTotalShifts() : 0L,
                     cash != null && cash.getClosedShifts() != null ? cash.getClosedShifts() : 0L,
                     cash != null ? nz(cash.getVariance()) : BigDecimal.ZERO));
@@ -186,15 +200,15 @@ public class ReportService {
         Map<Long, BigDecimal> cogsByProduct = invoiceItemRepository.cogsByProduct(start, end, storeId).stream()
                 .collect(Collectors.toMap(ProductCogsRow::getProductId, r -> nz(r.getCogs())));
 
-        java.util.Set<Long> soldIds = new java.util.HashSet<>();
-        java.util.List<ProductReportResponse.ProductProfit> products = new java.util.ArrayList<>();
+        Set<Long> soldIds = new HashSet<>();
+        List<ProductReportResponse.ProductProfit> products = new ArrayList<>();
         for (var s : invoiceItemRepository.productSales(start, end, storeId)) {
             soldIds.add(s.getProductId());
             BigDecimal revenue = nz(s.getRevenue());
             BigDecimal cogs = cogsByProduct.getOrDefault(s.getProductId(), BigDecimal.ZERO);
             BigDecimal profit = revenue.subtract(cogs);
             BigDecimal margin = revenue.signum() > 0
-                    ? profit.multiply(BigDecimal.valueOf(100)).divide(revenue, 1, java.math.RoundingMode.HALF_UP)
+                    ? profit.multiply(BigDecimal.valueOf(100)).divide(revenue, 1, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
             products.add(new ProductReportResponse.ProductProfit(
                     s.getProductId(), s.getProductName(), s.getCategoryName(),
@@ -202,7 +216,7 @@ public class ReportService {
         }
 
         // Hàng ế: còn tồn trong cửa hàng nhưng không nằm trong tập đã bán của khoảng. Cần cửa hàng cụ thể.
-        java.util.List<ProductReportResponse.DeadStock> deadStock = new java.util.ArrayList<>();
+        List<ProductReportResponse.DeadStock> deadStock = new ArrayList<>();
         if (storeId != null) {
             for (ProductStockView v : productStockRepository.findByStoreId(storeId)) {
                 long stock = v.getCurrentStock() != null ? v.getCurrentStock() : 0L;
@@ -211,7 +225,7 @@ public class ReportService {
                             v.getProductId(), v.getName(), v.getBarcode(), stock));
                 }
             }
-            deadStock.sort(java.util.Comparator.comparingLong(ProductReportResponse.DeadStock::currentStock).reversed());
+            deadStock.sort(Comparator.comparingLong(ProductReportResponse.DeadStock::currentStock).reversed());
         }
         return new ProductReportResponse(products, deadStock);
     }

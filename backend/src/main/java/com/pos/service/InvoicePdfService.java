@@ -14,11 +14,11 @@ import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.repository.StoreConfigRepository;
 import com.pos.security.StoreContext;
+import com.pos.util.PdfFonts;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.text.DecimalFormat;
 import java.time.format.DateTimeFormatter;
 
@@ -58,7 +58,7 @@ public class InvoicePdfService {
             PdfWriter.getInstance(doc, out);
             doc.open();
 
-            BaseFont bf = loadUnicodeFont();
+            BaseFont bf = PdfFonts.unicode();
             Font fTitle = new Font(bf, 12, Font.BOLD);
             Font fNormal = new Font(bf, 8, Font.NORMAL);
             Font fBold = new Font(bf, 8, Font.BOLD);
@@ -131,27 +131,6 @@ public class InvoicePdfService {
             return out.toByteArray();
         } catch (DocumentException e) {
             throw new IllegalStateException("Lỗi tạo PDF hóa đơn: " + e.getMessage(), e);
-        }
-    }
-
-    /** Nạp font Unicode để hiển thị tiếng Việt (Arial trên Windows); fallback Helvetica. */
-    private BaseFont loadUnicodeFont() {
-        String[] candidates = {
-                "C:/Windows/Fonts/arial.ttf",
-                "C:/Windows/Fonts/segoeui.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        };
-        for (String path : candidates) {
-            try {
-                if (new File(path).exists()) {
-                    return BaseFont.createFont(path, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-                }
-            } catch (Exception ignored) { }
-        }
-        try {
-            return BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-        } catch (Exception e) {
-            throw new IllegalStateException("Không tải được font cho PDF", e);
         }
     }
 

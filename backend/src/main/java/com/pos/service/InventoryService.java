@@ -153,47 +153,21 @@ public class InventoryService {
             // Độ lệch chuẩn nhu cầu/ngày: σ = √(E[q²] − E[q]²), tính trên cả ngày không bán (=0).
             double meanSq = sumSqByProduct.getOrDefault(v.getProductId(), 0.0) / VELOCITY_DAYS;
             double sigma = Math.sqrt(Math.max(0, meanSq - avgDaily * avgDaily));
-            // Tồn an toàn theo MỨC PHỤC VỤ phân hóa theo ABC: A giữ kỹ hơn (~98%), C nới (~90%).
-            double safetyStock = serviceZ(abc) * sigma * Math.sqrt(LEAD_DAYS);
-            // Z (thất thường): chặn tồn an toàn phình to → tránh ôm hàng chết (đúng tinh thần "giảm tồn" nhóm Z).
-            if ("Z".equals(xyz)) safetyStock = Math.min(safetyStock, avgDaily * LEAD_DAYS);
-            double reorderPoint = avgDaily * LEAD_DAYS + safetyStock;
+            double reorderPoint = avgDaily * LEAD_DAYS + safetyStock(abc, xyz, sigma, avgDaily);
 
-            boolean needReorder = current <= reorderPoint || current <= min;
-            // C·Z (ít & thất thường): chỉ đề xuất khi THỰC chạm ngưỡng/hết → đặt thưa, đỡ đọng vốn.
-            if ("C".equals(abc) && "Z".equals(xyz)) needReorder = current <= min;
-            if (!needReorder) continue;
+            if (!needsReorder(abc, xyz, current, min, reorderPoint)) continue;
 
-            // Tồn mục tiêu: đủ bán theo kỳ dự trữ (C đặt thưa → kỳ dài hơn). Sàn theo nhóm: A/B giữ 2×
-            // ngưỡng để chắc còn hàng; C chỉ về TỚI ngưỡng (giảm tồn, tránh ôm hàng chậm luân chuyển).
-            double floor = "C".equals(abc) ? min : min * 2.0;
-            double targetStock = Math.max(floor, avgDaily * coverageDays(abc));
-            int suggestedQty = (int) Math.max(0, Math.ceil(targetStock - current));
-            if (suggestedQty == 0) suggestedQty = Math.max(min, 1); // vẫn nên nhập tối thiểu
-
+            int suggestedQty = orderQuantity(abc, min, avgDaily, current);
             Integer daysLeft = avgDaily > 0 ? (int) Math.floor(current / avgDaily) : null;
-
-            // EOQ = √(2·D·S/H): D nhu cầu/năm, S chi phí đặt hàng, H chi phí lưu kho/đơn vị/năm.
-            int reorderPointInt = (int) Math.ceil(reorderPoint);
-            double annualDemand = avgDaily * 365;
-            double holding = HOLDING_RATE * costByProduct.getOrDefault(v.getProductId(), BigDecimal.ZERO).doubleValue();
-            int eoq = (annualDemand > 0 && holding > 0)
-                    ? (int) Math.round(Math.sqrt(2 * annualDemand * ORDER_COST / holding))
-                    : suggestedQty;
-            // Chặn EOQ phi thực tế cho hàng rẻ/bán chậm (H nhỏ → EOQ phình): không quá ~2 tháng bán.
-            eoq = Math.min(eoq, Math.max(suggestedQty, (int) Math.ceil(avgDaily * EOQ_MAX_COVER_DAYS)));
-
-            // Độ khẩn theo THỜI GIAN còn bán, không theo "dưới ngưỡng": dưới min mà còn nhiều ngày bán → chỉ REORDER.
-            String urgency;
-            if (current <= 0) urgency = "OUT";
-            else if (daysLeft != null && daysLeft <= LEAD_DAYS) urgency = "URGENT"; // sắp hết trong thời gian giao hàng
-            else urgency = "REORDER";
+            double unitCost = costByProduct.getOrDefault(v.getProductId(), BigDecimal.ZERO).doubleValue();
+            int eoq = economicOrderQty(avgDaily, unitCost, suggestedQty);
 
             result.add(new ReorderSuggestionResponse(
                     v.getProductId(), v.getBarcode(), v.getName(),
                     current, min, sold,
                     BigDecimal.valueOf(avgDaily).setScale(1, RoundingMode.HALF_UP),
-                    daysLeft, suggestedQty, reorderPointInt, eoq, urgency,
+                    daysLeft, suggestedQty, (int) Math.ceil(reorderPoint),
+                    eoq, classifyUrgency(current, daysLeft),
                     abc, xyz, expiringProducts.contains(v.getProductId())));
         }
 
@@ -216,6 +190,53 @@ public class InventoryService {
             case "URGENT" -> 1;
             default -> 2;
         };
+    }
+
+    /**
+     * Tồn an toàn = z(mức phục vụ theo ABC) · σ · √leadtime. Nhóm Z (thất thường) bị chặn trần
+     * = bán trong leadtime để tránh ôm hàng chết (đúng tinh thần "giảm tồn" cho hàng khó đoán).
+     */
+    private static double safetyStock(String abc, String xyz, double sigma, double avgDaily) {
+        double ss = serviceZ(abc) * sigma * Math.sqrt(LEAD_DAYS);
+        return "Z".equals(xyz) ? Math.min(ss, avgDaily * LEAD_DAYS) : ss;
+    }
+
+    /** Có cần nhập không: chạm điểm đặt lại HOẶC dưới ngưỡng. C·Z (ít & thất thường) chỉ nhập khi THỰC chạm ngưỡng/hết. */
+    private static boolean needsReorder(String abc, String xyz, long current, int min, double reorderPoint) {
+        if ("C".equals(abc) && "Z".equals(xyz)) return current <= min;
+        return current <= reorderPoint || current <= min;
+    }
+
+    /**
+     * Lượng nhập đề xuất: đủ bán theo kỳ dự trữ (C đặt thưa → kỳ dài hơn), có sàn theo nhóm
+     * (A/B giữ 2× ngưỡng cho chắc; C chỉ về tới ngưỡng). Nếu ra 0 vẫn nhập tối thiểu.
+     */
+    private static int orderQuantity(String abc, int min, double avgDaily, long current) {
+        double floor = "C".equals(abc) ? min : min * 2.0;
+        double targetStock = Math.max(floor, avgDaily * coverageDays(abc));
+        int qty = (int) Math.max(0, Math.ceil(targetStock - current));
+        return qty == 0 ? Math.max(min, 1) : qty;
+    }
+
+    /**
+     * EOQ = √(2·D·S/H) với D nhu cầu/năm, S chi phí đặt hàng, H chi phí lưu kho/đơn vị/năm.
+     * Thiếu dữ liệu (không bán / không có giá vốn) → dùng lượng đề xuất. Chặn trần ~2 tháng bán
+     * để EOQ không phình cho hàng rẻ/bán chậm (H nhỏ).
+     */
+    private static int economicOrderQty(double avgDaily, double unitCost, int fallbackQty) {
+        double annualDemand = avgDaily * 365;
+        double holding = HOLDING_RATE * unitCost;
+        int eoq = (annualDemand > 0 && holding > 0)
+                ? (int) Math.round(Math.sqrt(2 * annualDemand * ORDER_COST / holding))
+                : fallbackQty;
+        return Math.min(eoq, Math.max(fallbackQty, (int) Math.ceil(avgDaily * EOQ_MAX_COVER_DAYS)));
+    }
+
+    /** Độ khẩn theo THỜI GIAN còn bán: hết hàng → OUT; sắp hết trong leadtime → URGENT; còn lại → REORDER. */
+    private static String classifyUrgency(long current, Integer daysLeft) {
+        if (current <= 0) return "OUT";
+        if (daysLeft != null && daysLeft <= LEAD_DAYS) return "URGENT";
+        return "REORDER";
     }
 
     /** Mức phục vụ z theo nhóm ABC: A giữ kỹ (~98%), B (~95%), C nới (~90%) — dồn vốn cho hàng chủ lực. */

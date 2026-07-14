@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Form, Modal, Spinner, Table } from 'react-bootstrap'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
@@ -8,20 +8,14 @@ import { payrollApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 /** Cấu hình lương theo từng nhân viên: loại lương (giờ/tháng), đơn giá, công chuẩn, tăng ca, phụ cấp. */
 export default function PayProfiles() {
   const toast = useToast()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(payrollApi.payProfiles)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await payrollApi.payProfiles()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   function edit(p) {
     setForm({

@@ -11,6 +11,7 @@ import { useStoreScope } from '../../context/StoreScopeContext'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { formatDateTime } from '../../utils/format'
+import { useList } from '../../hooks/useList'
 
 /** Trạng thái phiếu điều chuyển → nhãn + màu pill (đồng bộ enum TransferStatus ở backend). */
 const STATUS = {
@@ -25,18 +26,11 @@ const emptyLine = () => ({ productId: '', batchId: '', quantity: 1 })
 export default function Transfers({ embedded = false }) {
   const toast = useToast()
   const { scopeStoreId } = useStoreScope()
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: list, loading, reload: load } = useList(transferApi.list)
   const [creating, setCreating] = useState(false)
   const [detail, setDetail] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    try { setList(await transferApi.list()) } catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
 
   // Cửa hàng đang xem (MANAGER: cố định; ADMIN: chi nhánh đã chọn ở phù hiệu phạm vi).
   const scope = scopeStoreId ? String(scopeStoreId) : ''
