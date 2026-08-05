@@ -23,8 +23,8 @@ frontend/dist-ssr/
 docs/*
 !docs/Báo Cáo
 docs/Báo Cáo/*
-!docs/Báo Cáo/BAO_CAO_DO_AN_MiniMartPOS_HoHuyHoang_2305XCT0393.docx
-!docs/Báo Cáo/SLIDE_BAO_VE_MiniMartPOS_HoHuyHoang_2305XCT0393.pptx
+!docs/Báo Cáo/BAO_CAO_DO_AN_MiniMartPOS_HoHuyHoang_2305CT0393.docx
+!docs/Báo Cáo/SLIDE_BAO_VE_MiniMartPOS_HoHuyHoang_2305CT0393.pptx
 
 # ===== OS =====
 .DS_Store
