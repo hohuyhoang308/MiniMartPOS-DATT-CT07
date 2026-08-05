@@ -19,6 +19,8 @@ class CodeGeneratorTest {
 
     @Test
     void date_prefix_format() {
-        assertThat(CodeGenerator.datePrefix("HD")).startsWith("HD").endsWith("-");
+        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        assertThat(CodeGenerator.datePrefix("HD")).isEqualTo("HD" + today + "-");
     }
 }
