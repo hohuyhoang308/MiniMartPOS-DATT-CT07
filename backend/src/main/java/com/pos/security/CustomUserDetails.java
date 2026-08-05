@@ -33,12 +33,12 @@ public class CustomUserDetails implements UserDetails {
         return user.getRole().name();
     }
 
-    /** Chi nhánh người dùng trực thuộc; null = quản trị toàn chuỗi (CHAIN_ADMIN). */
+    /** Chi nhánh người dùng trực thuộc; null = quản trị toàn chuỗi (ADMIN (toàn chuỗi)). */
     public Long getStoreId() {
         return user.getStore() != null ? user.getStore().getId() : null;
     }
 
-    /** Tên chi nhánh trực thuộc (null nếu là CHAIN_ADMIN). */
+    /** Tên chi nhánh trực thuộc (null nếu là ADMIN (toàn chuỗi)). */
     public String getStoreName() {
         return user.getStore() != null ? user.getStore().getName() : null;
     }

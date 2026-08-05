@@ -56,7 +56,7 @@ export const NAV_SECTIONS = [
   },
 ]
 
-export const ALL_NAV = NAV_SECTIONS.flatMap((s) => s.items)
+const ALL_NAV = NAV_SECTIONS.flatMap((s) => s.items)
 
 export function findNav(pathname) {
   // Chọn prefix KHỚP DÀI NHẤT để route con (vd /reports/employees) không bị /reports "nuốt".

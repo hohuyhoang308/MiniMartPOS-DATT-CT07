@@ -28,7 +28,7 @@ public class PaymentExpiryJob {
             int expired = paymentService.expireStalePending();
             if (expired > 0) log.info("Đã đánh dấu hết hạn {} giao dịch QR treo", expired);
         } catch (Exception e) {
-            log.debug("Bỏ qua lần dọn giao dịch hết hạn: {}", e.getMessage());
+            log.warn("Bỏ qua lần dọn giao dịch hết hạn: {}", e.getMessage());
         }
     }
 }

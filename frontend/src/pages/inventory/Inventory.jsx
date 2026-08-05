@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Button, Card, Col, Modal, Nav, Row, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
@@ -27,7 +26,7 @@ function ShelfCell({ s }) {
   return <span className={`fw-semibold ${cls}`}>{shelf}</span>
 }
 
-export default function Inventory({ embedded = false }) {
+export default function Inventory() {
   const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
@@ -50,8 +49,6 @@ export default function Inventory({ embedded = false }) {
 
   return (
     <div className="page-fill">
-      {!embedded && <PageHeader title="Tồn kho · Kho & Kệ" subtitle="Xem tồn theo từng lô và hạn sử dụng, kèm gợi ý nhập hàng. Việc đưa hàng lên kệ làm ở trang Lên kệ." />}
-
       {tab !== 'adjust' && (
         <InfoBanner id="inventory" title="Cách đọc bảng tồn kho">
           Mỗi sản phẩm có hàng ở <b>KỆ</b> (bán được ngay) và ở <b>KHO</b> (chưa đưa lên kệ). Bấm vào
@@ -88,7 +85,7 @@ export default function Inventory({ embedded = false }) {
         </Card.Body>
         <div className="table-responsive fill-scroll">
           {tab === 'adjust' ? (
-            <div className="p-3"><StockAdjust embedded /></div>
+            <div className="p-3"><StockAdjust /></div>
           ) : tab === 'expiring' ? (
             <Table hover className="mb-0">
               <thead><tr><th>Sản phẩm</th><th className="text-center">Còn trong lô</th><th>Hạn sử dụng</th><th className="text-center">Còn mấy ngày</th></tr></thead>

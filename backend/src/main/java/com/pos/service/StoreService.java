@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/** Quản lý CHI NHÁNH trong chuỗi (đa chuỗi) — chỉ CHAIN_ADMIN. */
+/** Quản lý CHI NHÁNH trong chuỗi (đa chuỗi) — chỉ ADMIN (toàn chuỗi). */
 @Service
 @Transactional(readOnly = true)
 public class StoreService {

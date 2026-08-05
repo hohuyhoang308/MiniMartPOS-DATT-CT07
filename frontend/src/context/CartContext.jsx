@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 const CartContext = createContext(null)
 
 /** Giá trị quy đổi: 1 điểm tích lũy = 1.000đ khi dùng để giảm trừ. */
-export const POINT_VALUE = 1000
+const POINT_VALUE = 1000
 
 /** Khóa lưu các ĐƠN ĐANG TREO (held orders) trên trình duyệt của quầy (tồn tại như POS thật). */
 const HELD_KEY = 'pos_held_orders'

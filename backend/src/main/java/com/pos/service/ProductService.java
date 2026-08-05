@@ -9,15 +9,12 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.view.ProductStockView;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
-import com.pos.entity.Shelf;
 import com.pos.repository.CategoryRepository;
 import com.pos.repository.InvoiceItemRepository;
 import com.pos.repository.ProductRepository;
-import com.pos.repository.ShelfRepository;
 import com.pos.repository.UnitRepository;
 import com.pos.config.CacheConfig;
 import com.pos.repository.projection.ProductCountRow;
-import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
 
 import java.util.HashMap;
@@ -41,8 +38,7 @@ public class ProductService {
     private final UnitRepository unitRepository;
     private final ProductStockViewRepository stockRepository;
     private final InvoiceItemRepository invoiceItemRepository;
-    private final BatchStockViewRepository batchStockRepository;
-    private final ShelfRepository shelfRepository;
+    private final ShelfService shelfService;
     private final AuditService auditService;
     private final ProductPricingService pricingService;
 
@@ -51,8 +47,7 @@ public class ProductService {
                           UnitRepository unitRepository,
                           ProductStockViewRepository stockRepository,
                           InvoiceItemRepository invoiceItemRepository,
-                          BatchStockViewRepository batchStockRepository,
-                          ShelfRepository shelfRepository,
+                          ShelfService shelfService,
                           AuditService auditService,
                           ProductPricingService pricingService) {
         this.productRepository = productRepository;
@@ -60,8 +55,7 @@ public class ProductService {
         this.unitRepository = unitRepository;
         this.stockRepository = stockRepository;
         this.invoiceItemRepository = invoiceItemRepository;
-        this.batchStockRepository = batchStockRepository;
-        this.shelfRepository = shelfRepository;
+        this.shelfService = shelfService;
         this.auditService = auditService;
         this.pricingService = pricingService;
     }
@@ -73,19 +67,6 @@ public class ProductService {
         java.math.BigDecimal eff = pricingService.effectiveSalePrice(p, storeId);
         // Chỉ đính khi KHÁC giá gốc (có override) — giữ payload gọn, POS tự fallback về salePrice.
         return eff.compareTo(p.getSalePrice()) != 0 ? dto.withStoreSalePrice(eff) : dto;
-    }
-
-    /** Bản đồ sản phẩm → mã kệ đang bày của MỘT chi nhánh (kệ có tồn &gt; 0) — danh sách/POS biết hàng ở kệ nào. */
-    private Map<Long, String> productShelfCode(Long storeId) {
-        Map<Long, String> byId = shelfRepository.findAll().stream()
-                .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
-        Map<Long, String> byProduct = new HashMap<>();
-        for (var b : batchStockRepository.findOnShelfByStore(storeId)) {
-            if (b.getShelfId() != null) {
-                byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
-            }
-        }
-        return byProduct;
     }
 
     /** Hỗ trợ tối thiểu: cần đồng xuất hiện ≥ ngần này HĐ mới coi là liên kết thật (lọc nhiễu đơn lẻ). */
@@ -111,17 +92,24 @@ public class ProductService {
 
         LinkedHashMap<Long, Product> picked = new LinkedHashMap<>();
         // 1) Từ lịch sử: xếp theo lift = co(A,B)/n(B), lọc support tối thiểu, chỉ món còn hàng TRÊN KỆ
-        invoiceItemRepository.boughtTogether(productId, storeId, PageRequest.of(0, Math.max(limit * 5, 20))).stream()
+        List<ProductCountRow> rows = invoiceItemRepository
+                .boughtTogether(productId, storeId, PageRequest.of(0, Math.max(limit * 5, 20))).stream()
                 .filter(r -> r.getCnt() != null && r.getCnt() >= MIN_SUPPORT)
                 .sorted((a, b) -> Double.compare(
                         b.getCnt() / (double) Math.max(1L, invoiceCount.getOrDefault(b.getProductId(), 1L)),
                         a.getCnt() / (double) Math.max(1L, invoiceCount.getOrDefault(a.getProductId(), 1L))))
-                .forEach(row -> {
-                    if (picked.size() >= limit) return;
-                    productRepository.findById(row.getProductId())
-                            .filter(p -> p.getStatus() == CommonStatus.ACTIVE && shelfOf(stock.get(p.getId())) > 0)
-                            .ifPresent(p -> picked.putIfAbsent(p.getId(), p));
-                });
+                .toList();
+        // Nạp MỘT lần tất cả sản phẩm ứng viên (thay vì findById từng dòng — N+1).
+        Map<Long, Product> candidates = rows.isEmpty() ? Map.of()
+                : productRepository.findAllById(rows.stream().map(ProductCountRow::getProductId).toList())
+                        .stream().collect(Collectors.toMap(Product::getId, p -> p, (a, b) -> a));
+        for (ProductCountRow row : rows) {
+            if (picked.size() >= limit) break;
+            Product p = candidates.get(row.getProductId());
+            if (p != null && p.getStatus() == CommonStatus.ACTIVE && shelfOf(stock.get(p.getId())) > 0) {
+                picked.putIfAbsent(p.getId(), p);
+            }
+        }
         // 2) Fallback: bù bằng sản phẩm cùng danh mục còn hàng trên kệ
         if (picked.size() < limit) {
             for (Product p : productRepository.search(null, base.getCategory().getId())) {
@@ -143,7 +131,7 @@ public class ProductService {
      * Tìm/lọc sản phẩm; đính kèm tồn kho THEO CHI NHÁNH đang làm việc (đa cửa hàng).
      * <ul>
      *   <li>Đã chọn chi nhánh → tồn + mã kệ của ĐÚNG chi nhánh đó.</li>
-     *   <li>CHAIN_ADMIN chưa chọn chi nhánh (toàn chuỗi) → tồn GỘP của tất cả chi nhánh (mã kệ bỏ trống vì khác nhau giữa các cửa hàng).</li>
+     *   <li>ADMIN (toàn chuỗi) chưa chọn chi nhánh (toàn chuỗi) → tồn GỘP của tất cả chi nhánh (mã kệ bỏ trống vì khác nhau giữa các cửa hàng).</li>
      * </ul>
      */
     public List<ProductResponse> search(String keyword, Long categoryId) {
@@ -153,7 +141,7 @@ public class ProductService {
         if (storeId != null) {
             Map<Long, ProductStockView> stockMap = stockRepository.findByStoreId(storeId).stream()
                     .collect(Collectors.toMap(ProductStockView::getProductId, v -> v, (a, b) -> a));
-            Map<Long, String> shelfByProduct = productShelfCode(storeId);
+            Map<Long, String> shelfByProduct = shelfService.shelfCodeByProduct(storeId);
             // Giá override theo chi nhánh — POS phải thấy đúng giá server sẽ tính tiền (không thì hiển thị ≠ thu tiền).
             Map<Long, java.math.BigDecimal> overrides = pricingService.activeOverridesForStore(storeId);
             return products.stream()
@@ -240,18 +228,11 @@ public class ProductService {
         }
         // Audit chung cho việc sửa sản phẩm — liệt kê rõ những gì đã thay đổi.
         java.util.List<String> changes = new java.util.ArrayList<>();
-        if (oldName != null && !oldName.equals(saved.getName()))
-            changes.add("tên \"" + oldName + "\" → \"" + saved.getName() + "\"");
-        if (oldBarcode != null && !oldBarcode.equals(saved.getBarcode()))
-            changes.add("mã vạch " + oldBarcode + " → " + saved.getBarcode());
-        String newCategory = saved.getCategory() != null ? saved.getCategory().getName() : null;
-        if (oldCategory != null && !oldCategory.equals(newCategory))
-            changes.add("danh mục \"" + oldCategory + "\" → \"" + newCategory + "\"");
-        String newUnit = saved.getUnit() != null ? saved.getUnit().getName() : null;
-        if (oldUnit != null && !oldUnit.equals(newUnit))
-            changes.add("đơn vị tính \"" + oldUnit + "\" → \"" + newUnit + "\"");
-        if (oldMinStock != null && !oldMinStock.equals(saved.getMinStock()))
-            changes.add("mức tồn tối thiểu " + oldMinStock + " → " + saved.getMinStock());
+        diff(changes, "tên", q(oldName), q(saved.getName()));
+        diff(changes, "mã vạch", oldBarcode, saved.getBarcode());
+        diff(changes, "danh mục", q(oldCategory), q(saved.getCategory() != null ? saved.getCategory().getName() : null));
+        diff(changes, "đơn vị tính", q(oldUnit), q(saved.getUnit() != null ? saved.getUnit().getName() : null));
+        diff(changes, "mức tồn tối thiểu", oldMinStock, saved.getMinStock());
         String detail = "Sửa sản phẩm \"" + saved.getName() + "\"";
         if (!changes.isEmpty()) detail += " (" + String.join("; ", changes) + ")";
         auditService.log("UPDATE_PRODUCT", "PRODUCT", saved.getId(), detail);
@@ -270,6 +251,16 @@ public class ProductService {
     }
 
     // ----- helpers -----
+
+    /** Thêm dòng "nhãn cũ → mới" vào nhật ký thay đổi nếu hai giá trị khác nhau. */
+    private static void diff(List<String> out, String label, Object oldV, Object newV) {
+        if (oldV != null && !oldV.equals(newV)) out.add(label + " " + oldV + " → " + newV);
+    }
+
+    /** Bọc chuỗi trong nháy kép cho nhật ký (null giữ nguyên). */
+    private static String q(String s) {
+        return s != null ? "\"" + s + "\"" : null;
+    }
 
     private void apply(Product p, ProductRequest req) {
         Category category = categoryRepository.findById(req.categoryId())

@@ -6,11 +6,9 @@ import Loading from '../../components/ui/Loading'
 import { payrollApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
-import { formatMoney } from '../../utils/format'
+import { formatMoney, formatHours as fmtH } from '../../utils/format'
 import { useList } from '../../hooks/useList'
 import { openBlob } from '../../utils/download'
-
-const fmtH = (h) => `${Number(h || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}h`
 
 /** Phiếu lương của chính nhân viên đăng nhập (chỉ các kỳ đã khóa/đã chi). */
 export default function MyPayslips() {

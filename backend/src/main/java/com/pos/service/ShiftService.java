@@ -65,7 +65,7 @@ public class ShiftService {
         if (shiftRepository.existsByUserIdAndStatus(userId, ShiftStatus.OPEN)) {
             throw new BadRequestException("Bạn đang có một ca chưa đóng — vui lòng đóng ca trước khi mở ca mới");
         }
-        // Chi nhánh của ca: người gắn chi nhánh → chi nhánh đó; CHAIN_ADMIN → chi nhánh đang chọn (X-Store-Id).
+        // Chi nhánh của ca: người gắn chi nhánh → chi nhánh đó; ADMIN (toàn chuỗi) → chi nhánh đang chọn (X-Store-Id).
         Store store = user.getStore() != null ? user.getStore()
                 : storeRepository.getReferenceById(StoreContext.requireStoreId());
         WorkShift shift = new WorkShift();
@@ -108,10 +108,10 @@ public class ShiftService {
     public ShiftResponse close(Long shiftId, BigDecimal closingCash) {
         WorkShift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> NotFoundException.of("ca làm việc", shiftId));
-        // Cô lập đa cửa hàng: không cho đóng ca thuộc cửa hàng khác (CHAIN_ADMIN chưa chọn chi nhánh được bỏ qua).
+        // Cô lập đa cửa hàng: không cho đóng ca thuộc cửa hàng khác (ADMIN (toàn chuỗi) chưa chọn chi nhánh được bỏ qua).
         StoreContext.assertSameStore(shift.getStore().getId());
         CustomUserDetails me = SecurityUtils.currentUser();
-        boolean isManager = "ADMIN".equals(me.getRole()) || "MANAGER".equals(me.getRole());
+        boolean isManager = SecurityUtils.isManagerOrAbove();
         if (!isManager && !shift.getUser().getId().equals(me.getId())) {
             throw new BadRequestException("Bạn chỉ có thể đóng ca của chính mình");
         }

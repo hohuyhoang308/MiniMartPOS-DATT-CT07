@@ -5,7 +5,6 @@ import com.pos.entity.TelegramRecipient;
 import com.pos.exception.BadRequestException;
 import com.pos.repository.StoreConfigRepository;
 import com.pos.repository.TelegramRecipientRepository;
-import com.pos.security.SecurityUtils;
 import com.pos.security.StoreContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +60,7 @@ public class TelegramService {
 
     /** Gửi tin thử (FR-A5) tới 1 chat bằng token của CỬA HÀNG được chọn (ADMIN truyền storeId). */
     public boolean testSend(Long storeId, String chatId, String text) {
-        Long sid = (storeId != null && SecurityUtils.isAdmin()) ? storeId : StoreContext.requireStoreId();
+        Long sid = StoreContext.resolveTargetStoreId(storeId);
         StoreConfig cfg = config(sid);
         return sendMessage(cfg.getTelegramBotToken(), chatId,
                 text != null ? text : "🔔 Tin nhắn thử từ hệ thống POS cửa hàng tiện lợi");

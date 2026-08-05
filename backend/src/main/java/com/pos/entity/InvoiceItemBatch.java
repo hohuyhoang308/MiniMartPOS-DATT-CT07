@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /** Phân bổ tồn theo lô khi bán (bảng nối) — bảng {@code invoice_item_batches}.
- *  Nối dòng bán ↔ lô tồn kho (FIFO). Hủy HĐ ⇒ tồn tự hoàn vì các phân bổ
+ *  Nối dòng bán ↔ lô tồn kho (FEFO). Hủy HĐ ⇒ tồn tự hoàn vì các phân bổ
  *  trỏ tới hóa đơn CANCELLED không còn được tính (view v_batch_stock). */
 @Entity
 @Table(name = "invoice_item_batches")

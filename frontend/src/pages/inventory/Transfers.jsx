@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
@@ -21,9 +20,9 @@ const STATUS = {
   CANCELLED: { label: 'Đã hủy', cls: 'pill-danger', icon: 'bi-x-circle-fill' },
 }
 
-const emptyLine = () => ({ productId: '', batchId: '', quantity: 1 })
+const emptyLine = () => ({ id: crypto.randomUUID(), productId: '', batchId: '', quantity: 1 })
 
-export default function Transfers({ embedded = false }) {
+export default function Transfers() {
   const toast = useToast()
   const { scopeStoreId } = useStoreScope()
   const { data: list, loading, reload: load } = useList(transferApi.list)
@@ -58,15 +57,9 @@ export default function Transfers({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={() => setCreating(true)}><i className="bi bi-plus-lg me-1"></i>Tạo phiếu điều chuyển</Button>
-        </div>
-      ) : (
-        <PageHeader title="Điều chuyển kho" subtitle="Chuyển hàng giữa các chi nhánh: chi nhánh nguồn xuất hàng, chi nhánh đích nhận hàng vào kho.">
-          <Button onClick={() => setCreating(true)}><i className="bi bi-plus-lg me-1"></i>Tạo phiếu điều chuyển</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={() => setCreating(true)}><i className="bi bi-plus-lg me-1"></i>Tạo phiếu điều chuyển</Button>
+      </div>
 
       <InfoBanner id="stock-transfers" title="Điều chuyển kho hoạt động ra sao?">
         Khi một chi nhánh thừa hàng còn chi nhánh khác thiếu, bạn lập một phiếu điều chuyển từ
@@ -224,7 +217,7 @@ function CreateModal({ show, onHide, onDone }) {
                 const chosen = batches.find((b) => String(b.batchId) === String(it.batchId))
                 const max = chosen ? chosen.inWarehouse : 0
                 return (
-                  <tr key={idx}>
+                  <tr key={it.id}>
                     <td>
                       <Form.Select size="sm" value={it.productId} onChange={(e) => onProduct(idx, e.target.value)}>
                         <option value="">— chọn —</option>

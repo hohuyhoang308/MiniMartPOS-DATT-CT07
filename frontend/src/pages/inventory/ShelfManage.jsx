@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Button, Form, Modal, Spinner, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
@@ -12,10 +11,11 @@ import { categoryApi } from '../../api/catalog'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
 import { useList } from '../../hooks/useList'
+import { capacityBarColor } from '../../constants/chartColors'
 
 const EMPTY = { code: '', name: '', capacity: 200, status: 'ACTIVE' }
 
-export default function ShelfManage({ embedded = false }) {
+export default function ShelfManage() {
   const toast = useToast()
   const { data: shelves, loading, reload: load } = useList(shelfApi.list)
   const [categories, setCategories] = useState([])
@@ -44,15 +44,9 @@ export default function ShelfManage({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
-        </div>
-      ) : (
-        <PageHeader title="Cấu hình kệ" subtitle="Khai báo các kệ trưng bày trong cửa hàng. Đây là việc của quản lý.">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm kệ</Button>
+      </div>
 
       <InfoBanner id="shelfmanage" title="Cấu hình kệ (dành cho quản lý)">
         Đây là nơi <b>quản lý</b> <b>thêm, sửa, xoá kệ</b> và đặt <b>sức chứa</b> cho từng kệ (đặt mã kệ như K01 và tên khu vực).
@@ -82,7 +76,7 @@ export default function ShelfManage({ embedded = false }) {
                   <div className="num small">{s.totalQuantity} / {cap > 0 ? cap : '∞'}</div>
                   {cap > 0 && (
                     <div className="progress mt-1" style={{ height: 5, background: '#eef2f7' }}>
-                      <div className="progress-bar" style={{ width: `${pct}%`, background: pct >= 100 ? '#f43f5e' : pct >= 80 ? '#f59e0b' : 'var(--brand-500)' }} />
+                      <div className="progress-bar" style={{ width: `${pct}%`, background: capacityBarColor(pct) }} />
                     </div>
                   )}
                 </td>

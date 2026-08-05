@@ -9,9 +9,6 @@ import java.util.List;
 
 public interface LoyaltyPointLedgerRepository extends JpaRepository<LoyaltyPointLedger, Long> {
 
-    /** Lịch sử điểm của 1 khách (mới nhất trước) — màn chi tiết khách hàng. */
-    List<LoyaltyPointLedger> findTop100ByCustomerIdOrderByCreatedAtDesc(Long customerId);
-
     /** Số dòng sổ cái của một khách — để seed dòng MỞ khi khách có điểm ban đầu mà chưa có sổ cái. */
     long countByCustomerId(Long customerId);
 

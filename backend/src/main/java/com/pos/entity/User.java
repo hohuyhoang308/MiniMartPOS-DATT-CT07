@@ -38,7 +38,7 @@ public class User {
 
     /**
      * Chi nhánh người dùng trực thuộc (đa chuỗi). NULL = không gắn chi nhánh nào —
-     * chỉ dùng cho {@link Role#CHAIN_ADMIN} (quản trị toàn chuỗi). ADMIN/MANAGER/CASHIER
+     * chỉ dùng cho {@link Role#ADMIN} (quản trị toàn chuỗi). MANAGER/STAFF
      * BẮT BUỘC gắn một chi nhánh: mọi truy vấn của họ tự lọc theo chi nhánh này.
      *
      * <p>EAGER vì {@code User} là principal bảo mật: được nạp ở mỗi request (JWT filter) và

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import MoneyInput from '../../components/ui/MoneyInput'
 import EmptyState from '../../components/ui/EmptyState'
@@ -12,9 +11,9 @@ import { errMsg } from '../../api/client'
 import { formatMoney, formatDateTime } from '../../utils/format'
 import { useList } from '../../hooks/useList'
 
-const emptyLine = () => ({ productId: '', quantity: 1, importPrice: 0, expiryDate: '', byPack: false })
+const emptyLine = () => ({ id: crypto.randomUUID(), productId: '', quantity: 1, importPrice: 0, expiryDate: '', byPack: false })
 
-export default function GoodsReceipts({ embedded = false }) {
+export default function GoodsReceipts() {
   const toast = useToast()
   const location = useLocation()
   const navigate = useNavigate()
@@ -40,7 +39,7 @@ export default function GoodsReceipts({ embedded = false }) {
     prefilledRef.current = true
     const items = prefill.map((pf) => {
       const p = products.find((x) => x.id === pf.productId)
-      return { productId: String(pf.productId), quantity: pf.quantity || 1, importPrice: p?.costPrice ?? 0, expiryDate: '' }
+      return { ...emptyLine(), productId: String(pf.productId), quantity: pf.quantity || 1, importPrice: p?.costPrice ?? 0 }
     })
     setForm({ supplierId: '', note: 'Nhập hàng theo gợi ý của hệ thống', updateCostPrice: true, items: items.length ? items : [emptyLine()] })
     setCreating(true)
@@ -80,15 +79,9 @@ export default function GoodsReceipts({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
-        </div>
-      ) : (
-        <PageHeader title="Nhập kho" subtitle="Lập phiếu mỗi khi nhận hàng về. Hệ thống tự cộng hàng vào kho và ghi nhớ hạn sử dụng.">
-          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Lập phiếu nhập</Button>
+      </div>
 
       <InfoBanner id="receipts" title="Nhập kho hoạt động ra sao?">
         Mỗi lần nhận hàng, bạn lập một phiếu nhập. Mỗi phiếu sẽ tạo ra các <b>lô hàng</b>, mỗi lô có
@@ -145,7 +138,7 @@ export default function GoodsReceipts({ embedded = false }) {
                   const lp = products.find((x) => String(x.id) === String(it.productId))
                   const hasPack = lp && lp.packSize > 1 && lp.packUnitName
                   return (
-                  <tr key={idx}>
+                  <tr key={it.id}>
                     <td>
                       <Form.Select size="sm" value={it.productId} onChange={(e) => setItem(idx, 'productId', e.target.value)}>
                         <option value="">— chọn —</option>

@@ -23,8 +23,8 @@ import java.time.LocalDateTime;
  *       (đã thêm chiều {@code store_id}).</li>
  *   <li>DÙNG CHUNG toàn chuỗi: danh mục sản phẩm, khách thân thiết, khuyến mãi, đơn vị, NCC,
  *       sổ điểm (một catalog, một chương trình điểm).</li>
- *   <li>Phân quyền: vai trò CHAIN_ADMIN quản trị toàn chuỗi (chọn chi nhánh qua header X-Store-Id);
- *       ADMIN/MANAGER/CASHIER gắn cứng một chi nhánh, mọi truy vấn tự lọc theo chi nhánh đó.</li>
+ *   <li>Phân quyền: vai trò ADMIN (toàn chuỗi) quản trị toàn chuỗi (chọn chi nhánh qua header X-Store-Id);
+ *       MANAGER/STAFF gắn cứng một chi nhánh, mọi truy vấn tự lọc theo chi nhánh đó.</li>
  * </ul>
  */
 @Entity

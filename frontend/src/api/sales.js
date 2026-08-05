@@ -21,7 +21,7 @@ export const invoiceApi = {
   list: (params) => client.get('/invoices', { params }).then(unwrap),
   get: (id) => client.get(`/invoices/${id}`).then(unwrap),
   cancel: (id, reason) => client.post(`/invoices/${id}/cancel`, { reason }).then(unwrap),
-  pdfUrl: (id) => `/api/invoices/${id}/pdf`,
+  pdf: (id) => client.get(`/invoices/${id}/pdf`, { responseType: 'blob' }).then((r) => r.data),
 }
 
 export const paymentApi = {

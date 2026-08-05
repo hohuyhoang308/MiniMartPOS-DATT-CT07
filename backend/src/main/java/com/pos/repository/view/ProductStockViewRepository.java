@@ -25,7 +25,7 @@ public interface ProductStockViewRepository extends JpaRepository<ProductStockVi
     @Query("SELECT COUNT(v) FROM ProductStockView v WHERE v.storeId = :storeId AND v.currentStock <= 0")
     long countOutOfStock(@Param("storeId") Long storeId);
 
-    /** Tồn thấp TOÀN CHUỖI (mỗi dòng = 1 sản phẩm tại 1 chi nhánh) — dashboard của CHAIN_ADMIN. */
+    /** Tồn thấp TOÀN CHUỖI (mỗi dòng = 1 sản phẩm tại 1 chi nhánh) — dashboard của ADMIN (toàn chuỗi). */
     @Query("SELECT v FROM ProductStockView v WHERE v.currentStock <= v.minStock ORDER BY v.currentStock")
     List<ProductStockView> findLowStockAll();
 

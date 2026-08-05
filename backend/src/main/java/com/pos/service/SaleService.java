@@ -29,7 +29,7 @@ import java.util.*;
 
 /**
  * Nghiệp vụ bán hàng tại quầy (UC09/UC10) — toàn bộ trong MỘT transaction:
- * lưu hóa đơn + chi tiết, chọn lô FIFO theo HSD ghi invoice_item_batches,
+ * lưu hóa đơn + chi tiết, chọn lô FEFO theo HSD ghi invoice_item_batches,
  * tích điểm khách, tăng lượt dùng KM, tạo giao dịch QR (nếu thanh toán QR).
  * Nếu một sản phẩm không đủ tồn → rollback toàn bộ.
  */
@@ -212,8 +212,8 @@ public class SaleService {
         invoice.setCode(generateCode());
         invoice.setIdempotencyKey(idem);
 
-        // 7) Trừ tồn FIFO theo HSD: phân bổ từng dòng bán vào các lô CỦA CHI NHÁNH NÀY (đa chuỗi)
-        allocateStockFifo(invoice, neededByProduct, shift.getStore().getId());
+        // 7) Trừ tồn FEFO theo HSD: phân bổ từng dòng bán vào các lô CỦA CHI NHÁNH NÀY (đa chuỗi)
+        allocateStockFefo(invoice, neededByProduct, shift.getStore().getId());
 
         // 8) Lưu hóa đơn (cascade items + batches). flush để CSDL tính total_amount/subtotal (GENERATED).
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
@@ -254,17 +254,17 @@ public class SaleService {
         return InvoiceResponse.from(saved, pt, qrUrl);
     }
 
-    /** Phân bổ FIFO: với mỗi sản phẩm, rút tồn theo thứ tự HSD gần nhất TRONG CHI NHÁNH. Thiếu tồn → Conflict (rollback). */
-    private void allocateStockFifo(Invoice invoice, Map<Long, Integer> neededByProduct, Long storeId) {
+    /** Phân bổ FEFO: với mỗi sản phẩm, rút tồn theo thứ tự HSD gần nhất TRONG CHI NHÁNH. Thiếu tồn → Conflict (rollback). */
+    private void allocateStockFefo(Invoice invoice, Map<Long, Integer> neededByProduct, Long storeId) {
         // Khoá tồn theo sản phẩm (id TĂNG DẦN để tránh deadlock) TRƯỚC khi đọc tồn từ view:
         // tuần tự hoá các giao dịch chạm cùng sản phẩm → không thể bán quá tồn kệ khi 2 quầy bán đồng thời.
         neededByProduct.keySet().stream().sorted().forEach(productRepository::findByIdForUpdate);
 
-        // Nạp danh sách lô khả dụng (FIFO) cho từng sản phẩm + bộ đếm tồn còn lại trong bộ nhớ
+        // Nạp danh sách lô khả dụng (FEFO) cho từng sản phẩm + bộ đếm tồn còn lại trong bộ nhớ
         Map<Long, Deque<long[]>> batchesByProduct = new HashMap<>(); // productId -> deque[ batchId, remaining ]
         for (Long productId : neededByProduct.keySet()) {
             Deque<long[]> deque = new ArrayDeque<>();
-            for (BatchStockView b : batchStockRepository.findAvailableBatchesFifo(productId, storeId)) {
+            for (BatchStockView b : batchStockRepository.findAvailableBatchesFefo(productId, storeId)) {
                 deque.addLast(new long[]{b.getBatchId(), b.getOnShelf()}); // chỉ bán hàng TRÊN KỆ của chi nhánh
             }
             batchesByProduct.put(productId, deque);

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Col, Form, Row, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
@@ -8,13 +7,7 @@ import Loading from '../../components/ui/Loading'
 import { reportApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
-import { formatMoney } from '../../utils/format'
-
-const iso = (d) => d.toISOString().slice(0, 10)
-function monthRange() {
-  const now = new Date()
-  return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) }
-}
+import { formatMoney, monthRange } from '../../utils/format'
 
 /** Màu biên lợi nhuận: thấp (đỏ) → cao (xanh). */
 function marginCls(m) {
@@ -24,7 +17,7 @@ function marginCls(m) {
   return 'text-success'
 }
 
-export default function ProductReport({ embedded = false }) {
+export default function ProductReport() {
   const toast = useToast()
   const def = monthRange()
   const [from, setFrom] = useState(def.from)
@@ -54,8 +47,6 @@ export default function ProductReport({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && <PageHeader title="Báo cáo sản phẩm" subtitle="Lợi nhuận & biên lợi nhuận theo mặt hàng, và hàng tồn bán chậm" />}
-
       <InfoBanner id="prod-report" title="Trang này dùng để làm gì?">
         Xem mỗi mặt hàng bán được bao nhiêu, <b>lãi bao nhiêu</b> và <b>biên lợi nhuận</b> (lãi trên doanh thu) —
         để biết hàng nào lãi tốt, hàng nào lãi mỏng. Phần <b>Hàng bán chậm</b> liệt kê sản phẩm <b>còn tồn nhưng

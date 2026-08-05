@@ -45,7 +45,7 @@ public class InvoiceItem {
     @Column(insertable = false, updatable = false, precision = 14, scale = 2)
     private BigDecimal subtotal;
 
-    /** Phân bổ tồn theo lô (FIFO) cho dòng bán này. */
+    /** Phân bổ tồn theo lô (FEFO) cho dòng bán này. */
     @OneToMany(mappedBy = "invoiceItem", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<InvoiceItemBatch> batches = new ArrayList<>();
 

@@ -1,5 +1,10 @@
 package com.pos.util;
 
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.BaseFont;
 
 import java.io.File;
@@ -33,5 +38,12 @@ public final class PdfFonts {
         } catch (Exception e) {
             throw new IllegalStateException("Không nạp được font cho PDF", e);
         }
+    }
+
+    /** Thêm một đoạn văn CĂN GIỮA vào tài liệu — dùng chung cho các service xuất PDF. */
+    public static void addCenter(Document doc, String text, Font font) throws DocumentException {
+        Paragraph p = new Paragraph(text, font);
+        p.setAlignment(Element.ALIGN_CENTER);
+        doc.add(p);
     }
 }

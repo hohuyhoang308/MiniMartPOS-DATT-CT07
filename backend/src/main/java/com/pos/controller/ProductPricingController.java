@@ -40,13 +40,13 @@ public class ProductPricingController {
     public ApiResponse<StorePriceResponse> set(@org.springframework.web.bind.annotation.RequestBody
                                                @jakarta.validation.Valid SetStorePriceRequest req) {
         return ApiResponse.ok("Đã đặt giá riêng cho chi nhánh",
-                StorePriceResponse.from(service.setStorePrice(req.productId(), req.salePrice())));
+                service.setStorePrice(req.productId(), req.salePrice()));
     }
 
     /** Bỏ giá riêng → quay về giá chuẩn của chuỗi. */
     @DeleteMapping("/{productId}")
     public ApiResponse<Void> clear(@PathVariable Long productId) {
         service.clearStorePrice(productId);
-        return ApiResponse.ok("Đã bỏ giá riêng", null);
+        return ApiResponse.message("Đã bỏ giá riêng");
     }
 }

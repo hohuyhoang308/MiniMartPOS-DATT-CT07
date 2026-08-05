@@ -351,7 +351,6 @@ a { text-decoration: none; }
   box-shadow: var(--shadow-sm);
   background: var(--surface);
 }
-.card-elevated { box-shadow: var(--shadow-md); }
 .soft-card {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);

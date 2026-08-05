@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Nạp chi nhánh đang chọn từ header {@code X-Store-Id} vào {@link StoreContext} cho CHAIN_ADMIN
+ * Nạp chi nhánh đang chọn từ header {@code X-Store-Id} vào {@link StoreContext} cho ADMIN (toàn chuỗi)
  * (đa chuỗi). Người dùng gắn chi nhánh sẽ bỏ qua header này khi resolve. Luôn dọn ThreadLocal cuối request.
  *
  * <p>Header được KIỂM TRA tồn tại trong bảng {@code stores}: id sai định dạng / không có thật → bỏ qua

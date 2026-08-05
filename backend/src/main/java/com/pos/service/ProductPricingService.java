@@ -1,5 +1,6 @@
 package com.pos.service;
 
+import com.pos.config.CacheConfig;
 import com.pos.dto.pricing.StorePriceResponse;
 import com.pos.entity.Product;
 import com.pos.entity.ProductStorePrice;
@@ -54,7 +55,7 @@ public class ProductPricingService {
      * Giá bán hiệu lực của 1 sản phẩm tại 1 chi nhánh. storeId null (ADMIN toàn chuỗi) → giá chuẩn.
      * Cache để giảm tải DB ở POS; key gồm cả product để evict chính xác khi đổi giá.
      */
-    @Cacheable(cacheNames = "storePrice", key = "#product.id + ':' + (#storeId == null ? 'CHAIN' : #storeId)")
+    @Cacheable(cacheNames = CacheConfig.STORE_PRICE, key = "#product.id + ':' + (#storeId == null ? 'CHAIN' : #storeId)")
     public BigDecimal effectiveSalePrice(Product product, Long storeId) {
         if (storeId == null) return product.getSalePrice();
         return priceRepository.findActive(product.getId(), storeId, CommonStatus.ACTIVE)
@@ -86,8 +87,8 @@ public class ProductPricingService {
      * (StoreContext chốt store); ADMIN phải chọn chi nhánh trước. Upsert: đã có thì cập nhật, chưa có thì tạo.
      */
     @Transactional
-    @CacheEvict(cacheNames = "storePrice", key = "#productId + ':' + T(com.pos.security.StoreContext).requireStoreId()")
-    public ProductStorePrice setStorePrice(Long productId, BigDecimal salePrice) {
+    @CacheEvict(cacheNames = CacheConfig.STORE_PRICE, key = "#productId + ':' + T(com.pos.security.StoreContext).requireStoreId()")
+    public StorePriceResponse setStorePrice(Long productId, BigDecimal salePrice) {
         if (salePrice == null || salePrice.signum() < 0)
             throw new com.pos.exception.BadRequestException("Giá bán không hợp lệ");
         Long storeId = StoreContext.requireStoreId();
@@ -105,12 +106,13 @@ public class ProductPricingService {
         ProductStorePrice saved = priceRepository.save(psp);
         auditService.log("SET_STORE_PRICE", "PRODUCT", productId,
                 "Giá riêng CN#" + storeId + " = " + salePrice);
-        return saved;
+        // Map sang DTO ngay trong transaction (tránh LazyInitializationException ở controller).
+        return StorePriceResponse.from(saved);
     }
 
     /** Bỏ override → quay về giá chuẩn của chuỗi. */
     @Transactional
-    @CacheEvict(cacheNames = "storePrice", key = "#productId + ':' + T(com.pos.security.StoreContext).requireStoreId()")
+    @CacheEvict(cacheNames = CacheConfig.STORE_PRICE, key = "#productId + ':' + T(com.pos.security.StoreContext).requireStoreId()")
     public void clearStorePrice(Long productId) {
         Long storeId = StoreContext.requireStoreId();
         priceRepository.findByProductIdAndStoreId(productId, storeId).ifPresent(psp -> {

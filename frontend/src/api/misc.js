@@ -79,8 +79,8 @@ export const reportApi = {
   employees: (from, to) => client.get('/reports/employees', { params: { from, to } }).then(unwrap),
   products: (from, to) => client.get('/reports/products', { params: { from, to } }).then(unwrap),
   dailyRollup: (from, to) => client.get('/reports/daily-rollup', { params: { from, to } }).then(unwrap),
-  exportUrl: (from, to, groupBy = 'DAY') =>
-    `/api/reports/export?type=excel&from=${from}&to=${to}&groupBy=${groupBy}`,
+  exportExcel: (from, to, groupBy = 'DAY') =>
+    client.get('/reports/export', { params: { type: 'excel', from, to, groupBy }, responseType: 'blob' }).then((r) => r.data),
 }
 
 /** Tài khoản & cấu hình (UC02, UC20, UC24). */

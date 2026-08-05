@@ -19,14 +19,6 @@ public interface CashMovementRepository extends JpaRepository<CashMovement, Long
     @Query("SELECT COALESCE(SUM(c.amount), 0) FROM CashMovement c WHERE c.shift.id = :shiftId AND c.type = :type")
     BigDecimal sumByShiftAndType(@Param("shiftId") Long shiftId, @Param("type") CashMovementType type);
 
-    /** RÒNG (THU − CHI) của MỘT ca — cộng vào tiền mặt dự kiến cuối ca. */
-    @Query("""
-            SELECT COALESCE(SUM(CASE WHEN c.type = com.pos.entity.enums.CashMovementType.IN
-                                     THEN c.amount ELSE -c.amount END), 0)
-            FROM CashMovement c WHERE c.shift.id = :shiftId
-            """)
-    BigDecimal netByShift(@Param("shiftId") Long shiftId);
-
     /** RÒNG (THU − CHI) gộp theo NHIỀU ca cùng lúc — bỏ N+1 ở báo cáo ca. */
     @Query("""
             SELECT c.shift.id AS shiftId,

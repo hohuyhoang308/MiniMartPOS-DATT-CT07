@@ -12,7 +12,6 @@ import com.pos.entity.enums.CommonStatus;
 import com.pos.entity.view.BatchStockView;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
-import com.pos.entity.Store;
 import com.pos.repository.*;
 import com.pos.repository.view.BatchStockViewRepository;
 import com.pos.security.SecurityUtils;
@@ -23,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/** Quản lý KỆ vật lý: CRUD kệ + đưa hàng từ KHO lên một KỆ cụ thể (FIFO/HSD) + xem nội dung kệ. */
+/** Quản lý KỆ vật lý: CRUD kệ + đưa hàng từ KHO lên một KỆ cụ thể (FEFO theo HSD) + xem nội dung kệ. */
 @Service
 @Transactional(readOnly = true)
 public class ShelfService {
@@ -102,12 +101,8 @@ public class ShelfService {
         }
         // NGỪNG DÙNG kệ: chỉ cho phép khi kệ đã hết hàng. Tránh tình trạng "ngừng" mà POS vẫn bán
         // được hàng còn trên kệ — phải lấy về kho hoặc bán hết trước.
-        if (req.status() == CommonStatus.INACTIVE && s.getStatus() == CommonStatus.ACTIVE) {
-            boolean hasStock = batchStockRepository.findByShelf(id).stream()
-                    .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
-            if (hasStock) {
-                throw new BadRequestException("Kệ còn hàng — hãy lấy hết hàng về kho hoặc bán hết trước khi ngừng dùng kệ.");
-            }
+        if (req.status() == CommonStatus.INACTIVE && s.getStatus() == CommonStatus.ACTIVE && shelfHasStock(id)) {
+            throw new BadRequestException("Kệ còn hàng — hãy lấy hết hàng về kho hoặc bán hết trước khi ngừng dùng kệ.");
         }
         apply(s, req);
         Shelf saved = shelfRepository.save(s);
@@ -122,9 +117,7 @@ public class ShelfService {
     public void delete(Long id) {
         Shelf s = getOrThrow(id);
         String code = s.getCode();
-        boolean hasStock = batchStockRepository.findByShelf(id).stream()
-                .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
-        if (hasStock) {
+        if (shelfHasStock(id)) {
             throw new BadRequestException("Kệ còn hàng — không thể xoá. Hãy lấy hết hàng về kho hoặc bán hết trước.");
         }
         // Còn lịch sử lên kệ / lấy về kho tham chiếu kệ này → khoá FK, chặn bằng thông báo rõ ràng.
@@ -149,7 +142,7 @@ public class ShelfService {
 
     /**
      * Đưa {@code quantity} sản phẩm từ KHO lên KỆ {@code shelfId}: rút từ các lô trong kho theo
-     * FIFO/HSD, tạo phiếu chuyển. Tôn trọng quy ước "một lô chỉ ở một kệ" (bỏ qua lô đã thuộc kệ khác).
+     * FEFO theo HSD, tạo phiếu chuyển. Tôn trọng quy ước "một lô chỉ ở một kệ" (bỏ qua lô đã thuộc kệ khác).
      * Trả về số lượng thực tế đã lên kệ.
      */
     @Transactional
@@ -164,17 +157,18 @@ public class ShelfService {
         User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);
 
         // Giới hạn theo SỨC CHỨA của kệ (0 = không giới hạn)
+        int toMove = quantity;
         int cap = shelf.getCapacity() != null ? shelf.getCapacity() : 0;
         if (cap > 0) {
             long room = cap - currentShelfTotal(shelfId);
             if (room <= 0) {
                 throw new BadRequestException("Kệ " + shelf.getCode() + " đã đầy (sức chứa " + cap + ").");
             }
-            if (quantity > room) quantity = (int) room; // chỉ lên hàng tới khi đầy kệ
+            if (toMove > room) toMove = (int) room; // chỉ lên hàng tới khi đầy kệ
         }
 
-        int need = quantity, moved = 0;
-        for (BatchStockView b : batchStockRepository.findWarehouseBatchesFifo(productId, shelf.getStore().getId())) {
+        int need = toMove, moved = 0;
+        for (BatchStockView b : batchStockRepository.findWarehouseBatchesFefo(productId, shelf.getStore().getId())) {
             if (need <= 0) break;
             if (b.getShelfId() != null && !b.getShelfId().equals(shelfId)) continue; // lô đã thuộc kệ khác
             int avail = b.getInWarehouse() != null ? b.getInWarehouse().intValue() : 0;
@@ -217,24 +211,43 @@ public class ShelfService {
         if (v.getShelfId() == null || onShelf <= 0) {
             throw new BadRequestException("Lô này không còn hàng trên kệ để lấy về kho.");
         }
-        if (quantity > onShelf) quantity = (int) onShelf; // chỉ lấy tối đa bằng tồn kệ
+        int toReturn = quantity > onShelf ? (int) onShelf : quantity; // chỉ lấy tối đa bằng tồn kệ
         Shelf shelf = getOrThrow(v.getShelfId());
         User user = userRepository.findById(SecurityUtils.currentUserId()).orElse(null);
 
         ShelfReturn r = new ShelfReturn();
         r.setBatch(batchRepository.getReferenceById(batchId));
         r.setShelf(shelf);
-        r.setQuantity(quantity);
+        r.setQuantity(toReturn);
         r.setCreatedBy(user);
         shelfReturnRepository.save(r);
         String productName = batch.getProduct() != null ? batch.getProduct().getName() : "#" + batchId;
         auditService.log("SHELF_RETURN", "SHELF", shelf.getId(),
-                "Lấy về kho " + quantity + " sản phẩm \"" + productName
+                "Lấy về kho " + toReturn + " sản phẩm \"" + productName
                         + "\" từ kệ " + shelf.getCode() + " (lô #" + batchId + ")");
-        return quantity;
+        return toReturn;
     }
 
     // ---------- helpers ----------
+
+    /** Bản đồ sản phẩm → mã kệ đang bày của MỘT chi nhánh (kệ có tồn &gt; 0) — dùng chung cho danh sách tồn/POS. */
+    public Map<Long, String> shelfCodeByProduct(Long storeId) {
+        Map<Long, String> byId = shelfRepository.findAll().stream()
+                .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
+        Map<Long, String> byProduct = new HashMap<>();
+        for (BatchStockView b : batchStockRepository.findOnShelfByStore(storeId)) {
+            if (b.getShelfId() != null) {
+                byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
+            }
+        }
+        return byProduct;
+    }
+
+    /** Kệ còn hàng đang bày không (tồn kệ &gt; 0)? — điều kiện chặn xóa/ngừng dùng kệ. */
+    private boolean shelfHasStock(Long shelfId) {
+        return batchStockRepository.findByShelf(shelfId).stream()
+                .anyMatch(v -> v.getOnShelf() != null && v.getOnShelf() > 0);
+    }
 
     private void apply(Shelf s, ShelfRequest req) {
         s.setCode(req.code().trim());

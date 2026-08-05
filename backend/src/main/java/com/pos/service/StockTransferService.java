@@ -31,7 +31,7 @@ import java.util.Set;
  * <ul>
  *   <li><b>SHIP</b> (chi nhánh NGUỒN): ghi {@link StockAdjustment} reason=TRANSFER_OUT → view trừ tồn nguồn.</li>
  *   <li><b>RECEIVE</b> (chi nhánh ĐÍCH): tạo {@link GoodsReceipt} source=TRANSFER mang HSD/giá vốn gốc →
- *       tồn xuất hiện ở đích như lô mới, FIFO theo HSD vẫn đúng.</li>
+ *       tồn xuất hiện ở đích như lô mới, FEFO theo HSD vẫn đúng.</li>
  * </ul>
  * Mọi bước đều khóa phiếu (PESSIMISTIC_WRITE) + chốt phạm vi chi nhánh + kiểm bảng chuyển hợp lệ.</p>
  */
@@ -140,9 +140,11 @@ public class StockTransferService {
         StoreContext.assertSameStore(t.getSourceStore().getId());   // chỉ chi nhánh NGUỒN được ship
         assertTransition(t, TransferStatus.SHIPPING);
 
+        // Khóa tồn TẤT CẢ sản phẩm theo THỨ TỰ TOÀN CỤC (id tăng dần) trước khi đọc view —
+        // cùng thứ tự khóa với SaleService để không deadlock chéo giữa ship và bán hàng.
+        t.getItems().stream().map(it -> it.getProduct().getId()).distinct().sorted()
+                .forEach(productRepository::findByIdForUpdate);
         for (StockTransferItem it : t.getItems()) {
-            // Khóa tồn sản phẩm trước khi đọc view (chống đua với bán/lên kệ — không cho âm).
-            productRepository.findByIdForUpdate(it.getProduct().getId());
             BatchStockView v = batchStockRepository.findById(it.getBatch().getId())
                     .orElseThrow(() -> NotFoundException.of("lô", it.getBatch().getId()));
             long inWarehouse = v.getInWarehouse() != null ? v.getInWarehouse() : 0L;
@@ -212,7 +214,7 @@ public class StockTransferService {
     // ---- helpers ----
 
     /** Tạo phiếu nhập NỘI BỘ (source=TRANSFER, không NCC) cho một kho từ các dòng của phiếu điều chuyển,
-     *  giữ nguyên HSD & giá vốn theo lô gốc → tồn xuất hiện như lô mới, FIFO theo HSD vẫn đúng. */
+     *  giữ nguyên HSD & giá vốn theo lô gốc → tồn xuất hiện như lô mới, FEFO theo HSD vẫn đúng. */
     private GoodsReceipt createInternalReceipt(Store store, StockTransfer t, String note) {
         GoodsReceipt rcpt = new GoodsReceipt();
         rcpt.setCode(genReceiptCode());

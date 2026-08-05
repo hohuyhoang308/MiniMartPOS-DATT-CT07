@@ -7,7 +7,7 @@ import org.hibernate.annotations.Immutable;
 import java.time.LocalDate;
 
 /** Tồn còn lại từng LÔ = số nhập - tổng đã bán (HĐ COMPLETED) —
- *  ánh xạ view {@code v_batch_stock} (chỉ đọc). Dùng để chọn lô FIFO khi bán. */
+ *  ánh xạ view {@code v_batch_stock} (chỉ đọc). Dùng để chọn lô FEFO khi bán. */
 @Entity
 @Immutable
 @Table(name = "v_batch_stock")

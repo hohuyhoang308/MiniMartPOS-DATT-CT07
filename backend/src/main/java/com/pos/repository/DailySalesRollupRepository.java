@@ -60,6 +60,4 @@ public interface DailySalesRollupRepository extends JpaRepository<DailySalesRoll
     List<DailySalesRollup> findByStoreIdAndSalesDateBetweenOrderBySalesDate(Long storeId, LocalDate from, LocalDate to);
 
     List<DailySalesRollup> findBySalesDateBetween(LocalDate from, LocalDate to);
-
-    boolean existsByStoreId(Long storeId);
 }

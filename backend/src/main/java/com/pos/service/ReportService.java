@@ -22,6 +22,7 @@ import com.pos.repository.projection.UserQtyRow;
 import com.pos.repository.view.ProductStockViewRepository;
 import com.pos.repository.view.ShiftSummaryViewRepository;
 import com.pos.security.StoreContext;
+import com.pos.util.Money;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -170,7 +171,7 @@ public class ReportService {
             out.add(new EmployeeReportResponse(
                     s.getUserId(), s.getCashierName(), invoices, revenue,
                     itemsByUser.getOrDefault(s.getUserId(), 0L),
-                    invoices > 0 ? revenue.divide(BigDecimal.valueOf(invoices), 0, RoundingMode.HALF_UP) : BigDecimal.ZERO,
+                    invoices > 0 ? Money.prorate(revenue, BigDecimal.ONE, BigDecimal.valueOf(invoices)) : BigDecimal.ZERO,
                     cash != null && cash.getTotalShifts() != null ? cash.getTotalShifts() : 0L,
                     cash != null && cash.getClosedShifts() != null ? cash.getClosedShifts() : 0L,
                     cash != null ? nz(cash.getVariance()) : BigDecimal.ZERO));
@@ -189,7 +190,7 @@ public class ReportService {
     }
 
     /**
-     * BÁO CÁO SẢN PHẨM trong khoảng: lợi nhuận/biên theo từng sản phẩm đã bán (doanh thu − COGS FIFO‑lô),
+     * BÁO CÁO SẢN PHẨM trong khoảng: lợi nhuận/biên theo từng sản phẩm đã bán (doanh thu − COGS đích danh theo lô),
      * và danh sách HÀNG Ế (còn tồn nhưng không bán được đơn vị nào trong khoảng) — chỉ tính khi đã chọn cửa hàng.
      */
     public ProductReportResponse productReport(LocalDate from, LocalDate to) {

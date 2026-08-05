@@ -3,7 +3,6 @@ import { Button, ButtonGroup, Card, Col, Form, Row, Table } from 'react-bootstra
 import {
   Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
 import StatusPill from '../../components/ui/StatusPill'
@@ -11,11 +10,11 @@ import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
 import DiffBadge from '../../components/ui/DiffBadge'
 import { reportApi } from '../../api/misc'
-import client from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
-import { formatMoney } from '../../utils/format'
+import { formatMoney, iso, monthRange } from '../../utils/format'
 import { downloadBlob } from '../../utils/download'
+import { REVENUE_FILL, REVENUE_STROKE, PROFIT_COLOR } from '../../constants/chartColors'
 
 const GROUPS = [
   { key: 'DAY', label: 'Ngày' },
@@ -23,13 +22,6 @@ const GROUPS = [
   { key: 'MONTH', label: 'Tháng' },
   { key: 'YEAR', label: 'Năm' },
 ]
-
-const iso = (d) => d.toISOString().slice(0, 10)
-
-function monthRange() {
-  const now = new Date()
-  return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) }
-}
 
 /** Rút gọn nhãn kỳ từ chuỗi bucket backend trả về theo từng cách gộp. */
 function formatLabel(groupBy, bucket) {
@@ -92,8 +84,8 @@ function buildSeries(from, to, groupBy, points) {
   return out
 }
 
-/** Báo cáo doanh thu/lợi nhuận + đối soát quỹ theo ca. `embedded` = nhúng trong trang Báo cáo (ẩn tiêu đề). */
-export default function RevenueReport({ embedded = false }) {
+/** Báo cáo doanh thu/lợi nhuận + đối soát quỹ theo ca (nhúng trong trang Báo cáo). */
+export default function RevenueReport() {
   const toast = useToast()
   const def = monthRange()
   const [from, setFrom] = useState(def.from)
@@ -138,8 +130,7 @@ export default function RevenueReport({ embedded = false }) {
   async function exportExcel() {
     setExporting(true)
     try {
-      const res = await client.get(reportApi.exportUrl(from, to, groupBy).replace('/api', ''), { responseType: 'blob' })
-      downloadBlob(res.data, `bao-cao-${groupBy.toLowerCase()}-${from}_${to}.xlsx`)
+      downloadBlob(await reportApi.exportExcel(from, to, groupBy), `bao-cao-${groupBy.toLowerCase()}-${from}_${to}.xlsx`)
       toast.success('Đã xuất file Excel')
     } catch (e) { toast.error(errMsg(e)) } finally { setExporting(false) }
   }
@@ -156,12 +147,6 @@ export default function RevenueReport({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && (
-        <PageHeader title="Báo cáo doanh thu & lợi nhuận" subtitle="Xem theo ngày, tuần, tháng, năm và theo từng ca làm việc">
-          {exportBtn}
-        </PageHeader>
-      )}
-
       <InfoBanner id="reports" title="Cách xem báo cáo">
         Chọn <b>khoảng thời gian</b> và <b>cách xem</b> (theo ngày, tuần, tháng hay năm) rồi bấm "Xem báo cáo".
         <b> Lợi nhuận</b> là tiền bán được trừ đi tiền vốn của số hàng đã bán. Bảng bên dưới cho biết doanh thu
@@ -180,7 +165,7 @@ export default function RevenueReport({ embedded = false }) {
               </Form.Select>
             </Col>
             <Col md="auto"><Button onClick={() => load()}><i className="bi bi-funnel me-1"></i>Xem báo cáo</Button></Col>
-            {embedded && <Col md="auto">{exportBtn}</Col>}
+            <Col md="auto">{exportBtn}</Col>
           </Row>
           <div className="mt-3 d-flex flex-wrap gap-2">
             <span className="text-muted2 small align-self-center me-1">Khoảng nhanh:</span>
@@ -212,8 +197,8 @@ export default function RevenueReport({ embedded = false }) {
                   <ComposedChart data={chart}>
                     <defs>
                       <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        <stop offset="0%" stopColor={REVENUE_FILL} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={REVENUE_FILL} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -221,8 +206,8 @@ export default function RevenueReport({ embedded = false }) {
                     <YAxis tickFormatter={(v) => `${v / 1000}k`} />
                     <Tooltip cursor={false} formatter={(v, n) => [formatMoney(v), n === 'revenue' ? 'Doanh thu' : 'Lợi nhuận']} />
                     <Legend formatter={(v) => (v === 'revenue' ? 'Doanh thu' : 'Lợi nhuận')} />
-                    <Area type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2.5} fill="url(#revFill)" />
-                    <Line type="monotone" dataKey="profit" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
+                    <Area type="monotone" dataKey="revenue" stroke={REVENUE_STROKE} strokeWidth={2.5} fill="url(#revFill)" />
+                    <Line type="monotone" dataKey="profit" stroke={PROFIT_COLOR} strokeWidth={2.5} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}

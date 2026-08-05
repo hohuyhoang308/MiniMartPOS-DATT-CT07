@@ -81,9 +81,6 @@ management:
   health:
     db:
       enabled: true                 # health phụ thuộc kết nối DB
-    redis:
-      enabled: false                # Redis chỉ bật ở profile 'redis'; mặc định in-memory → tắt health Redis
-                                     # (nếu không sẽ báo DOWN vì cố ping Redis không chạy). Bật lại trong application-redis nếu cần.
 
 logging:
   level:

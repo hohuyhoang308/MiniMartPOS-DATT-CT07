@@ -101,7 +101,7 @@ public class CustomerService {
         Customer c = getOrThrow(id);
         var spending = spendingRepository.findByCustomerId(id);
         // Cô lập đa cửa hàng: nhân viên/quản lý chỉ thấy lịch sử mua tại CHÍNH cửa hàng mình;
-        // CHAIN_ADMIN (chưa chọn chi nhánh) thấy toàn chuỗi.
+        // ADMIN (toàn chuỗi) (chưa chọn chi nhánh) thấy toàn chuỗi.
         List<CustomerHistoryResponse.InvoiceBrief> invoices =
                 invoiceRepository.findCustomerHistory(id, InvoiceStatus.COMPLETED, StoreContext.currentStoreId())
                         .stream()

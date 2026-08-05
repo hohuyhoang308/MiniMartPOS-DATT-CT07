@@ -21,13 +21,19 @@ public final class SecurityUtils {
         return currentUser().getId();
     }
 
-    /** Chi nhánh đang làm việc (đa chuỗi); null = toàn chuỗi. Xem {@link StoreContext}. */
-    public static Long currentStoreId() {
-        return StoreContext.currentStoreId();
-    }
-
     /** Có phải quản trị viên TOÀN CHUỖI không (vai trò ADMIN, không gắn cửa hàng). */
     public static boolean isAdmin() {
         return "ADMIN".equals(currentUser().getRole());
+    }
+
+    /** Có phải cấp quản lý trở lên không (ADMIN hoặc MANAGER). */
+    public static boolean isManagerOrAbove() {
+        String role = currentUser().getRole();
+        return "ADMIN".equals(role) || "MANAGER".equals(role);
+    }
+
+    /** Có phải nhân viên bán hàng (STAFF) không. */
+    public static boolean isStaff() {
+        return "STAFF".equals(currentUser().getRole());
     }
 }

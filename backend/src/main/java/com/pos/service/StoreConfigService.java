@@ -7,7 +7,6 @@ import com.pos.entity.StoreConfig;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.StoreConfigRepository;
 import com.pos.repository.StoreRepository;
-import com.pos.security.SecurityUtils;
 import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,11 +47,7 @@ public class StoreConfigService {
      * MANAGER/STAFF bỏ trống → tự lấy cửa hàng của họ. ADMIN bỏ trống → lỗi (yêu cầu chọn cửa hàng).
      */
     private Long resolveConfigStoreId(Long storeId) {
-        if (storeId != null) {
-            if (SecurityUtils.isAdmin()) return storeId;             // admin cấu hình cửa hàng bất kỳ
-            return StoreContext.requireStoreId();                    // người gắn cửa hàng: chỉ cửa hàng của mình
-        }
-        return StoreContext.requireStoreId();
+        return StoreContext.resolveTargetStoreId(storeId);
     }
 
     /** ĐỌC cấu hình — KHÔNG ghi DB. Chưa cấu hình → trả về mặc định tạm (lấy tên/địa chỉ từ chi nhánh). */

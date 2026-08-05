@@ -8,11 +8,8 @@ import { useToast } from '../../context/ToastContext'
 import { useStoreScope } from '../../context/StoreScopeContext'
 import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
+import { currentMonth as thisMonth } from '../../utils/format'
 
-function thisMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 const TYPE = {
   WORK: { label: 'Giờ làm (ngoài ca)', cls: 'pill-info', icon: 'bi-clock' },
   LEAVE_PAID: { label: 'Nghỉ phép có lương', cls: 'pill-violet', icon: 'bi-calendar-check' },
@@ -48,11 +45,13 @@ export default function Attendance() {
   async function save(e) {
     e.preventDefault(); setSaving(true)
     try {
-      await payrollApi.addAttendance({
+      const saved = await payrollApi.addAttendance({
         userId: Number(form.userId), workDate: form.workDate,
         type: form.type, hours: Number(form.hours), reason: form.reason || null,
       })
-      toast.success('Đã chấm công')
+      // Backend cảnh báo khi ngày đó nhân viên đã có ca (nguy cơ nhập trùng giờ với ca)
+      if (saved?.warning) toast.warning(saved.warning)
+      else toast.success('Đã chấm công')
       setForm(null); load()
     } catch (e) { toast.error(errMsg(e)) } finally { setSaving(false) }
   }

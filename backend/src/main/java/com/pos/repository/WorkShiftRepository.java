@@ -3,6 +3,7 @@ package com.pos.repository;
 import com.pos.entity.WorkShift;
 import com.pos.entity.enums.ShiftStatus;
 import com.pos.repository.projection.EmployeeCashRow;
+import com.pos.repository.projection.LongShiftRow;
 import com.pos.repository.projection.WorkedHoursRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -79,4 +80,30 @@ public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
     List<WorkedHoursRow> workedHoursByEmployee(@Param("storeId") Long storeId,
                                                @Param("from") LocalDateTime from,
                                                @Param("to") LocalDateTime to);
+
+    /**
+     * Ca ĐÃ ĐÓNG dài quá {@code maxHours} giờ trong kỳ (nghi quên đóng ca → giờ công bị tính dư).
+     * Dùng để CẢNH BÁO khi tính lương — không tự sửa số liệu.
+     */
+    @Query(value = """
+            SELECT s.id AS shiftId,
+                   u.full_name AS fullName,
+                   s.opened_at AS openedAt,
+                   ROUND(TIMESTAMPDIFF(SECOND, s.opened_at, s.closed_at) / 3600.0, 1) AS hours
+            FROM work_shifts s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.status = 'CLOSED' AND s.closed_at IS NOT NULL
+              AND s.store_id = :storeId
+              AND s.opened_at >= :from AND s.opened_at < :to
+              AND TIMESTAMPDIFF(SECOND, s.opened_at, s.closed_at) > :maxHours * 3600
+            ORDER BY s.opened_at
+            """, nativeQuery = true)
+    List<LongShiftRow> findLongShifts(@Param("storeId") Long storeId,
+                                      @Param("from") LocalDateTime from,
+                                      @Param("to") LocalDateTime to,
+                                      @Param("maxHours") int maxHours);
+
+    /** Nhân viên có ca (mở ca) trong một ngày? — cảnh báo chấm công thủ công trùng ngày có ca. */
+    boolean existsByUser_IdAndOpenedAtGreaterThanEqualAndOpenedAtLessThan(
+            Long userId, LocalDateTime dayStart, LocalDateTime nextDayStart);
 }

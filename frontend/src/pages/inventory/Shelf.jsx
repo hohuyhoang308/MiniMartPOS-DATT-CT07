@@ -11,6 +11,7 @@ import { productApi } from '../../api/catalog'
 import { inventoryApi, shelfApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
+import { capacityBarColor } from '../../constants/chartColors'
 
 const needShelf = (p) => (p.shelfStock ?? 0) <= (p.minStock ?? 0) && (p.warehouseStock ?? 0) > 0
 
@@ -114,7 +115,7 @@ export default function Shelf() {
                   <div className="text-muted2 small text-truncate">{s.name || '—'} · {s.productCount} mặt hàng</div>
                   {cap > 0 && (
                     <div className="progress mt-1" style={{ height: 4, background: '#eef2f7' }}>
-                      <div className="progress-bar" style={{ width: `${pct}%`, background: pct >= 100 ? '#f43f5e' : pct >= 80 ? '#f59e0b' : 'var(--brand-500)' }} />
+                      <div className="progress-bar" style={{ width: `${pct}%`, background: capacityBarColor(pct) }} />
                     </div>
                   )}
                 </Card.Body>

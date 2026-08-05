@@ -1,158 +1,150 @@
--- =====================================================================
---  HỆ THỐNG POS CHO CỬA HÀNG TIỆN LỢI
---  Script tạo CSDL MySQL 8 + dữ liệu mẫu  (BẢN CÀI TAY ĐỘC LẬP / TÀI LIỆU)
---  Thiết kế chuẩn hóa 3NF, toàn vẹn tham chiếu đầy đủ, không bảng/cột dư thừa.
---  Xem docs/04_Thiet_ke_CSDL_ERD.md
---  Cách chạy:  mysql -u root -p < sql/schema.sql   (hoặc Import qua phpMyAdmin)
+-- ============================================================================
+--  BẢN CÀI TAY — được RÁP TỰ ĐỘNG từ bản chuẩn duy nhất:
+--      backend/src/main/resources/db/schema.sql
+--  KHÔNG SỬA TAY FILE NÀY. Muốn đổi cấu trúc: sửa bản chuẩn rồi chạy lại
+--  lệnh ráp (xem docs) hoặc chép đè nội dung bản chuẩn vào dưới header này.
 --
---  ⚠️ LƯU Ý: Khi CHẠY ỨNG DỤNG, backend KHÔNG dùng file này. App tự dựng cấu trúc + VIEW
---     từ 'backend/src/main/resources/db/schema.sql' (spring.sql.init) rồi seed dữ liệu nền
---     bằng các *DataInitializer trong code. File này chỉ để cài tay/đọc tài liệu —
---     nếu sửa cấu trúc, phải đồng bộ CẢ HAI file để khỏi lệch.
+--  Cách chạy:  mysql -u root -p < sql/schema.sql   (hoặc Import qua phpMyAdmin)
+--  Lưu ý: TRIGGER do ứng dụng tự tạo khi khởi động (SchemaTriggersInitializer),
+--  bản cài tay không cần DELIMITER.
+-- ============================================================================
+CREATE DATABASE IF NOT EXISTS pos_convenience_store
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_0900_ai_ci;
+USE pos_convenience_store;
+-- =====================================================================
+--  SCHEMA TỰ KHỞI TẠO (idempotent) cho POS — chạy bởi Spring Boot
+--  spring.sql.init mỗi lần khởi động. An toàn chạy lại nhiều lần:
+--    - CREATE TABLE IF NOT EXISTS  → đã có thì bỏ qua (không mất dữ liệu)
+--    - CREATE OR REPLACE VIEW      → cập nhật định nghĩa view
+--  Dữ liệu nền (users/sản phẩm/khách/khuyến mãi...) do các *DataInitializer
+--  trong code seed (idempotent), KHÔNG đặt ở đây.
+--  => Drop database rồi khởi động lại: cấu trúc + view tự dựng, seeders tự nạp.
 -- =====================================================================
 
-DROP DATABASE IF EXISTS pos_convenience_store;
-CREATE DATABASE pos_convenience_store
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_0900_ai_ci;   -- = mặc định MySQL 8; đồng nhất với DB do app tự tạo (tránh trộn collation)
-USE pos_convenience_store;
+-- Ghim charset/collation MẶC ĐỊNH cho database hiện tại → mọi bảng tạo sau tự thừa hưởng,
+-- tránh lệch collation (nguyên nhân gốc của migration "đồng nhất collation" bên dưới). Idempotent.
+ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
--- ---------------------------------------------------------------------
--- 0. CHI NHÁNH / CỬA HÀNG trong chuỗi (ĐA CHUỖI). Tạo TRƯỚC mọi bảng tham chiếu store_id.
--- ---------------------------------------------------------------------
-CREATE TABLE stores (
-    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code         VARCHAR(30)  NOT NULL UNIQUE,            -- CH01, CH02...
-    name         VARCHAR(150) NOT NULL,
-    address      VARCHAR(255),
-    phone        VARCHAR(20),
-    is_warehouse TINYINT(1)   NOT NULL DEFAULT 0,         -- 1 = kho trung tâm của chuỗi (Obj 1.1): chỉ trung chuyển, không bán quầy
-    status       ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+-- 0. CHI NHÁNH / CỬA HÀNG trong chuỗi (đa chuỗi) ----------------------
+--     Phải tạo TRƯỚC mọi bảng tham chiếu store_id. Chi nhánh mặc định id=1 (CH01)
+--     do migration bên dưới chèn (dữ liệu cũ trước đa chuỗi thuộc về chi nhánh này).
+CREATE TABLE IF NOT EXISTS stores (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code       VARCHAR(30)  NOT NULL UNIQUE,           -- CH01, CH02...
+    name       VARCHAR(150) NOT NULL,
+    address    VARCHAR(255),
+    phone      VARCHAR(20),
+    status     ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 1. NGƯỜI DÙNG & PHÂN QUYỀN (FR1)
---    store_id NULL = quản trị toàn chuỗi (CHAIN_ADMIN); còn lại gắn 1 chi nhánh.
--- ---------------------------------------------------------------------
-CREATE TABLE users (
+-- 1. Người dùng & phân quyền ------------------------------------------
+--     store_id NULL = quản trị toàn chuỗi (CHAIN_ADMIN); còn lại gắn 1 chi nhánh.
+CREATE TABLE IF NOT EXISTS users (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     username      VARCHAR(50)  NOT NULL UNIQUE,
-    password_hash VARCHAR(100) NOT NULL,                  -- BCrypt (~60 ký tự)
+    password_hash VARCHAR(100) NOT NULL,
     full_name     VARCHAR(100) NOT NULL,
     role          ENUM('ADMIN','MANAGER','STAFF') NOT NULL,   -- ADMIN=toàn chuỗi; MANAGER/STAFF=một cửa hàng
     store_id      BIGINT,
     status        ENUM('ACTIVE','LOCKED') NOT NULL DEFAULT 'ACTIVE',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_user_store (store_id),
     CONSTRAINT fk_user_store FOREIGN KEY (store_id) REFERENCES stores(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 2. DANH MỤC, ĐƠN VỊ TÍNH (FR2) + NHÀ CUNG CẤP (FR3)  -- các bảng gốc
--- ---------------------------------------------------------------------
-CREATE TABLE categories (
+-- 2. Danh mục, đơn vị, nhà cung cấp -----------------------------------
+CREATE TABLE IF NOT EXISTS categories (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(100) NOT NULL UNIQUE,
     description VARCHAR(255),
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE'
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE units (
+CREATE TABLE IF NOT EXISTS units (
     id   BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE                       -- lon, chai, gói, thùng...
-) ENGINE=InnoDB;
+    name VARCHAR(50) NOT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE suppliers (
+CREATE TABLE IF NOT EXISTS suppliers (
     id      BIGINT AUTO_INCREMENT PRIMARY KEY,
     name    VARCHAR(150) NOT NULL,
     phone   VARCHAR(20),
     email   VARCHAR(100),
     address VARCHAR(255),
     status  ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE'
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 3. SẢN PHẨM (FR2.3) -> FK categories, units
--- ---------------------------------------------------------------------
-CREATE TABLE products (
+-- 3. Sản phẩm ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS products (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    barcode     VARCHAR(50)  NOT NULL UNIQUE,              -- mã vạch
+    barcode     VARCHAR(50)  NOT NULL UNIQUE,
     name        VARCHAR(150) NOT NULL,
     category_id BIGINT NOT NULL,
     unit_id     BIGINT NOT NULL,
-    cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,          -- giá vốn hiện hành
-    sale_price  DECIMAL(12,2) NOT NULL,                    -- giá bán (da gom VAT)
-    tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,        -- thue suat GTGT %
-    pack_size   INT NOT NULL DEFAULT 1,                     -- 1 thung = ? lon
-    pack_unit_id BIGINT,                                    -- don vi mua (thung)
+    cost_price  DECIMAL(12,2) NOT NULL DEFAULT 0,
+    sale_price  DECIMAL(12,2) NOT NULL,                  -- giá bán ĐÃ GỒM VAT (chuẩn bán lẻ VN)
+    tax_rate    DECIMAL(5,2)  NOT NULL DEFAULT 8.00,      -- thuế suất GTGT % (vd 0/8/10)
+    pack_size   INT NOT NULL DEFAULT 1,                   -- 1 ĐV mua (thùng) = ? ĐV bán cơ bản (lon)
+    pack_unit_id BIGINT,                                  -- đơn vị MUA (thùng/lốc) — NULL nếu chỉ bán lẻ
     image_url   VARCHAR(255),
-    min_stock   INT NOT NULL DEFAULT 0,                    -- mức tồn tối thiểu để cảnh báo
+    min_stock   INT NOT NULL DEFAULT 0,
     status      ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- KHÔNG có current_stock: tồn kho suy ra từ lô (view v_product_stock)
+    KEY idx_product_name (name),
+    KEY idx_product_category (category_id),
+    KEY idx_product_unit (unit_id),
     CONSTRAINT fk_product_category  FOREIGN KEY (category_id) REFERENCES categories(id),
     CONSTRAINT fk_product_unit      FOREIGN KEY (unit_id)     REFERENCES units(id),
     CONSTRAINT fk_product_pack_unit FOREIGN KEY (pack_unit_id) REFERENCES units(id),
     CONSTRAINT chk_product_price    CHECK (sale_price >= 0 AND cost_price >= 0),
     CONSTRAINT chk_product_packsize CHECK (pack_size >= 1),
     CONSTRAINT chk_product_minstock CHECK (min_stock >= 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_product_name     ON products(name);
-CREATE INDEX idx_product_category ON products(category_id);
-CREATE INDEX idx_product_unit     ON products(unit_id);
-
--- ---------------------------------------------------------------------
--- 4. NHẬP KHO (FR3) -> goods_receipt_items đóng vai trò "LÔ HÀNG" (bất biến)
---      quantity     = số lượng nhập (cố định)
---      expiry_date  = hạn sử dụng của lô
---    Tồn còn lại KHÔNG lưu ở đây -> suy ra từ phân bổ bán (invoice_item_batches).
--- ---------------------------------------------------------------------
-CREATE TABLE goods_receipts (
+-- 4. Nhập kho (goods_receipt_items = LÔ HÀNG) -------------------------
+CREATE TABLE IF NOT EXISTS goods_receipts (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code         VARCHAR(30) NOT NULL UNIQUE,              -- mã phiếu nhập
-    store_id     BIGINT NOT NULL,                          -- chi nhánh nhập (LÔ thừa hưởng chi nhánh)
-    supplier_id  BIGINT,                                   -- NULL khi nguồn = TRANSFER (nhận điều chuyển nội bộ, không có NCC)
-    source       ENUM('PURCHASE','TRANSFER') NOT NULL DEFAULT 'PURCHASE', -- nguồn gốc: mua NCC / nhận điều chuyển (Obj 1.1)
-    created_by   BIGINT NOT NULL,                          -- người lập phiếu
-    total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,         -- tổng tiền chứng từ (chốt khi lưu)
+    code         VARCHAR(30) NOT NULL UNIQUE,
+    store_id     BIGINT NOT NULL,                       -- chi nhánh nhập (LÔ thừa hưởng chi nhánh từ đây)
+    supplier_id  BIGINT NOT NULL,
+    created_by   BIGINT NOT NULL,
+    total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     note         VARCHAR(255),
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_receipt_store (store_id),
     CONSTRAINT fk_receipt_store    FOREIGN KEY (store_id)    REFERENCES stores(id),
     CONSTRAINT fk_receipt_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
     CONSTRAINT fk_receipt_user     FOREIGN KEY (created_by)  REFERENCES users(id)
-) ENGINE=InnoDB;
-CREATE INDEX idx_receipt_store ON goods_receipts(store_id);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE goods_receipt_items (
+CREATE TABLE IF NOT EXISTS goods_receipt_items (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     receipt_id   BIGINT NOT NULL,
     product_id   BIGINT NOT NULL,
-    quantity     INT NOT NULL,                             -- số lượng nhập của lô (cố định)
-    import_price DECIMAL(12,2) NOT NULL,                   -- giá nhập tại thời điểm
-    expiry_date  DATE,                                     -- HSD của lô (NULL nếu không HSD)
+    quantity     INT NOT NULL,
+    import_price DECIMAL(12,2) NOT NULL,
+    expiry_date  DATE,
+    KEY idx_gri_product (product_id),
+    KEY idx_gri_expiry (expiry_date),
     CONSTRAINT fk_gri_receipt FOREIGN KEY (receipt_id) REFERENCES goods_receipts(id) ON DELETE CASCADE,
     CONSTRAINT fk_gri_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT chk_gri_qty CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_gri_product ON goods_receipt_items(product_id);
-CREATE INDEX idx_gri_expiry  ON goods_receipt_items(expiry_date);
-
--- ---------------------------------------------------------------------
--- 5. KHÁCH HÀNG (FR6) & KHUYẾN MÃI (FR7)  -- các bảng gốc
--- ---------------------------------------------------------------------
-CREATE TABLE customers (
+-- 5. Khách hàng & khuyến mãi ------------------------------------------
+CREATE TABLE IF NOT EXISTS customers (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     full_name      VARCHAR(100) NOT NULL,
-    phone          VARCHAR(20)  NOT NULL UNIQUE,           -- SĐT duy nhất
+    phone          VARCHAR(20)  NOT NULL UNIQUE,
     email          VARCHAR(100),
-    loyalty_points INT NOT NULL DEFAULT 0,                 -- số dư điểm (trạng thái)
+    loyalty_points INT NOT NULL DEFAULT 0,
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_customer_points CHECK (loyalty_points >= 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE promotions (
+CREATE TABLE IF NOT EXISTS promotions (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     code             VARCHAR(30)  NOT NULL UNIQUE,
     name             VARCHAR(150) NOT NULL,
@@ -161,7 +153,7 @@ CREATE TABLE promotions (
     min_order_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
     start_date       DATETIME NOT NULL,
     end_date         DATETIME NOT NULL,
-    usage_limit      INT,                                  -- NULL = không giới hạn
+    usage_limit      INT,
     used_count       INT NOT NULL DEFAULT 0,
     status           ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     CONSTRAINT chk_promo_value   CHECK (discount_value >= 0),
@@ -169,284 +161,220 @@ CREATE TABLE promotions (
     CONSTRAINT chk_promo_used    CHECK (used_count >= 0),
     CONSTRAINT chk_promo_percent CHECK (discount_type <> 'PERCENT' OR discount_value <= 100),  -- % giảm không quá 100
     CONSTRAINT chk_promo_limit   CHECK (usage_limit IS NULL OR used_count <= usage_limit)       -- không dùng quá hạn mức
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 6. CA LÀM VIỆC (FR4.1) -> FK users
--- ---------------------------------------------------------------------
-CREATE TABLE work_shifts (
+-- 6. Ca làm việc ------------------------------------------------------
+CREATE TABLE IF NOT EXISTS work_shifts (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    store_id     BIGINT NOT NULL,                          -- chi nhánh mở ca
-    user_id      BIGINT NOT NULL,                          -- thu ngân của ca
+    store_id     BIGINT NOT NULL,                       -- chi nhánh mở ca (HĐ/phiếu trả thừa hưởng)
+    user_id      BIGINT NOT NULL,
     opening_cash DECIMAL(12,2) NOT NULL DEFAULT 0,
-    closing_cash DECIMAL(12,2),                            -- đối soát cuối ca (NULL khi đang mở)
-    final_cash_sales DECIMAL(14,2),                        -- SNAPSHOT tiền mặt bán chốt lúc ĐÓNG ca (Obj 2): hủy HĐ tiền mặt của ca đã đóng không làm lệch đối soát quỹ
+    closing_cash DECIMAL(12,2),
     opened_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at    DATETIME,
     status       ENUM('OPEN','CLOSED') NOT NULL DEFAULT 'OPEN',
+    KEY idx_shift_user (user_id),
+    KEY idx_shift_status (status),
+    KEY idx_shift_store (store_id),
     CONSTRAINT fk_shift_store FOREIGN KEY (store_id) REFERENCES stores(id),
     CONSTRAINT fk_shift_user  FOREIGN KEY (user_id)  REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_shift_user   ON work_shifts(user_id);
-CREATE INDEX idx_shift_status ON work_shifts(status);
-CREATE INDEX idx_shift_store  ON work_shifts(store_id);
+-- (Bảng cash_movements định nghĩa ở mục 12c bên dưới — petty cash thu/chi quỹ.)
 
-
--- (Bang cash_movements dinh nghia o muc petty cash ben duoi — gan stock_adjustments.)
-
--- ---------------------------------------------------------------------
--- 7. HÓA ĐƠN & CHI TIẾT (FR4, FR5)
---    KHÔNG có cashier_id: thu ngân suy ra qua shift_id -> work_shifts.user_id.
---    total_amount là cột GENERATED = subtotal - discount_amount.
--- ---------------------------------------------------------------------
-CREATE TABLE invoices (
+-- 7. Hóa đơn & chi tiết ----------------------------------------------
+CREATE TABLE IF NOT EXISTS invoices (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code            VARCHAR(30) NOT NULL UNIQUE,           -- mã hóa đơn
-    store_id        BIGINT NOT NULL,                       -- chi nhánh bán (chốt từ ca)
-    shift_id        BIGINT NOT NULL,                       -- ca làm việc (=> thu ngân)
-    customer_id     BIGINT,                                -- tùy chọn (khách thân thiết)
-    promotion_id    BIGINT,                                -- tùy chọn (mã giảm giá)
-    subtotal        DECIMAL(14,2) NOT NULL,                -- tổng trước giảm (chốt từ chi tiết)
+    code            VARCHAR(30) NOT NULL UNIQUE,
+    store_id        BIGINT NOT NULL,                    -- chi nhánh bán (chốt từ ca: truy vấn doanh thu theo chi nhánh khỏi join)
+    shift_id        BIGINT NOT NULL,
+    customer_id     BIGINT,
+    promotion_id    BIGINT,
+    subtotal        DECIMAL(14,2) NOT NULL,
     discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
-    total_amount    DECIMAL(14,2) AS (subtotal - discount_amount) STORED,  -- tính sẵn
+    total_amount    DECIMAL(14,2) AS (subtotal - discount_amount) STORED,
     payment_method  ENUM('CASH','QR') NOT NULL,
-    customer_paid   DECIMAL(14,2),                         -- tiền khách đưa (tiền mặt)
-    change_amount   DECIMAL(14,2),                         -- tiền thừa
-    points_earned   INT NOT NULL DEFAULT 0,                -- điểm tích cho khách ở HĐ này
-    points_used     INT NOT NULL DEFAULT 0,                -- điểm khách dùng để giảm trừ ở HĐ này
+    customer_paid   DECIMAL(14,2),
+    change_amount   DECIMAL(14,2),
+    points_earned   INT NOT NULL DEFAULT 0,
+    points_used     INT NOT NULL DEFAULT 0,
+    -- PENDING_PAYMENT: HĐ QR đã tạo, đang CHỜ xác nhận tiền về (giữ chỗ tồn nhưng CHƯA tính doanh thu).
+    --   QR trả tiền (WEB2M/xác nhận tay) ⇒ COMPLETED; quá hạn ⇒ CANCELLED (tự hoàn tồn + điểm).
     status          ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED',
-    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,       -- phan VAT trong tong
-    cancelled_by    BIGINT,                                -- ai hủy (audit)
-    cancelled_at    DATETIME,                              -- khi nào hủy
-    cancel_reason   VARCHAR(255),                          -- lý do hủy (bắt buộc khi hủy)
-    idempotency_key VARCHAR(64) UNIQUE,                    -- chong tao HD trung khi gui lai
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,      -- phần VAT trong tổng (giá đã gồm VAT)
+    idempotency_key VARCHAR(64) UNIQUE,                    -- chống tạo HĐ trùng khi FE gửi lại do mất phản hồi
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_invoice_shift (shift_id),
+    KEY idx_invoice_customer (customer_id),
+    KEY idx_invoice_created (created_at),
+    KEY idx_invoice_status (status, created_at),
+    KEY idx_invoice_store (store_id, status, created_at),
     CONSTRAINT fk_invoice_store     FOREIGN KEY (store_id)     REFERENCES stores(id),
     CONSTRAINT fk_invoice_shift     FOREIGN KEY (shift_id)     REFERENCES work_shifts(id),
     CONSTRAINT fk_invoice_customer  FOREIGN KEY (customer_id)  REFERENCES customers(id),
     CONSTRAINT fk_invoice_promotion FOREIGN KEY (promotion_id) REFERENCES promotions(id),
-    CONSTRAINT fk_invoice_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id),  -- vết "ai hủy"
     CONSTRAINT chk_invoice_amount   CHECK (subtotal >= 0 AND discount_amount >= 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_invoice_shift    ON invoices(shift_id);
-CREATE INDEX idx_invoice_customer ON invoices(customer_id);
-CREATE INDEX idx_invoice_created  ON invoices(created_at);
-CREATE INDEX idx_invoice_status   ON invoices(status, created_at);
-CREATE INDEX idx_invoice_store    ON invoices(store_id, status, created_at);
-
-CREATE TABLE invoice_items (
+CREATE TABLE IF NOT EXISTS invoice_items (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     invoice_id BIGINT NOT NULL,
     product_id BIGINT NOT NULL,
     quantity   INT NOT NULL,
-    unit_price DECIMAL(12,2) NOT NULL,                     -- giá bán tại thời điểm (snapshot)
-    subtotal   DECIMAL(14,2) AS (quantity * unit_price) STORED,  -- tính sẵn
+    unit_price DECIMAL(12,2) NOT NULL,
+    subtotal   DECIMAL(14,2) AS (quantity * unit_price) STORED,
+    KEY idx_ii_invoice (invoice_id),
+    KEY idx_ii_product (product_id),
     CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
     CONSTRAINT fk_ii_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT chk_ii_qty CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_ii_invoice ON invoice_items(invoice_id);
-CREATE INDEX idx_ii_product ON invoice_items(product_id);
-
--- ---------------------------------------------------------------------
--- 8. PHÂN BỔ TỒN KHO KHI BÁN  (BẢNG NỐI bán <-> lô)  *** MỚI ***
---    Nối invoice_items <-> goods_receipt_items: mỗi dòng bán lấy hàng từ
---    lô nào, số lượng bao nhiêu (FIFO theo HSD). Đảm bảo:
---      - Truy vết & toàn vẹn tồn kho theo lô.
---      - Hủy hóa đơn (UC14): tồn TỰ HOÀN vì phân bổ trỏ tới HĐ CANCELLED
---        không còn được tính (xem view v_batch_stock).
---    Ràng buộc: SUM(quantity theo invoice_item) = invoice_items.quantity.
--- ---------------------------------------------------------------------
-CREATE TABLE invoice_item_batches (
+-- 8. Phân bổ tồn theo lô khi bán -------------------------------------
+CREATE TABLE IF NOT EXISTS invoice_item_batches (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     invoice_item_id BIGINT NOT NULL,
-    batch_id        BIGINT NOT NULL,                       -- = goods_receipt_items.id
-    quantity        INT NOT NULL,                          -- số lượng lấy từ lô này
+    batch_id        BIGINT NOT NULL,
+    quantity        INT NOT NULL,
+    KEY idx_iib_item (invoice_item_id),
+    KEY idx_iib_batch (batch_id),
     CONSTRAINT fk_iib_item  FOREIGN KEY (invoice_item_id) REFERENCES invoice_items(id) ON DELETE CASCADE,
     CONSTRAINT fk_iib_batch FOREIGN KEY (batch_id)        REFERENCES goods_receipt_items(id),
     CONSTRAINT chk_iib_qty  CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_iib_item  ON invoice_item_batches(invoice_item_id);
-CREATE INDEX idx_iib_batch ON invoice_item_batches(batch_id);
-
--- ---------------------------------------------------------------------
--- 8a. KỆ VẬT LÝ (Display Shelves): các kệ trưng bày (Kệ A1, K01...).
--- ---------------------------------------------------------------------
-CREATE TABLE shelves (
+-- 8a. KỆ VẬT LÝ (Display Shelves): các kệ trưng bày trong cửa hàng (Kệ A1, Kệ 1...).
+CREATE TABLE IF NOT EXISTS shelves (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    store_id   BIGINT NOT NULL,                          -- chi nhánh đặt kệ
-    code       VARCHAR(30)  NOT NULL,                    -- mã kệ: K01, A1... (duy nhất TRONG chi nhánh)
-    name       VARCHAR(100),                             -- khu vực: "Nước giải khát"
-    capacity   INT NOT NULL DEFAULT 0,                   -- sức chứa tối đa (số SP); 0 = không giới hạn
+    store_id   BIGINT NOT NULL,                        -- chi nhánh đặt kệ
+    code       VARCHAR(30)  NOT NULL,                  -- mã kệ: A1, B2, K01... (duy nhất TRONG chi nhánh)
+    name       VARCHAR(100),                           -- tên/khu vực: "Nước giải khát"
+    capacity   INT NOT NULL DEFAULT 0,                 -- sức chứa tối đa (số SP); 0 = không giới hạn
     status     ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_shelf_store (store_id),
     CONSTRAINT uq_shelf_store_code UNIQUE (store_id, code),
     CONSTRAINT fk_shelf_store FOREIGN KEY (store_id) REFERENCES stores(id),
     CONSTRAINT chk_shelf_cap CHECK (capacity >= 0)
-) ENGINE=InnoDB;
-CREATE INDEX idx_shelf_store ON shelves(store_id);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên 1 KỆ).
---     Quy ước: một LÔ chỉ nằm trên MỘT kệ.
+-- 8b. CHUYỂN HÀNG TỪ KHO LÊN KỆ (mỗi dòng = số lượng của 1 LÔ đưa lên 1 KỆ cụ thể).
+--     Quy ước: một LÔ chỉ nằm trên MỘT kệ (mọi lần lên kệ của lô đó vào cùng kệ).
 --     Tồn kệ của lô = đã lên kệ − đã bán; Tồn kho của lô = đã nhập − đã lên kệ.
--- ---------------------------------------------------------------------
-CREATE TABLE shelf_transfers (
+CREATE TABLE IF NOT EXISTS shelf_transfers (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id
+    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id (lô)
     shelf_id    BIGINT NOT NULL,                       -- kệ đích
     quantity    INT NOT NULL,
     created_by  BIGINT,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_st_batch (batch_id),
+    KEY idx_st_shelf (shelf_id),
     CONSTRAINT fk_st_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
     CONSTRAINT fk_st_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
     CONSTRAINT fk_st_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_st_qty  CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_st_batch ON shelf_transfers(batch_id);
-CREATE INDEX idx_st_shelf ON shelf_transfers(shelf_id);
-
--- Lay hang tu ke ve kho (doi ung voi len ke).
+-- 8c. LẤY HÀNG TỪ KỆ VỀ KHO (đối ứng với lên kệ — "đặt lên thì có đặt xuống").
+--     Mỗi dòng = số lượng của 1 LÔ trả từ kệ về kho. Tồn kệ của lô = lên kệ − trả về − bán.
 CREATE TABLE IF NOT EXISTS shelf_returns (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    batch_id    BIGINT NOT NULL,
-    shelf_id    BIGINT NOT NULL,
+    batch_id    BIGINT NOT NULL,                       -- = goods_receipt_items.id (lô)
+    shelf_id    BIGINT NOT NULL,                       -- kệ nguồn (lấy hàng xuống từ kệ này)
     quantity    INT NOT NULL,
     created_by  BIGINT,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_sr_batch (batch_id),
+    KEY idx_sr_shelf (shelf_id),
     CONSTRAINT fk_sr_batch FOREIGN KEY (batch_id) REFERENCES goods_receipt_items(id) ON DELETE CASCADE,
     CONSTRAINT fk_sr_shelf FOREIGN KEY (shelf_id) REFERENCES shelves(id),
     CONSTRAINT fk_sr_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_sr_qty  CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_sr_batch ON shelf_returns(batch_id);
-CREATE INDEX idx_sr_shelf ON shelf_returns(shelf_id);
+-- (Đã bỏ chức năng TRẢ HÀNG / HOÀN TIỀN: cửa hàng tiện lợi không nhận trả hàng.
+--  Hủy nhầm hóa đơn dùng HỦY HĐ — tồn tự hoàn qua view; không còn bảng sales_returns.)
 
--- (Đã bỏ chức năng TRẢ HÀNG / HOÀN TIỀN: cửa hàng tiện lợi không nhận trả hàng;
---  hủy nhầm hóa đơn dùng HỦY HĐ → tồn tự hoàn qua view. Không còn bảng sales_returns.)
-
--- ---------------------------------------------------------------------
--- 9. GIAO DỊCH THANH TOÁN ĐIỆN TỬ — VietQR + WEB2M (FR-A1, FR-A4)
---    Chỉ dùng cho thanh toán QR/chuyển khoản cần ĐỐI SOÁT TỰ ĐỘNG qua WEB2M.
---    Tiền mặt KHÔNG tạo dòng ở đây (đã thu tại quầy).
---    Mỗi cột đều có vai trò riêng (không thừa):
---      amount           = số tiền cần khớp với giao dịch ngân hàng (snapshot)
---      transfer_content = nội dung CK DUY NHẤT để WEB2M map giao dịch -> đúng HĐ
---      bank_reference   = mã giao dịch NH do WEB2M trả về (bằng chứng đã nhận tiền)
--- ---------------------------------------------------------------------
-CREATE TABLE payment_transactions (
+-- 9. Giao dịch thanh toán QR -----------------------------------------
+CREATE TABLE IF NOT EXISTS payment_transactions (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     invoice_id       BIGINT NOT NULL,
-    amount           DECIMAL(14,2) NOT NULL,             -- số tiền cần khớp
-    transfer_content VARCHAR(50) NOT NULL UNIQUE,         -- nội dung CK duy nhất (WEB2M đối soát)
+    amount           DECIMAL(14,2) NOT NULL,
+    transfer_content VARCHAR(50) NOT NULL UNIQUE,
     status           ENUM('PENDING','PAID','EXPIRED','FAILED') NOT NULL DEFAULT 'PENDING',
-    bank_reference   VARCHAR(100),                        -- mã GD ngân hàng (khi khớp)
-    paid_at          DATETIME,                            -- thời điểm xác nhận đã nhận tiền
-    expired_at       DATETIME,                            -- hạn hiệu lực mã QR
+    bank_reference   VARCHAR(100),
+    paid_at          DATETIME,
+    expired_at       DATETIME,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_payment_invoice (invoice_id),
+    KEY idx_payment_status (status, expired_at),
     CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
     CONSTRAINT chk_payment_amount CHECK (amount >= 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX idx_payment_invoice ON payment_transactions(invoice_id);
-CREATE INDEX idx_payment_status  ON payment_transactions(status);
-
--- ---------------------------------------------------------------------
--- 10. CẤU HÌNH HỆ THỐNG (FR10, FR-A) - bảng 1 dòng (singleton) làm HUB cấu hình:
---     thông tin cửa hàng (in HĐ) + ngân hàng (sinh VietQR) + WEB2M (poll đối soát)
---     + Telegram Bot (thông báo). Mỗi cột có vai trò riêng, không thừa.
---     LƯU Ý: web2m_api_url & telegram_bot_token là NHẠY CẢM - giới hạn quyền đọc;
---            production nên override bằng biến môi trường trong application.yml.
--- ---------------------------------------------------------------------
-CREATE TABLE store_config (
-    id                BIGINT PRIMARY KEY,                  -- = stores.id (mỗi chi nhánh 1 dòng)
-    -- Thông tin cửa hàng (in hóa đơn - FR10)
-    name              VARCHAR(150) NOT NULL,
-    address           VARCHAR(255),
-    phone             VARCHAR(20),
-    tax_code          VARCHAR(30),
-    logo_url          VARCHAR(255),
-    -- Ngân hàng nhận tiền - để SINH MÃ VietQR hiển thị (FR-A1)
-    bank_name         VARCHAR(50),                         -- vd 'MB Bank' (hiển thị)
-    bank_bin          VARCHAR(20),                         -- mã BIN cho VietQR, vd 970422 (MB)
-    bank_account_no   VARCHAR(30),                         -- số tài khoản nhận tiền
-    bank_account_name VARCHAR(100),                        -- tên chủ tài khoản
-    transfer_prefix   VARCHAR(20),                         -- mã ký hiệu trong nội dung CK, vd 'POS'
-    -- WEB2M - API poll lịch sử giao dịch để ĐỐI SOÁT tự động (FR-A4)
-    web2m_api_url     VARCHAR(255),                        -- URL đầy đủ (token nằm trong path)
-    -- Telegram Bot - thông báo tự động (FR-A5)
+-- 10. Cấu hình TỪNG CHI NHÁNH (đa chuỗi) — id = stores.id (1–1 chia sẻ khóa) ----
+CREATE TABLE IF NOT EXISTS store_config (
+    id                 BIGINT PRIMARY KEY,             -- = stores.id (KHÔNG auto-increment)
+    name               VARCHAR(150) NOT NULL,
+    address            VARCHAR(255),
+    phone              VARCHAR(20),
+    tax_code           VARCHAR(30),
+    logo_url           VARCHAR(255),
+    bank_name          VARCHAR(50),
+    bank_bin           VARCHAR(20),
+    bank_account_no    VARCHAR(30),
+    bank_account_name  VARCHAR(100),
+    transfer_prefix    VARCHAR(20),
+    web2m_api_url      VARCHAR(255),
     telegram_bot_token VARCHAR(255),
     telegram_enabled   TINYINT(1) NOT NULL DEFAULT 0,
-    notify_payment     TINYINT(1) NOT NULL DEFAULT 1,      -- báo khi nhận thanh toán
-    notify_low_stock   TINYINT(1) NOT NULL DEFAULT 1,      -- báo tồn thấp
-    notify_new_invoice TINYINT(1) NOT NULL DEFAULT 0,      -- báo hóa đơn mới
-    updated_at        DATETIME,
+    notify_payment     TINYINT(1) NOT NULL DEFAULT 1,
+    notify_low_stock   TINYINT(1) NOT NULL DEFAULT 1,
+    notify_new_invoice TINYINT(1) NOT NULL DEFAULT 0,
+    updated_at         DATETIME,
     CONSTRAINT fk_config_store FOREIGN KEY (id) REFERENCES stores(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 11. NGƯỜI NHẬN THÔNG BÁO TELEGRAM (FR-A5) - danh sách Chat ID.
---     FK -> store_config (nối về hub cấu hình, không đứng riêng). Tách bảng
---     để giữ 1NF (mỗi Chat ID một dòng), thêm/xóa người nhận linh hoạt.
--- ---------------------------------------------------------------------
-CREATE TABLE telegram_recipients (
+-- 11. Người nhận thông báo Telegram (theo chi nhánh) -----------------
+CREATE TABLE IF NOT EXISTS telegram_recipients (
     id        BIGINT AUTO_INCREMENT PRIMARY KEY,
-    config_id BIGINT NOT NULL,                             -- = store_config.id = stores.id
-    chat_id   VARCHAR(50) NOT NULL,                        -- ID số hoặc @username kênh
-    label     VARCHAR(100),                                -- ghi chú người nhận
+    config_id BIGINT NOT NULL,                          -- = store_config.id = stores.id
+    chat_id   VARCHAR(50) NOT NULL,
+    label     VARCHAR(100),
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     CONSTRAINT uq_tele_store_chat UNIQUE (config_id, chat_id),
     CONSTRAINT fk_tele_config FOREIGN KEY (config_id) REFERENCES store_config(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Nhat ky kiem toan (audit log): ai lam gi, khi nao - cho hanh dong nhay cam.
-CREATE TABLE audit_logs (
+-- 12. NHẬT KÝ KIỂM TOÁN (audit log) — vết "ai làm gì, khi nào" cho hành động nhạy cảm
+--     (hủy hóa đơn, đổi giá, chốt quỹ ca, đổi quyền/mật khẩu, đổi cấu hình). Chỉ ghi thêm (append-only).
+CREATE TABLE IF NOT EXISTS audit_logs (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-    actor_user_id  BIGINT,
-    actor_username VARCHAR(50),
-    store_id       BIGINT,                                -- chi nhanh phat sinh thao tac (NULL = toan chuoi)
-    action         VARCHAR(60) NOT NULL,
-    target_type    VARCHAR(40),
+    actor_user_id  BIGINT,                                -- ai thực hiện
+    actor_username VARCHAR(50),                           -- chốt tên đăng nhập tại thời điểm (khỏi join)
+    store_id       BIGINT,                                -- chi nhánh phát sinh thao tác (NULL = toàn chuỗi)
+    action         VARCHAR(60) NOT NULL,                  -- vd CANCEL_INVOICE, CHANGE_PRICE, CLOSE_SHIFT
+    target_type    VARCHAR(40),                           -- vd INVOICE, PRODUCT, SHIFT
     target_id      BIGINT,
-    detail         VARCHAR(500),
+    detail         VARCHAR(500),                          -- mô tả/chênh lệch (vd lý do hủy)
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    KEY idx_audit_action (action),
+    KEY idx_audit_created (created_at),
     KEY idx_audit_target (target_type, target_id),
     KEY idx_audit_actor (actor_user_id),
-    KEY idx_audit_store (store_id),
+    KEY idx_audit_store_created (store_id, created_at),
     CONSTRAINT fk_audit_user  FOREIGN KEY (actor_user_id) REFERENCES users(id),
     CONSTRAINT fk_audit_store FOREIGN KEY (store_id)      REFERENCES stores(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- So cai diem tich luy (loyalty ledger): moi thay doi diem la 1 dong (truy vet, doi soat).
-CREATE TABLE loyalty_point_ledger (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    customer_id   BIGINT NOT NULL,
-    invoice_id    BIGINT,
-    delta         INT NOT NULL,
-    reason        VARCHAR(40) NOT NULL,
-    balance_after INT NOT NULL,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    KEY idx_lpl_customer (customer_id),
-    KEY idx_lpl_invoice (invoice_id),
-    CONSTRAINT fk_lpl_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
-    CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
-
--- Xuat huy / dieu chinh giam ton (kiem ke & hao hut): rut hang het han/hu hong/that thoat khoi ton KHO
--- cua mot LO. Moi dong GIAM `quantity` don vi (append-only). v_batch_stock tru tong nay.
-CREATE TABLE stock_adjustments (
+-- 12b. XUẤT HỦY / ĐIỀU CHỈNH GIẢM TỒN (FR8 — kiểm kê & hao hụt): rút hàng hết hạn/hư hỏng/thất thoát
+--      khỏi tồn KHO của một LÔ. Mỗi dòng GIẢM `quantity` đơn vị (append-only). v_batch_stock trừ tổng này.
+CREATE TABLE IF NOT EXISTS stock_adjustments (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    store_id   BIGINT NOT NULL,                            -- chi nhanh phat sinh (= chi nhanh cua lo)
-    batch_id   BIGINT NOT NULL,                            -- = goods_receipt_items.id (lo bi giam ton)
-    quantity   INT NOT NULL,                               -- so luong GIAM (duong)
-    reason     ENUM('EXPIRED','DAMAGED','LOST','OTHER','TRANSFER_OUT') NOT NULL,  -- het han / hu hong / that thoat / khac / xuat dieu chuyen noi bo (Obj 1.1)
+    store_id   BIGINT NOT NULL,                            -- chi nhánh phát sinh (= chi nhánh của lô)
+    batch_id   BIGINT NOT NULL,                            -- = goods_receipt_items.id (lô bị giảm tồn)
+    quantity   INT NOT NULL,                               -- số lượng GIẢM (dương)
+    reason     ENUM('EXPIRED','DAMAGED','LOST','OTHER') NOT NULL,  -- hết hạn / hư hỏng / thất thoát / khác
     note       VARCHAR(255),
     created_by BIGINT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -456,17 +384,17 @@ CREATE TABLE stock_adjustments (
     CONSTRAINT fk_adj_batch FOREIGN KEY (batch_id)   REFERENCES goods_receipt_items(id),
     CONSTRAINT fk_adj_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_adj_qty  CHECK (quantity > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Thu/chi tien mat NGOAI ban hang trong ca (petty cash). Append-only. Doi soat quy cuoi ca:
--- tien du kien = dau ca + tien mat ban + SUM(IN) - SUM(OUT).
-CREATE TABLE cash_movements (
+-- 12c. THU/CHI TIỀN MẶT NGOÀI BÁN HÀNG trong ca (petty cash). Append-only. Đối soát quỹ cuối ca:
+--      tiền dự kiến = đầu ca + tiền mặt bán + SUM(IN) − SUM(OUT).
+CREATE TABLE IF NOT EXISTS cash_movements (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    shift_id   BIGINT NOT NULL,                            -- ca phat sinh
-    store_id   BIGINT NOT NULL,                            -- chi nhanh (= chi nhanh cua ca)
-    type       ENUM('IN','OUT') NOT NULL,                  -- THU vao / CHI ra khoi ket
-    amount     DECIMAL(14,2) NOT NULL,                     -- so tien (duong)
-    reason     VARCHAR(255) NOT NULL,                      -- ly do/dien giai (bat buoc)
+    shift_id   BIGINT NOT NULL,                            -- ca phát sinh
+    store_id   BIGINT NOT NULL,                            -- chi nhánh (= chi nhánh của ca)
+    type       ENUM('IN','OUT') NOT NULL,                  -- THU vào / CHI ra khỏi két
+    amount     DECIMAL(14,2) NOT NULL,                     -- số tiền (dương)
+    reason     VARCHAR(255) NOT NULL,                      -- lý do/diễn giải (bắt buộc)
     created_by BIGINT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_cash_shift (shift_id),
@@ -475,14 +403,27 @@ CREATE TABLE cash_movements (
     CONSTRAINT fk_cash_store FOREIGN KEY (store_id)   REFERENCES stores(id),
     CONSTRAINT fk_cash_user  FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_cash_amount CHECK (amount > 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 12. GIÁ BÁN RIÊNG THEO CHI NHÁNH (Obj 1.3) — giữ mô hình giá TẬP TRUNG:
---     products.sale_price là giá CHUẨN toàn chuỗi; mỗi (sản phẩm, chi nhánh) có TỐI ĐA 1
---     override ACTIVE. Giá bán hiệu lực = COALESCE(override ACTIVE, giá chuẩn), resolve ở SERVER.
--- ---------------------------------------------------------------------
-CREATE TABLE product_store_prices (
+-- 13. SỔ CÁI ĐIỂM TÍCH LŨY (loyalty ledger) — mỗi thay đổi điểm là 1 dòng (append-only) để truy vết,
+--     đối soát số dư = tổng delta. delta>0 tích, delta<0 dùng/điều chỉnh.
+CREATE TABLE IF NOT EXISTS loyalty_point_ledger (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id   BIGINT NOT NULL,
+    invoice_id    BIGINT,                                -- HĐ phát sinh (NULL nếu điều chỉnh tay)
+    delta         INT NOT NULL,                          -- +tích / −dùng / ±điều chỉnh
+    reason        VARCHAR(40) NOT NULL,                  -- EARN, REDEEM, CANCEL_REVERSAL...
+    balance_after INT NOT NULL,                          -- số dư sau thay đổi (đối soát)
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_lpl_customer (customer_id),
+    KEY idx_lpl_invoice (invoice_id),
+    CONSTRAINT fk_lpl_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_lpl_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 14. GIÁ BÁN RIÊNG THEO CHI NHÁNH (Obj 1.3) — giữ mô hình giá TẬP TRUNG (products.sale_price là giá chuẩn),
+--     mỗi (sản phẩm, chi nhánh) có TỐI ĐA 1 override ACTIVE. Giá bán = COALESCE(override, giá chuẩn).
+CREATE TABLE IF NOT EXISTS product_store_prices (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     product_id  BIGINT NOT NULL,
     store_id    BIGINT NOT NULL,
@@ -495,86 +436,72 @@ CREATE TABLE product_store_prices (
     CONSTRAINT fk_psp_store   FOREIGN KEY (store_id)   REFERENCES stores(id),
     CONSTRAINT fk_psp_user    FOREIGN KEY (updated_by) REFERENCES users(id),
     CONSTRAINT chk_psp_price  CHECK (sale_price >= 0)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 13. ĐIỀU CHUYỂN HÀNG NỘI BỘ giữa chi nhánh (Obj 1.1) — state machine MỘT CHIỀU:
---     PENDING → SHIPPING → RECEIVED (hoặc CANCELLED). KHÔNG mutate lô (giữ bất biến + view tồn):
---       • SHIP (nguồn):  ghi stock_adjustments(reason=TRANSFER_OUT) → trừ tồn nguồn.
---       • RECEIVE (đích): tạo goods_receipts(source=TRANSFER) mang HSD/giá vốn gốc → tồn xuất hiện
---                         ở đích như LÔ MỚI; FIFO theo HSD vẫn đúng. dest_receipt_id = phiếu nhập sinh ra.
--- ---------------------------------------------------------------------
-CREATE TABLE stock_transfers (
+-- 15. ĐIỀU CHUYỂN HÀNG NỘI BỘ giữa chi nhánh (Obj 1.1) — state machine PENDING→SHIPPING→RECEIVED/CANCELLED.
+--     KHÔNG mutate lô: SHIP ghi stock_adjustments(reason=TRANSFER_OUT) trừ tồn nguồn; RECEIVE tạo
+--     goods_receipts(source=TRANSFER) ở đích → tồn xuất hiện ở đích như lô mới (giữ FEFO theo HSD gốc).
+CREATE TABLE IF NOT EXISTS stock_transfers (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code            VARCHAR(30) NOT NULL UNIQUE,            -- mã phiếu điều chuyển (DC...)
-    source_store_id BIGINT NOT NULL,                        -- chi nhánh nguồn (xuất)
-    dest_store_id   BIGINT NOT NULL,                        -- chi nhánh đích (nhận)
+    code            VARCHAR(30) NOT NULL UNIQUE,
+    source_store_id BIGINT NOT NULL,
+    dest_store_id   BIGINT NOT NULL,
     status          ENUM('PENDING','SHIPPING','RECEIVED','CANCELLED') NOT NULL DEFAULT 'PENDING',
     created_by      BIGINT,
-    shipped_by      BIGINT, shipped_at   DATETIME,
-    received_by     BIGINT, received_at  DATETIME,
+    shipped_by      BIGINT, shipped_at  DATETIME,
+    received_by     BIGINT, received_at DATETIME,
     cancelled_by    BIGINT, cancelled_at DATETIME, cancel_reason VARCHAR(255),
     dest_receipt_id BIGINT,                                 -- phiếu nhập sinh ở đích khi RECEIVED (truy vết)
     note            VARCHAR(255),
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_tr_src (source_store_id),
+    KEY idx_tr_dst (dest_store_id),
+    KEY idx_tr_status (status),
     CONSTRAINT fk_tr_src  FOREIGN KEY (source_store_id) REFERENCES stores(id),
     CONSTRAINT fk_tr_dst  FOREIGN KEY (dest_store_id)   REFERENCES stores(id),
     CONSTRAINT fk_tr_rcpt FOREIGN KEY (dest_receipt_id) REFERENCES goods_receipts(id),
     CONSTRAINT fk_tr_cby  FOREIGN KEY (created_by)  REFERENCES users(id),
     CONSTRAINT fk_tr_sby  FOREIGN KEY (shipped_by)  REFERENCES users(id),
     CONSTRAINT fk_tr_rby  FOREIGN KEY (received_by) REFERENCES users(id),
-    CONSTRAINT chk_tr_diff CHECK (source_store_id <> dest_store_id)   -- không tự chuyển cho chính mình
-) ENGINE=InnoDB;
-CREATE INDEX idx_tr_src    ON stock_transfers(source_store_id);
-CREATE INDEX idx_tr_dst    ON stock_transfers(dest_store_id);
-CREATE INDEX idx_tr_status ON stock_transfers(status);
+    CONSTRAINT chk_tr_diff CHECK (source_store_id <> dest_store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE stock_transfer_items (
+CREATE TABLE IF NOT EXISTS stock_transfer_items (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     transfer_id  BIGINT NOT NULL,
     batch_id     BIGINT NOT NULL,                           -- lô NGUỒN (goods_receipt_items.id)
     product_id   BIGINT NOT NULL,
     quantity     INT NOT NULL,
     expiry_date  DATE,                                      -- HSD chốt từ lô nguồn → tái tạo ở đích
-    cost_price   DECIMAL(12,2) NOT NULL,                    -- giá vốn theo lô (chuyển kho KHÔNG đổi giá vốn)
+    cost_price   DECIMAL(12,2) NOT NULL,                    -- giá vốn theo lô (chuyển kho không đổi giá vốn)
     CONSTRAINT fk_tri_tr    FOREIGN KEY (transfer_id) REFERENCES stock_transfers(id) ON DELETE CASCADE,
     CONSTRAINT fk_tri_batch FOREIGN KEY (batch_id)    REFERENCES goods_receipt_items(id),
     CONSTRAINT fk_tri_prod  FOREIGN KEY (product_id)  REFERENCES products(id),
     CONSTRAINT chk_tri_qty  CHECK (quantity > 0)
-) ENGINE=InnoDB;
-CREATE INDEX idx_tri_transfer ON stock_transfer_items(transfer_id);
-CREATE INDEX idx_tri_batch    ON stock_transfer_items(batch_id);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 14. BẢNG TỔNG HỢP DOANH THU NGÀY (Obj 2 — daily rollup) — 1 dòng / (chi nhánh, ngày).
---     Job nền (cron 00:30 mỗi đêm) tổng hợp từ invoices COMPLETED → báo cáo nhiều năm × nhiều
---     chi nhánh đọc rollup (độ phức tạp theo SỐ NGÀY) thay vì quét bảng hóa đơn thô (theo SỐ HĐ).
---     Là dữ liệu SUY RA, dựng lại bất cứ lúc nào bằng upsert idempotent (không có "nguồn sự thật kép").
--- ---------------------------------------------------------------------
-CREATE TABLE daily_sales_rollup (
+-- 16. BẢNG TỔNG HỢP DOANH THU NGÀY (Obj 2 — rollup) — 1 dòng / (chi nhánh, ngày). Job nền tổng hợp
+--     từ invoices COMPLETED để báo cáo nhiều năm × nhiều chi nhánh không phải quét bảng hóa đơn thô.
+CREATE TABLE IF NOT EXISTS daily_sales_rollup (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     store_id      BIGINT NOT NULL,
     sales_date    DATE   NOT NULL,
-    revenue       DECIMAL(16,2) NOT NULL DEFAULT 0,         -- Σ total_amount (HĐ COMPLETED)
+    revenue       DECIMAL(16,2) NOT NULL DEFAULT 0,         -- Σ total_amount (COMPLETED)
     discount      DECIMAL(16,2) NOT NULL DEFAULT 0,
     tax           DECIMAL(16,2) NOT NULL DEFAULT 0,
-    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn (FIFO) hàng đã bán
+    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn đích danh theo lô của hàng đã bán
     gross_profit  DECIMAL(16,2) NOT NULL DEFAULT 0,         -- revenue − cogs
     invoice_count INT NOT NULL DEFAULT 0,
     items_sold    INT NOT NULL DEFAULT 0,
     rolled_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT uq_dsr UNIQUE (store_id, sales_date),        -- 1 dòng / (chi nhánh, ngày) → upsert
+    CONSTRAINT uq_dsr UNIQUE (store_id, sales_date),
+    KEY idx_dsr_date (sales_date),
     CONSTRAINT fk_dsr_store FOREIGN KEY (store_id) REFERENCES stores(id)
-) ENGINE=InnoDB;
-CREATE INDEX idx_dsr_date ON daily_sales_rollup(sales_date);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---------------------------------------------------------------------
--- 16. LƯƠNG & BẢNG CÔNG (Payroll). Công suy ra từ work_shifts (ca ĐÃ ĐÓNG):
---     giờ công = closed_at − opened_at, cộng dồn theo (nhân viên, chi nhánh, tháng).
---     Xem docs/PAYROLL_DESIGN.md cho nghiệp vụ & công thức.
--- ---------------------------------------------------------------------
--- 16a. Cấu hình lương / nhân viên (1 dòng/nhân viên — cấu hình hiện hành).
-CREATE TABLE employee_pay_profiles (
+-- 16. LƯƠNG & BẢNG CÔNG (Payroll) — công suy ra từ work_shifts (ca ĐÃ ĐÓNG). Xem docs/PAYROLL_DESIGN.md
+-- 16a. Cấu hình lương / nhân viên (1 dòng/nhân viên — cấu hình hiện hành; đổi mức ghi audit_logs).
+CREATE TABLE IF NOT EXISTS employee_pay_profiles (
     id                     BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id                BIGINT NOT NULL,
     pay_type               ENUM('HOURLY','MONTHLY') NOT NULL DEFAULT 'MONTHLY',
@@ -588,10 +515,10 @@ CREATE TABLE employee_pay_profiles (
     CONSTRAINT fk_epp_user FOREIGN KEY (user_id)    REFERENCES users(id),
     CONSTRAINT fk_epp_upd  FOREIGN KEY (updated_by) REFERENCES users(id),
     CONSTRAINT chk_epp_rate CHECK (base_rate >= 0 AND standard_monthly_hours > 0 AND ot_multiplier >= 1)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 16b. Kỳ lương: 1 / (chi nhánh, tháng). Vòng đời duyệt 2 bước DRAFT→PENDING_APPROVAL→APPROVED→PAID.
-CREATE TABLE payroll_periods (
+CREATE TABLE IF NOT EXISTS payroll_periods (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     store_id     BIGINT  NOT NULL,
     period_month CHAR(7) NOT NULL,                              -- 'YYYY-MM'
@@ -607,10 +534,24 @@ CREATE TABLE payroll_periods (
     CONSTRAINT uq_pp UNIQUE (store_id, period_month),           -- 1 kỳ / chi nhánh / tháng
     CONSTRAINT fk_pp_store FOREIGN KEY (store_id)   REFERENCES stores(id),
     CONSTRAINT fk_pp_user  FOREIGN KEY (created_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- MIGRATION (idempotent) cho CSDL CŨ có payroll_periods kiểu DRAFT→LOCKED→PAID:
+--   thêm cột duyệt 2 bước + mở rộng enum trạng thái + chuyển 'LOCKED' → 'APPROVED'.
+SET @pp_add_cols := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE()
+           AND table_name = 'payroll_periods' AND column_name = 'submitted_by'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD COLUMN submitted_by BIGINT NULL, ADD COLUMN submitted_at DATETIME NULL, ADD COLUMN approved_by BIGINT NULL, ADD COLUMN approved_at DATETIME NULL'));
+PREPARE pp1 FROM @pp_add_cols; EXECUTE pp1; DEALLOCATE PREPARE pp1;
+ALTER TABLE payroll_periods MODIFY COLUMN status
+    ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID','LOCKED') NOT NULL DEFAULT 'DRAFT';
+UPDATE payroll_periods SET status = 'APPROVED' WHERE status = 'LOCKED';
+ALTER TABLE payroll_periods MODIFY COLUMN status
+    ENUM('DRAFT','PENDING_APPROVAL','APPROVED','PAID') NOT NULL DEFAULT 'DRAFT';
 
 -- 16c. Phiếu lương: 1 / (kỳ, nhân viên). SNAPSHOT mọi số liệu → khóa kỳ là cố định.
-CREATE TABLE payslips (
+CREATE TABLE IF NOT EXISTS payslips (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     period_id       BIGINT NOT NULL,
     user_id         BIGINT NOT NULL,
@@ -632,10 +573,10 @@ CREATE TABLE payslips (
     CONSTRAINT uq_ps UNIQUE (period_id, user_id),
     CONSTRAINT fk_ps_period FOREIGN KEY (period_id) REFERENCES payroll_periods(id),
     CONSTRAINT fk_ps_user   FOREIGN KEY (user_id)   REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 16d. Điều chỉnh phiếu lương: thưởng/phạt/tạm ứng (cộng/trừ vào thực lĩnh).
-CREATE TABLE payslip_adjustments (
+CREATE TABLE IF NOT EXISTS payslip_adjustments (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     payslip_id  BIGINT NOT NULL,
     type        ENUM('BONUS','DEDUCTION') NOT NULL,
@@ -643,59 +584,349 @@ CREATE TABLE payslip_adjustments (
     reason      VARCHAR(255) NOT NULL,
     created_by  BIGINT,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_pa_payslip (payslip_id),
     CONSTRAINT fk_pa_payslip FOREIGN KEY (payslip_id) REFERENCES payslips(id),
     CONSTRAINT fk_pa_user    FOREIGN KEY (created_by)  REFERENCES users(id),
     CONSTRAINT chk_pa_amount CHECK (amount > 0)
-) ENGINE=InnoDB;
-CREATE INDEX idx_pa_payslip ON payslip_adjustments(payslip_id);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 16e. Chấm công thủ công & nghỉ phép — bổ sung công NGOÀI ca thu ngân (NV không mở ca, sửa công,
---      nghỉ phép). Payroll cộng giờ WORK + LEAVE_PAID vào giờ công khi tính lương.
-CREATE TABLE attendance_entries (
+-- 16e. CHẤM CÔNG THỦ CÔNG & NGHỈ PHÉP — bổ sung công NGOÀI ca thu ngân (NV kho/bảo vệ không mở ca,
+--      sửa công, nghỉ phép). Payroll cộng giờ WORK + LEAVE_PAID vào giờ công khi tính lương.
+CREATE TABLE IF NOT EXISTS attendance_entries (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id    BIGINT NOT NULL,
     store_id   BIGINT NOT NULL,
     work_date  DATE NOT NULL,
     type       ENUM('WORK','LEAVE_PAID','LEAVE_UNPAID') NOT NULL DEFAULT 'WORK',
-    hours      DECIMAL(5,2) NOT NULL,
+    hours      DECIMAL(5,2) NOT NULL,                  -- WORK/LEAVE_PAID: tính lương; LEAVE_UNPAID: chỉ ghi nhận
     reason     VARCHAR(255),
     created_by BIGINT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_att_user_date (user_id, work_date),
+    KEY idx_att_store_date (store_id, work_date),
     CONSTRAINT fk_att_user  FOREIGN KEY (user_id)    REFERENCES users(id),
     CONSTRAINT fk_att_store FOREIGN KEY (store_id)   REFERENCES stores(id),
     CONSTRAINT fk_att_cb    FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT chk_att_hours CHECK (hours > 0 AND hours <= 24)
-) ENGINE=InnoDB;
-CREATE INDEX idx_att_user_date  ON attendance_entries(user_id, work_date);
-CREATE INDEX idx_att_store_date ON attendance_entries(store_id, work_date);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
---  VIEW (suy ra tồn kho & các tổng - thay cột dư thừa)
+--  MIGRATION nhẹ cho CSDL CŨ (idempotent): thêm cột points_used nếu thiếu.
+--  (MySQL không có ADD COLUMN IF NOT EXISTS → kiểm tra qua information_schema.)
 -- =====================================================================
+SET @add_points_used := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'points_used'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN points_used INT NOT NULL DEFAULT 0 AFTER points_earned'));
+PREPARE stmt_apu FROM @add_points_used;
+EXECUTE stmt_apu;
+DEALLOCATE PREPARE stmt_apu;
 
--- Tồn còn lại của từng LÔ = số nhập - tổng đã bán (chỉ HĐ COMPLETED).
--- Hủy HĐ (CANCELLED) => phân bổ không được tính => tồn tự hoàn.
--- Tồn từng LÔ tách KHO/KỆ: on_shelf (kệ, POS bán) + in_warehouse (kho)
+-- Cột HỦY hóa đơn (ai/khi nào/lý do) — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_cancelled_by := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'cancelled_by'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN cancelled_by BIGINT NULL, ADD COLUMN cancelled_at DATETIME NULL, ADD COLUMN cancel_reason VARCHAR(255) NULL'));
+PREPARE stmt_acb FROM @add_cancelled_by;
+EXECUTE stmt_acb;
+DEALLOCATE PREPARE stmt_acb;
+
+-- Cột khóa chống trùng (idempotency) — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_idem := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'idempotency_key'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN idempotency_key VARCHAR(64) NULL UNIQUE'));
+PREPARE stmt_idem FROM @add_idem;
+EXECUTE stmt_idem;
+DEALLOCATE PREPARE stmt_idem;
+
+-- Cột VAT: products.tax_rate & invoices.tax_amount — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_taxrate := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'products' AND column_name = 'tax_rate'),
+    'SELECT 1',
+    'ALTER TABLE products ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 8.00 AFTER sale_price'));
+PREPARE stmt_tr FROM @add_taxrate; EXECUTE stmt_tr; DEALLOCATE PREPARE stmt_tr;
+
+SET @add_taxamt := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'invoices' AND column_name = 'tax_amount'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER status'));
+PREPARE stmt_ta FROM @add_taxamt; EXECUTE stmt_ta; DEALLOCATE PREPARE stmt_ta;
+
+-- Cột đơn vị quy đổi (thùng↔lon): products.pack_size & pack_unit_id — bổ sung cho CSDL cũ nếu thiếu.
+SET @add_pack := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema = DATABASE() AND table_name = 'products' AND column_name = 'pack_size'),
+    'SELECT 1',
+    'ALTER TABLE products ADD COLUMN pack_size INT NOT NULL DEFAULT 1 AFTER tax_rate, ADD COLUMN pack_unit_id BIGINT NULL AFTER pack_size'));
+PREPARE stmt_pk FROM @add_pack; EXECUTE stmt_pk; DEALLOCATE PREPARE stmt_pk;
+
+-- CSDL cũ có bảng trả hàng → dọn bỏ (đã loại chức năng trả hàng). Bỏ qua nếu bảng không tồn tại.
+DROP TABLE IF EXISTS sales_return_items;
+DROP TABLE IF EXISTS sales_returns;
+
+-- Mở rộng enum trạng thái hóa đơn: thêm PENDING_PAYMENT (HĐ QR chờ xác nhận tiền) cho CSDL cũ.
+-- MODIFY COLUMN an toàn chạy lại nhiều lần (idempotent về kết quả).
+ALTER TABLE invoices
+    MODIFY COLUMN status ENUM('COMPLETED','CANCELLED','PENDING_PAYMENT') NOT NULL DEFAULT 'COMPLETED';
+
+-- Obj 1.1: kho trung tâm = 1 chi nhánh đặc biệt (stores.is_warehouse) + nguồn gốc phiếu nhập
+-- (goods_receipts.source: PURCHASE mua ngoài / TRANSFER nhận điều chuyển). Bổ sung cho CSDL cũ.
+SET @add_is_wh := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stores' AND column_name='is_warehouse'),
+    'SELECT 1',
+    'ALTER TABLE stores ADD COLUMN is_warehouse TINYINT(1) NOT NULL DEFAULT 0'));
+PREPARE stmt_iswh FROM @add_is_wh; EXECUTE stmt_iswh; DEALLOCATE PREPARE stmt_iswh;
+
+SET @add_gr_src := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='goods_receipts' AND column_name='source'),
+    'SELECT 1',
+    'ALTER TABLE goods_receipts ADD COLUMN source ENUM(''PURCHASE'',''TRANSFER'') NOT NULL DEFAULT ''PURCHASE'''));
+PREPARE stmt_grsrc FROM @add_gr_src; EXECUTE stmt_grsrc; DEALLOCATE PREPARE stmt_grsrc;
+
+-- Mở rộng lý do điều chỉnh tồn: thêm TRANSFER_OUT (xuất điều chuyển). MODIFY idempotent về kết quả.
+ALTER TABLE stock_adjustments
+    MODIFY COLUMN reason ENUM('EXPIRED','DAMAGED','LOST','OTHER','TRANSFER_OUT') NOT NULL;
+
+-- Phiếu nhập do điều chuyển nội bộ không có NCC → cho supplier_id nullable. MODIFY idempotent.
+ALTER TABLE goods_receipts MODIFY COLUMN supplier_id BIGINT NULL;
+
+-- SNAPSHOT đối soát quỹ lúc ĐÓNG CA (finding #3): chốt tiền-mặt-bán tại thời điểm đóng để hủy HĐ tiền mặt
+-- của ca ĐÃ ĐÓNG về sau KHÔNG làm lệch đối soát quỹ của ca đó (tiền thực tế ĐÃ nằm trong két lúc đóng).
+SET @add_fcs := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='work_shifts' AND column_name='final_cash_sales'),
+    'SELECT 1',
+    'ALTER TABLE work_shifts ADD COLUMN final_cash_sales DECIMAL(14,2) NULL'));
+PREPARE stmt_fcs FROM @add_fcs; EXECUTE stmt_fcs; DEALLOCATE PREPARE stmt_fcs;
+
+-- Backfill các ca ĐÃ ĐÓNG còn thiếu snapshot (idempotent: chỉ đụng dòng NULL).
+-- Nguồn sự thật của quy tắc doanh thu tiền mặt theo ca: InvoiceRepository.cashSalesByShiftIds
+UPDATE work_shifts s
+LEFT JOIN ( SELECT shift_id, SUM(total_amount) cash FROM invoices
+            WHERE status='COMPLETED' AND payment_method='CASH' GROUP BY shift_id ) cs ON cs.shift_id = s.id
+SET s.final_cash_sales = COALESCE(cs.cash, 0)
+WHERE s.status='CLOSED' AND s.final_cash_sales IS NULL;
+
+-- =====================================================================
+--  MIGRATION ĐA CHUỖI (idempotent): thêm chi nhánh mặc định CH01 (id=1) và cột store_id
+--  cho CSDL CŨ (single-store) — backfill toàn bộ dữ liệu cũ về chi nhánh 1.
+--  Bảng tạo mới (CREATE TABLE ở trên) đã có sẵn cột nên các ALTER này chỉ chạy cho DB cũ.
+-- =====================================================================
+-- Chi nhánh mặc định (dữ liệu cũ thuộc về đây). INSERT IGNORE: chạy lại không nhân đôi.
+INSERT IGNORE INTO stores (id, code, name, address, phone, status)
+VALUES (1, 'CH01', 'Cửa hàng tiện lợi MiniMart', '123 Đường Lê Lợi, Q.1, TP.HCM', '0901234567', 'ACTIVE');
+
+-- users.store_id cho CSDL cũ (NULL hợp lệ cho ADMIN toàn chuỗi).
+SET @add_user_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE users ADD COLUMN store_id BIGINT NULL, ADD KEY idx_user_store (store_id), ADD CONSTRAINT fk_user_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_user_store; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- CHUYỂN ĐỔI VAI TRÒ về mô hình mới (ADMIN/MANAGER/STAFF) cho CSDL cũ — làm theo 3 bước an toàn:
+--  1) nới enum thành SIÊU TẬP (cũ ∪ mới) để UPDATE giá trị mới hợp lệ;
+--  2) đổi CASHIER→STAFF, CHAIN_ADMIN→ADMIN; backfill cửa hàng (MANAGER/STAFF→CH01, ADMIN→NULL);
+--  3) thu enum về tập CUỐI CÙNG. Idempotent: chạy lại không còn dòng cũ nên các UPDATE là no-op.
+ALTER TABLE users MODIFY COLUMN role ENUM('ADMIN','MANAGER','STAFF','CASHIER','CHAIN_ADMIN') NOT NULL;
+UPDATE users SET role = 'STAFF' WHERE role = 'CASHIER';
+UPDATE users SET role = 'ADMIN' WHERE role = 'CHAIN_ADMIN';
+UPDATE users SET store_id = 1 WHERE store_id IS NULL AND role <> 'ADMIN';
+UPDATE users SET store_id = NULL WHERE role = 'ADMIN';
+ALTER TABLE users MODIFY COLUMN role ENUM('ADMIN','MANAGER','STAFF') NOT NULL;
+
+-- goods_receipts.store_id (NOT NULL sau backfill).
+SET @add_gr_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='goods_receipts' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE goods_receipts ADD COLUMN store_id BIGINT NULL, ADD KEY idx_receipt_store (store_id), ADD CONSTRAINT fk_receipt_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_gr_store; EXECUTE s; DEALLOCATE PREPARE s;
+UPDATE goods_receipts SET store_id = 1 WHERE store_id IS NULL;
+
+-- work_shifts.store_id.
+SET @add_ws_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='work_shifts' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE work_shifts ADD COLUMN store_id BIGINT NULL, ADD KEY idx_shift_store (store_id), ADD CONSTRAINT fk_shift_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_ws_store; EXECUTE s; DEALLOCATE PREPARE s;
+UPDATE work_shifts SET store_id = 1 WHERE store_id IS NULL;
+
+-- shelves.store_id (mã kệ cũ duy nhất toàn cục vẫn hợp lệ trong 1 chi nhánh).
+SET @add_sh_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='shelves' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE shelves ADD COLUMN store_id BIGINT NULL, ADD KEY idx_shelf_store (store_id), ADD CONSTRAINT fk_shelf_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_sh_store; EXECUTE s; DEALLOCATE PREPARE s;
+UPDATE shelves SET store_id = 1 WHERE store_id IS NULL;
+
+-- invoices.store_id (chốt từ ca: = ca.store_id).
+SET @add_inv_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='invoices' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD COLUMN store_id BIGINT NULL, ADD KEY idx_invoice_store (store_id, status, created_at), ADD CONSTRAINT fk_invoice_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_inv_store; EXECUTE s; DEALLOCATE PREPARE s;
+UPDATE invoices i JOIN work_shifts w ON w.id = i.shift_id SET i.store_id = w.store_id WHERE i.store_id IS NULL;
+
+-- Sau khi backfill xong: siết NOT NULL cho các bảng vận hành (users để NULL vì ADMIN toàn chuỗi).
+-- An toàn chạy lại; chỉ thành công khi không còn dòng store_id NULL (đã backfill ở trên).
+ALTER TABLE goods_receipts MODIFY COLUMN store_id BIGINT NOT NULL;
+ALTER TABLE work_shifts    MODIFY COLUMN store_id BIGINT NOT NULL;
+ALTER TABLE shelves        MODIFY COLUMN store_id BIGINT NOT NULL;
+ALTER TABLE invoices       MODIFY COLUMN store_id BIGINT NOT NULL;
+
+-- store_config: chuyển từ singleton (TINYINT id=1, CHECK id=1) sang 1 dòng / chi nhánh (BIGINT = stores.id).
+-- Bỏ CHECK cũ nếu còn (tên ràng buộc chk_store_singleton). Bỏ qua lỗi nếu không tồn tại.
+SET @drop_chk := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='store_config' AND constraint_name='chk_store_singleton'),
+    'ALTER TABLE store_config DROP CHECK chk_store_singleton',
+    'SELECT 1'));
+PREPARE s FROM @drop_chk; EXECUTE s; DEALLOCATE PREPARE s;
+-- Nới kiểu id & config_id lên BIGINT cho CSDL cũ (an toàn chạy lại). Bỏ FK telegram trước khi đổi kiểu.
+SET @drop_tele_fk := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='telegram_recipients' AND constraint_name='fk_tele_config'),
+    'ALTER TABLE telegram_recipients DROP FOREIGN KEY fk_tele_config',
+    'SELECT 1'));
+PREPARE s FROM @drop_tele_fk; EXECUTE s; DEALLOCATE PREPARE s;
+ALTER TABLE store_config        MODIFY COLUMN id BIGINT NOT NULL;
+ALTER TABLE telegram_recipients MODIFY COLUMN config_id BIGINT NOT NULL;
+-- store_config.id giờ = stores.id → ràng buộc khóa ngoại (chỉ thêm nếu chưa có).
+SET @add_cfg_fk := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='store_config' AND constraint_name='fk_config_store'),
+    'SELECT 1',
+    'ALTER TABLE store_config ADD CONSTRAINT fk_config_store FOREIGN KEY (id) REFERENCES stores(id)'));
+PREPARE s FROM @add_cfg_fk; EXECUTE s; DEALLOCATE PREPARE s;
+-- Khôi phục FK telegram→config sau khi đổi kiểu (chỉ thêm nếu chưa có).
+SET @readd_tele_fk := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='telegram_recipients' AND constraint_name='fk_tele_config'),
+    'SELECT 1',
+    'ALTER TABLE telegram_recipients ADD CONSTRAINT fk_tele_config FOREIGN KEY (config_id) REFERENCES store_config(id)'));
+PREPARE s FROM @readd_tele_fk; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- =====================================================================
+--  MIGRATION ràng buộc toàn vẹn bổ sung cho CSDL CŨ (idempotent): chỉ thêm khi CHƯA có.
+--  (Bản cài mới đã có sẵn trong CREATE TABLE ở trên.)
+-- =====================================================================
+-- CHECK: % giảm ≤ 100 (chỉ áp cho PERCENT).
+SET @add_chk_pct := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='promotions' AND constraint_name='chk_promo_percent'),
+    'SELECT 1',
+    'ALTER TABLE promotions ADD CONSTRAINT chk_promo_percent CHECK (discount_type <> ''PERCENT'' OR discount_value <= 100)'));
+PREPARE s FROM @add_chk_pct; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- CHECK: số lần dùng ≤ hạn mức (nếu có hạn mức).
+SET @add_chk_lim := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='promotions' AND constraint_name='chk_promo_limit'),
+    'SELECT 1',
+    'ALTER TABLE promotions ADD CONSTRAINT chk_promo_limit CHECK (usage_limit IS NULL OR used_count <= usage_limit)'));
+PREPARE s FROM @add_chk_lim; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- Cột audit_logs.store_id cho CSDL CŨ (entity AuditLog đã có; bản tạo mới đã có sẵn). Thiếu cột này
+--   khiến MỌI hành động ghi audit (mở/đóng ca, hủy HĐ, đổi giá...) lỗi "Unknown column 'store_id'".
+SET @add_audit_store := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.columns
+           WHERE table_schema=DATABASE() AND table_name='audit_logs' AND column_name='store_id'),
+    'SELECT 1',
+    'ALTER TABLE audit_logs ADD COLUMN store_id BIGINT NULL AFTER actor_username, ADD KEY idx_audit_store (store_id)'));
+PREPARE s FROM @add_audit_store; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @add_audit_store_fk := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='audit_logs' AND constraint_name='fk_audit_store'),
+    'SELECT 1',
+    'ALTER TABLE audit_logs ADD CONSTRAINT fk_audit_store FOREIGN KEY (store_id) REFERENCES stores(id)'));
+PREPARE s FROM @add_audit_store_fk; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: invoices.cancelled_by → users(id) (vết kiểm toán "ai hủy"). Cột thêm ở migration phía trên.
+SET @add_fk_cancel := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='invoices' AND constraint_name='fk_invoice_cancelled_by'),
+    'SELECT 1',
+    'ALTER TABLE invoices ADD CONSTRAINT fk_invoice_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_cancel; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: payroll_periods.submitted_by → users(id) (vết "ai trình duyệt" — duyệt 2 bước).
+SET @add_fk_pp_sub := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='payroll_periods' AND constraint_name='fk_pp_submitted'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD CONSTRAINT fk_pp_submitted FOREIGN KEY (submitted_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_pp_sub; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: payroll_periods.approved_by → users(id) (vết "ai duyệt" — tách trách nhiệm lập/duyệt).
+SET @add_fk_pp_app := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='payroll_periods' AND constraint_name='fk_pp_approved'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD CONSTRAINT fk_pp_approved FOREIGN KEY (approved_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_pp_app; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: stock_transfers.cancelled_by → users(id) (vết "ai hủy" phiếu điều chuyển).
+SET @add_fk_tr_caby := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='stock_transfers' AND constraint_name='fk_tr_caby'),
+    'SELECT 1',
+    'ALTER TABLE stock_transfers ADD CONSTRAINT fk_tr_caby FOREIGN KEY (cancelled_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_tr_caby; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ĐỒNG NHẤT COLLATION: các bảng thêm sau (cash_movements, stock_adjustments) ở vài CSDL cũ bị tạo với
+--   collation khác phần còn lại → trộn collation gây lỗi "illegal mix of collations" khi so chuỗi chéo bảng.
+--   Quy 2 bảng này về ĐÚNG collation của bảng 'stores' (đại diện toàn bộ). No-op nếu đã khớp.
+SET @std_coll := (SELECT table_collation FROM information_schema.tables
+                  WHERE table_schema=DATABASE() AND table_name='stores');
+SET @fix_cm_coll := (SELECT IF(
+    (SELECT table_collation FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='cash_movements') <> @std_coll,
+    CONCAT('ALTER TABLE cash_movements CONVERT TO CHARACTER SET utf8mb4 COLLATE ', @std_coll),
+    'SELECT 1'));
+PREPARE s FROM @fix_cm_coll; EXECUTE s; DEALLOCATE PREPARE s;
+SET @fix_adj_coll := (SELECT IF(
+    (SELECT table_collation FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='stock_adjustments') <> @std_coll,
+    CONCAT('ALTER TABLE stock_adjustments CONVERT TO CHARACTER SET utf8mb4 COLLATE ', @std_coll),
+    'SELECT 1'));
+PREPARE s FROM @fix_adj_coll; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- LƯU Ý: các TRIGGER toàn vẹn (chống bán/đặt chéo chi nhánh, sai sản phẩm lô, bán vượt tồn, 1 lô/1 kệ,
+--   hóa đơn ≠ ca, 2 ca mở) KHÔNG đặt ở đây vì trình spring.sql.init tách lệnh theo ';'. Chúng được tạo
+--   bằng SchemaTriggersInitializer (chạy native DDL qua JDBC). Bản cài tay xem sql/schema.sql (có DELIMITER).
+
+-- =====================================================================
+--  VIEW (suy ra tồn kho & các tổng)
+-- =====================================================================
+-- Tồn từng LÔ tách KHO/KỆ:
+--   quantity_remaining = nhập − đã bán (tổng còn)
+--   transferred (net)  = đã lên kệ − đã trả về kho
+--   on_shelf  (tồn kệ)  = lên kệ ròng − đã bán          (POS bán từ đây)
+--   in_warehouse (tồn kho) = đã nhập − lên kệ ròng
 -- TỐI ƯU PERF: gộp sẵn (pre-aggregate) từng nguồn biến động theo batch_id rồi LEFT JOIN
 -- MỘT lần — thay cho 4 subquery TƯƠNG QUAN chạy lại cho TỪNG lô (cũ: ~O(lô × dòng bán)).
--- Tất cả khóa JOIN (batch_id) đều đã có index. Cột & ngữ nghĩa giữ NGUYÊN 100%.
---   sold (A) = phân bổ bán HĐ chưa hủy (HĐ hủy ⇒ tồn tự hoàn)
+-- Tất cả khóa JOIN (batch_id) đều đã có index. Cột & ngữ nghĩa giữ NGUYÊN 100% —
+-- tương thích view-entity BatchStockView và v_product_stock.
+--   sold (A)        = phân bổ bán của HĐ chưa hủy (HĐ hủy ⇒ tồn tự hoàn)
 --   transferred (T) = đã lên kệ ; shelf_returned (SR) = đã lấy từ kệ về kho
---   adjusted (ADJ) = đã XUẤT HỦY/giảm tồn (rút khỏi KHO: hết hạn/hư hỏng/thất thoát)
+--   adjusted (ADJ)  = đã XUẤT HỦY/giảm tồn (rút khỏi KHO: hết hạn/hư hỏng/thất thoát)
 --   quantity_remaining = nhập − A − ADJ ; on_shelf = (T−SR) − A ; in_warehouse = nhập − (T−SR) − ADJ
---   store_id = chi nhánh của lô (thừa hưởng từ phiếu nhập) — ĐA CHUỖI.
+--   (bất biến: on_shelf + in_warehouse = quantity_remaining — xuất hủy trừ ở KHO nên tồn kệ không đổi)
 CREATE OR REPLACE VIEW v_batch_stock AS
 SELECT  gri.id        AS batch_id,
-        gr.store_id,
+        gr.store_id,                                   -- ĐA CHUỖI: lô thừa hưởng chi nhánh từ phiếu nhập
         gri.product_id,
         gri.expiry_date,
         gri.quantity  AS quantity_in,
-        fs.shelf_id,
+        fs.shelf_id,                                   -- kệ của phiếu lên kệ ĐẦU TIÊN (MIN id) — xác định
         (gri.quantity - COALESCE(sa.sold,0) - COALESCE(adj.adjusted,0))                        AS quantity_remaining,
         ((COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0)) - COALESCE(sa.sold,0)) AS on_shelf,
         (gri.quantity - (COALESCE(tr.transferred,0) - COALESCE(sret.shelf_returned,0)) - COALESCE(adj.adjusted,0)) AS in_warehouse
 FROM goods_receipt_items gri
-JOIN goods_receipts gr ON gr.id = gri.receipt_id
+JOIN goods_receipts gr ON gr.id = gri.receipt_id       -- chi nhánh của lô
 LEFT JOIN ( SELECT iib.batch_id, SUM(iib.quantity) AS sold
             FROM invoice_item_batches iib
             JOIN invoice_items ii ON ii.id = iib.invoice_item_id
@@ -712,7 +943,8 @@ LEFT JOIN ( SELECT batch_id, MIN(id) AS first_id
             FROM shelf_transfers GROUP BY batch_id )      fmin ON fmin.batch_id = gri.id
 LEFT JOIN shelf_transfers fs ON fs.id = fmin.first_id;
 
--- Tồn hiện tại từng sản phẩm TÁCH THEO CHI NHÁNH (đa chuỗi): grain = (product_id, store_id)
+-- Tồn từng sản phẩm TÁCH THEO CHI NHÁNH (đa chuỗi): grain = (product_id, store_id).
+-- JOIN (không LEFT JOIN): sản phẩm chưa từng nhập tại chi nhánh nào sẽ không có dòng tồn ở chi nhánh đó.
 CREATE OR REPLACE VIEW v_product_stock AS
 SELECT  p.id AS product_id,
         bs.store_id,
@@ -726,7 +958,6 @@ FROM products p
 JOIN v_batch_stock bs ON bs.product_id = p.id
 GROUP BY p.id, bs.store_id, p.barcode, p.name, p.min_stock;
 
--- Lô còn hàng & cận/quá HSD trong 30 ngày tới (FR8.2)
 CREATE OR REPLACE VIEW v_expiring_batches AS
 SELECT  bs.batch_id,
         bs.store_id,
@@ -741,7 +972,6 @@ WHERE bs.quantity_remaining > 0
   AND bs.expiry_date IS NOT NULL
   AND bs.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY);
 
--- Tổng chi tiêu của khách (FR6.2) - thay cột total_spent
 CREATE OR REPLACE VIEW v_customer_spending AS
 SELECT  c.id AS customer_id,
         c.full_name,
@@ -753,7 +983,6 @@ FROM customers c
 LEFT JOIN invoices i ON i.customer_id = c.id AND i.status = 'COMPLETED'
 GROUP BY c.id, c.full_name, c.phone, c.loyalty_points;
 
--- Giao dịch QR đang chờ đối soát (FR-A4) - cho thu ngân theo dõi & job WEB2M quét
 CREATE OR REPLACE VIEW v_pending_payments AS
 SELECT  pt.id,
         pt.invoice_id,
@@ -766,7 +995,6 @@ FROM payment_transactions pt
 JOIN invoices i ON i.id = pt.invoice_id
 WHERE pt.status = 'PENDING';
 
--- Doanh thu theo ca (FR9.2) - thay cột total_sales
 CREATE OR REPLACE VIEW v_shift_summary AS
 SELECT  s.id AS shift_id,
         s.store_id,
@@ -783,219 +1011,3 @@ FROM work_shifts s
 JOIN users u ON u.id = s.user_id
 LEFT JOIN invoices i ON i.shift_id = s.id AND i.status = 'COMPLETED'
 GROUP BY s.id, s.store_id, s.user_id, u.full_name, s.opening_cash, s.closing_cash, s.opened_at, s.closed_at, s.status;
-
--- =====================================================================
---  TRIGGER TOÀN VẸN — ép các bất biến mà khóa ngoại đơn cột KHÔNG diễn đạt được
---  (đa chi nhánh, đúng sản phẩm lô, không bán vượt tồn, 1 lô/1 kệ, HĐ↔ca, 1 ca mở).
---  Bản chạy ỨNG DỤNG tạo các trigger này bằng SchemaTriggersInitializer (JDBC).
--- =====================================================================
-DELIMITER $$
-
-DROP TRIGGER IF EXISTS trg_iib_bi_integrity $$
-CREATE TRIGGER trg_iib_bi_integrity BEFORE INSERT ON invoice_item_batches FOR EACH ROW
-BEGIN
-    DECLARE v_item_product BIGINT; DECLARE v_item_qty INT; DECLARE v_inv_store BIGINT;
-    DECLARE v_batch_product BIGINT; DECLARE v_batch_store BIGINT; DECLARE v_batch_qty INT;
-    DECLARE v_alloc INT; DECLARE v_sold INT;
-    SELECT ii.product_id, ii.quantity, i.store_id INTO v_item_product, v_item_qty, v_inv_store
-      FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id WHERE ii.id = NEW.invoice_item_id;
-    SELECT gri.product_id, gr.store_id, gri.quantity INTO v_batch_product, v_batch_store, v_batch_qty
-      FROM goods_receipt_items gri JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
-    IF v_batch_store <> v_inv_store THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: phan bo lo khac chi nhanh voi hoa don';
-    END IF;
-    IF v_batch_product <> v_item_product THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: lo phan bo khong dung san pham cua dong hoa don';
-    END IF;
-    SELECT COALESCE(SUM(iib.quantity),0) INTO v_alloc
-      FROM invoice_item_batches iib WHERE iib.invoice_item_id = NEW.invoice_item_id;
-    IF v_alloc + NEW.quantity > v_item_qty THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: tong phan bo lo vuot so luong dong hoa don';
-    END IF;
-    SELECT COALESCE(SUM(iib.quantity),0) INTO v_sold
-      FROM invoice_item_batches iib
-      JOIN invoice_items ii2 ON ii2.id = iib.invoice_item_id
-      JOIN invoices i2 ON i2.id = ii2.invoice_id
-      WHERE iib.batch_id = NEW.batch_id AND i2.status <> 'CANCELLED';
-    IF v_sold + NEW.quantity > v_batch_qty THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: ban vuot ton kho cua lo';
-    END IF;
-END $$
-
-DROP TRIGGER IF EXISTS trg_st_bi_integrity $$
-CREATE TRIGGER trg_st_bi_integrity BEFORE INSERT ON shelf_transfers FOR EACH ROW
-BEGIN
-    DECLARE v_batch_store BIGINT; DECLARE v_shelf_store BIGINT; DECLARE v_other_shelf BIGINT;
-    SELECT gr.store_id INTO v_batch_store FROM goods_receipt_items gri
-      JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
-    SELECT store_id INTO v_shelf_store FROM shelves WHERE id = NEW.shelf_id;
-    IF v_batch_store <> v_shelf_store THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: len ke khac chi nhanh voi lo';
-    END IF;
-    SELECT MIN(shelf_id) INTO v_other_shelf FROM shelf_transfers
-      WHERE batch_id = NEW.batch_id AND shelf_id <> NEW.shelf_id;
-    IF v_other_shelf IS NOT NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: mot lo chi duoc nam tren mot ke';
-    END IF;
-END $$
-
-DROP TRIGGER IF EXISTS trg_sr_bi_integrity $$
-CREATE TRIGGER trg_sr_bi_integrity BEFORE INSERT ON shelf_returns FOR EACH ROW
-BEGIN
-    DECLARE v_batch_store BIGINT; DECLARE v_shelf_store BIGINT;
-    SELECT gr.store_id INTO v_batch_store FROM goods_receipt_items gri
-      JOIN goods_receipts gr ON gr.id = gri.receipt_id WHERE gri.id = NEW.batch_id;
-    SELECT store_id INTO v_shelf_store FROM shelves WHERE id = NEW.shelf_id;
-    IF v_batch_store <> v_shelf_store THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: lay hang tu ke khac chi nhanh voi lo';
-    END IF;
-END $$
-
-DROP TRIGGER IF EXISTS trg_inv_bi_store $$
-CREATE TRIGGER trg_inv_bi_store BEFORE INSERT ON invoices FOR EACH ROW
-BEGIN
-    DECLARE v_shift_store BIGINT;
-    SELECT store_id INTO v_shift_store FROM work_shifts WHERE id = NEW.shift_id;
-    IF v_shift_store IS NOT NULL AND NEW.store_id <> v_shift_store THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: hoa don khac chi nhanh voi ca lam viec';
-    END IF;
-END $$
-
-DROP TRIGGER IF EXISTS trg_ws_bi_oneopen $$
-CREATE TRIGGER trg_ws_bi_oneopen BEFORE INSERT ON work_shifts FOR EACH ROW
-BEGIN
-    IF NEW.status = 'OPEN'
-       AND EXISTS (SELECT 1 FROM work_shifts WHERE user_id = NEW.user_id AND status = 'OPEN') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Vi pham toan ven: nhan vien da co mot ca dang mo';
-    END IF;
-END $$
-
-DELIMITER ;
-
--- =====================================================================
---  DỮ LIỆU MẪU
--- =====================================================================
--- Chi nhánh (đa chuỗi): CH01 = chi nhánh mặc định cho toàn bộ dữ liệu mẫu bên dưới.
-INSERT INTO stores (id, code, name, address, phone) VALUES
-(1, 'CH01', 'MiniMart — Chi nhánh 1 (Quận 1)', '123 Đường Lê Lợi, Q.1, TP.HCM', '0901234567'),
-(2, 'CH02', 'MiniMart — Chi nhánh 2 (Thủ Đức)', '45 Võ Văn Ngân, TP.Thủ Đức', '0902223344');
-
--- Cấu hình MỖI chi nhánh một dòng (id = stores.id). Giá trị API/ngân hàng/token là PLACEHOLDER GIẢ.
-INSERT INTO store_config
- (id, name, address, phone, tax_code,
-  bank_name, bank_bin, bank_account_no, bank_account_name, transfer_prefix,
-  web2m_api_url, telegram_bot_token, telegram_enabled,
-  notify_payment, notify_low_stock, notify_new_invoice) VALUES
-(1, 'MiniMart — Chi nhánh 1 (Quận 1)', '123 Đường Lê Lợi, Q.1, TP.HCM', '0901234567', '0312345678',
- 'MB Bank', '970422', 'xxxxxxxxxxxx', 'CHU TAI KHOAN', 'POS',
- 'https://api.web2m.com/historyapiopenmb/YOUR_WEB2M_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN', 0, 1, 1, 0),
-(2, 'MiniMart — Chi nhánh 2 (Thủ Đức)', '45 Võ Văn Ngân, TP.Thủ Đức', '0902223344', '0312345678',
- 'Vietcombank', '970436', 'yyyyyyyyyyyy', 'CHU TAI KHOAN', 'POS',
- NULL, NULL, 0, 1, 1, 0);
-
--- Danh sách Chat ID nhận thông báo Telegram theo chi nhánh (giá trị giả - thay khi dùng thật)
-INSERT INTO telegram_recipients (config_id, chat_id, label) VALUES
-(1, '100000001', 'Người nhận 1 (CN1)'),
-(1, '100000002', 'Người nhận 2 (CN1)');
-
--- LƯU Ý: hash mẫu dưới đây là BCrypt của chuỗi "password" (hash kinh điển trong tài liệu Spring).
---   Backend có DemoDataInitializer sẽ TỰ ĐẶT LẠI mật khẩu 3 tài khoản này = "123456" khi khởi động
---   (chỉ khi chưa khớp), nên đăng nhập demo dùng mật khẩu: 123456.
-INSERT INTO users (username, password_hash, full_name, role, store_id) VALUES
-('admin',    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Quản trị viên (toàn chuỗi)', 'ADMIN',  NULL),
-('manager',  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Quản lý cửa hàng 1', 'MANAGER', 1),
-('staff',    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Nhân viên cửa hàng 1', 'STAFF',  1),
-('manager2', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Quản lý cửa hàng 2', 'MANAGER', 2),
-('staff2',   '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Nhân viên cửa hàng 2', 'STAFF',  2);
-
-INSERT INTO units (name) VALUES ('Lon'), ('Chai'), ('Gói'), ('Thùng'), ('Hộp');
-
-INSERT INTO categories (name, description) VALUES
-('Nước giải khát', 'Nước ngọt, nước suối, bia...'),
-('Đồ ăn nhanh',    'Mì gói, snack, bánh kẹo...'),
-('Hàng tiêu dùng', 'Hóa mỹ phẩm, đồ dùng...'),
-('Đồ đông lạnh',   'Kem, đồ đông lạnh...');
-
-INSERT INTO suppliers (name, phone, email, address) VALUES
-('Công ty Tân Hiệp Phát', '02838123456', 'sales@thp.com.vn', 'Bình Dương'),
-('Acecook Việt Nam',      '02838234567', 'cskh@acecook.vn',  'TP.HCM');
-
-INSERT INTO products (barcode, name, category_id, unit_id, cost_price, sale_price, min_stock) VALUES
-('8934588012345', 'Trà xanh không độ 500ml', 1, 2,  6000, 10000, 24),
-('8934588023456', 'Nước suối Aquafina 500ml', 1, 2,  3000,  5000, 24),
-('8936000012347', 'Mì Hảo Hảo tôm chua cay', 2, 3,  3000,  4500, 30),
-('8934567023458', 'Snack Oishi',              2, 3,  4000,  7000, 20),
-('8938505970019', 'Coca-Cola lon 330ml',      1, 1,  6500, 10000, 24),
-('8935001712345', 'Kem Merino',               4, 5,  8000, 12000, 10);
-
--- Phiếu nhập + lô hàng (batch = goods_receipt_items)
-INSERT INTO goods_receipts (code, store_id, supplier_id, created_by, total_amount, note) VALUES
-('PN20260601-001', 1, 1, 2, 1230000, 'Nhập đầu tháng 6');
-INSERT INTO goods_receipt_items (receipt_id, product_id, quantity, import_price, expiry_date) VALUES
-(1, 1, 48, 6000, '2026-12-31'),   -- batch id 1: Trà xanh
-(1, 2, 48, 3000, '2027-06-30'),   -- batch id 2: Aquafina
-(1, 5, 48, 6500, '2026-10-31');   -- batch id 3: Coca
-
-INSERT INTO goods_receipts (code, store_id, supplier_id, created_by, total_amount, note) VALUES
-('PN20260601-002', 1, 2, 2, 360000, 'Nhập mì & snack');
-INSERT INTO goods_receipt_items (receipt_id, product_id, quantity, import_price, expiry_date) VALUES
-(2, 3, 60, 3000, '2026-09-30'),   -- batch id 4: Mì Hảo Hảo
-(2, 4, 40, 4000, '2026-08-15');   -- batch id 5: Snack Oishi
-
--- Kệ vật lý của chi nhánh 1: mỗi danh mục một kệ (kèm sức chứa)
-INSERT INTO shelves (store_id, code, name, capacity) VALUES
-(1, 'K01', 'Nước giải khát', 500), (1, 'K02', 'Đồ ăn nhanh', 500),
-(1, 'K03', 'Hàng tiêu dùng', 500), (1, 'K04', 'Đồ đông lạnh', 300);
-
--- Đưa toàn bộ lô mẫu LÊN KỆ của danh mục tương ứng (kho → kệ) để bán được ngay (created_by = manager id 2)
-INSERT INTO shelf_transfers (batch_id, shelf_id, quantity, created_by)
-SELECT gri.id, sh.id, gri.quantity, 2
-FROM goods_receipt_items gri
-JOIN products   p  ON p.id  = gri.product_id
-JOIN categories c  ON c.id  = p.category_id
-JOIN shelves    sh ON sh.name = c.name;
-
-INSERT INTO customers (full_name, phone, email, loyalty_points) VALUES
-('Nguyễn Văn An', '0987654321', 'an.nguyen@email.com', 50),
-('Trần Thị Bình', '0978123456', NULL, 0);
-
-INSERT INTO promotions (code, name, discount_type, discount_value, min_order_amount, start_date, end_date, usage_limit) VALUES
-('SALE10',  'Giảm 10% đơn từ 100k', 'PERCENT', 10, 100000, '2026-06-01 00:00:00', '2026-06-30 23:59:59', 100),
-('GIAM20K', 'Giảm 20k đơn từ 200k', 'AMOUNT',  20000, 200000, '2026-06-01 00:00:00', '2026-12-31 23:59:59', NULL);
-
-INSERT INTO work_shifts (store_id, user_id, opening_cash, status) VALUES
-(1, 3, 500000, 'OPEN');
-
--- Hóa đơn mẫu: 2 Trà xanh (10000) + 1 Mì (4500) = 24500
-INSERT INTO invoices (code, store_id, shift_id, customer_id, subtotal, discount_amount, payment_method, customer_paid, change_amount, points_earned) VALUES
-('HD20260606-0001', 1, 1, 1, 24500, 0, 'CASH', 50000, 25500, 2);
-INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price) VALUES
-(1, 1, 2, 10000),   -- invoice_item id 1: Trà xanh x2
-(1, 3, 1,  4500);   -- invoice_item id 2: Mì x1
--- Phân bổ tồn theo lô (FIFO): lấy từ batch tương ứng
-INSERT INTO invoice_item_batches (invoice_item_id, batch_id, quantity) VALUES
-(1, 1, 2),   -- 2 Trà xanh lấy từ batch 1
-(2, 4, 1);   -- 1 Mì lấy từ batch 4
-
--- Hóa đơn 2: thanh toán QR (VietQR + WEB2M), đang CHỜ đối soát tự động
-INSERT INTO invoices (code, store_id, shift_id, subtotal, discount_amount, payment_method, points_earned) VALUES
-('HD20260606-0002', 1, 1, 10000, 0, 'QR', 1);
-INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price) VALUES
-(2, 5, 1, 10000);   -- invoice_item id 3: 1 Coca-Cola
-INSERT INTO invoice_item_batches (invoice_item_id, batch_id, quantity) VALUES
-(3, 3, 1);          -- lấy từ batch 3 (Coca)
--- Giao dịch QR chờ WEB2M xác nhận. Nội dung CK = '<prefix> <mã HĐ>' để WEB2M đối soát.
-INSERT INTO payment_transactions (invoice_id, amount, transfer_content, status) VALUES
-(2, 10000, 'POS HD20260606-0002', 'PENDING');
-
--- =====================================================================
---  KIỂM TRA NHANH
--- =====================================================================
--- SELECT * FROM v_batch_stock;        -- tồn từng lô (batch 1 còn 46, batch 4 còn 59)
--- SELECT * FROM v_product_stock;      -- tồn từng sản phẩm (lọc WHERE current_stock<=min_stock để xem tồn thấp)
--- SELECT * FROM v_customer_spending;  -- An: 24500
--- SELECT * FROM v_shift_summary;      -- ca 1: 24500 + 10000 = 34500
--- SELECT * FROM v_pending_payments;   -- HĐ HD20260606-0002 chờ đối soát QR
--- Hủy thử:  UPDATE invoices SET status='CANCELLED' WHERE id=1;  -> tồn batch 1,4 tự hoàn về 48,60
--- SELECT * FROM telegram_recipients WHERE is_active=1;  -- người nhận thông báo
--- WEB2M khớp tiền: UPDATE payment_transactions SET status='PAID', bank_reference='FT26...', paid_at=NOW() WHERE transfer_content='POS HD20260606-0002';

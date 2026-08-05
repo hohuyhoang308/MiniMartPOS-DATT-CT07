@@ -2,6 +2,7 @@ package com.pos.repository;
 
 import com.pos.entity.AttendanceEntry;
 import com.pos.repository.projection.AttendanceHoursRow;
+import com.pos.repository.projection.AttendanceOverlapRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -32,4 +33,27 @@ public interface AttendanceEntryRepository extends JpaRepository<AttendanceEntry
     List<AttendanceHoursRow> paidHoursByEmployee(@Param("storeId") Long storeId,
                                                  @Param("from") LocalDate from,
                                                  @Param("to") LocalDate to);
+
+    /**
+     * Ngày mà một nhân viên VỪA có ca VỪA có chấm công thủ công hưởng lương (WORK/LEAVE_PAID)
+     * trong kỳ — nguy cơ tính TRÙNG giờ. Dùng để CẢNH BÁO khi tính lương.
+     */
+    @Query(value = """
+            SELECT u.full_name AS fullName,
+                   a.work_date AS workDate,
+                   SUM(a.hours) AS hours
+            FROM attendance_entries a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.store_id = :storeId AND a.work_date BETWEEN :from AND :to
+              AND a.type IN ('WORK','LEAVE_PAID')
+              AND EXISTS (SELECT 1 FROM work_shifts s
+                          WHERE s.user_id = a.user_id AND s.store_id = a.store_id
+                            AND s.opened_at >= a.work_date
+                            AND s.opened_at < DATE_ADD(a.work_date, INTERVAL 1 DAY))
+            GROUP BY a.user_id, u.full_name, a.work_date
+            ORDER BY a.work_date
+            """, nativeQuery = true)
+    List<AttendanceOverlapRow> findOverlapWithShifts(@Param("storeId") Long storeId,
+                                                     @Param("from") LocalDate from,
+                                                     @Param("to") LocalDate to);
 }

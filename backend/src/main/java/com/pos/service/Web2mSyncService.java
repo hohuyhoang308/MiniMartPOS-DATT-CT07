@@ -103,8 +103,7 @@ public class Web2mSyncService {
 
     /** Kiểm tra kết nối API WEB2M (FR-A6). apiUrl trống → dùng cấu hình WEB2M của CỬA HÀNG được chọn (ADMIN truyền storeId). */
     public boolean testConnection(Long storeId, String apiUrl) {
-        Long sid = (storeId != null && com.pos.security.SecurityUtils.isAdmin())
-                ? storeId : com.pos.security.StoreContext.requireStoreId();
+        Long sid = com.pos.security.StoreContext.resolveTargetStoreId(storeId);
         String url = (apiUrl != null && !apiUrl.isBlank()) ? apiUrl
                 : storeConfigRepository.findById(sid)
                     .map(StoreConfig::getWeb2mApiUrl).orElse(null);

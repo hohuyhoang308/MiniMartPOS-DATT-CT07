@@ -14,8 +14,7 @@ import { dashboardApi } from '../../api/misc'
 import { useStoreScope } from '../../context/StoreScopeContext'
 import { formatMoney } from '../../utils/format'
 import { useList } from '../../hooks/useList'
-
-const BAR_COLORS = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#f43f5e', '#14b8a6', '#6366f1']
+import { STORE_BAR_COLORS as BAR_COLORS } from '../../constants/chartColors'
 
 /**
  * SO SÁNH CHI NHÁNH (toàn chuỗi) — chỉ quản trị viên toàn chuỗi (ADMIN).

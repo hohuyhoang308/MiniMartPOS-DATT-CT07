@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Button, Form, Modal, Spinner, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import ConfirmModal from '../../components/ui/ConfirmModal'
@@ -17,7 +16,7 @@ import { useList } from '../../hooks/useList'
  * Giá bán RIÊNG theo chi nhánh — đặt giá khác giá gốc cho cửa hàng đang xem.
  * Backend tự lọc theo header X-Store-Id; ADMIN phải chọn chi nhánh (StoreScopeRequired) trước.
  */
-export default function StorePrices({ embedded = false }) {
+export default function StorePrices() {
   const toast = useToast()
   const { data: rows, loading, reload: load } = useList(storePriceApi.list)
   const [editing, setEditing] = useState(null) // override đang sửa (null = không), {} = thêm mới
@@ -35,15 +34,9 @@ export default function StorePrices({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={() => setEditing({})}><i className="bi bi-plus-lg me-1"></i>Thêm giá riêng</Button>
-        </div>
-      ) : (
-        <PageHeader title="Giá theo chi nhánh" subtitle="Đặt giá bán riêng cho cửa hàng này, khác với giá gốc của toàn chuỗi.">
-          <Button onClick={() => setEditing({})}><i className="bi bi-plus-lg me-1"></i>Thêm giá riêng</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={() => setEditing({})}><i className="bi bi-plus-lg me-1"></i>Thêm giá riêng</Button>
+      </div>
 
       <InfoBanner id="store-prices" title="Giá theo chi nhánh là gì?">
         Mỗi sản phẩm có một <b>giá gốc</b> dùng chung cho toàn chuỗi. Ở đây bạn có thể đặt một

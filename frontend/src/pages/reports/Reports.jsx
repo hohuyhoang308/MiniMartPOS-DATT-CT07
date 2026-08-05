@@ -18,19 +18,19 @@ export default function Reports() {
       <PageHeader title="Báo cáo & phân tích" subtitle="Doanh thu, ca làm việc, hiệu suất nhân viên, lợi nhuận sản phẩm và phân loại hàng" />
       <Tabs activeKey={tab} onSelect={setTab} mountOnEnter unmountOnExit className="mb-3">
         <Tab eventKey="revenue" title={<span><i className="bi bi-bar-chart-line-fill me-1"></i>Doanh thu & ca</span>}>
-          <RevenueReport embedded />
+          <RevenueReport />
         </Tab>
         <Tab eventKey="rollup" title={<span><i className="bi bi-calendar-week me-1"></i>Tổng hợp ngày</span>}>
-          <DailyRollup embedded />
+          <DailyRollup />
         </Tab>
         <Tab eventKey="employees" title={<span><i className="bi bi-person-badge me-1"></i>Hiệu suất nhân viên</span>}>
-          <EmployeeReport embedded />
+          <EmployeeReport />
         </Tab>
         <Tab eventKey="products" title={<span><i className="bi bi-graph-up-arrow me-1"></i>Lợi nhuận sản phẩm</span>}>
-          <ProductReport embedded />
+          <ProductReport />
         </Tab>
         <Tab eventKey="abcxyz" title={<span><i className="bi bi-bar-chart-steps me-1"></i>Phân loại hàng (ABC/XYZ)</span>}>
-          <AbcXyz embedded />
+          <AbcXyz />
         </Tab>
       </Tabs>
     </div>

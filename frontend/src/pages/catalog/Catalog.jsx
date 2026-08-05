@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button, Card, Col, Form, Modal, Row, Spinner, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
@@ -13,10 +12,9 @@ import { useList } from '../../hooks/useList'
 const EMPTY_CAT = { name: '', description: '', status: 'ACTIVE' }
 
 /** Gộp "Danh mục" + "Đơn vị tính" vào một màn hình cho gọn (đều là dữ liệu nền của sản phẩm). */
-export default function Catalog({ embedded = false }) {
+export default function Catalog() {
   return (
     <div className="page-fill">
-      {!embedded && <PageHeader title="Danh mục & Đơn vị tính" subtitle="Nhóm hàng và đơn vị tính để phân loại sản phẩm, quản lý chung tại đây" />}
       <Row className="g-3 fill-row">
         <Col lg={7}><CategorySection /></Col>
         <Col lg={5}><UnitSection /></Col>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, Modal, Spinner } from 'react-bootstrap'
-import client, { errMsg } from '../../api/client'
+import { errMsg } from '../../api/client'
 import { paymentApi, invoiceApi } from '../../api/sales'
 import { useToast } from '../../context/ToastContext'
 import { formatMoney } from '../../utils/format'
+import { openBlob } from '../../utils/download'
 
 export default function PaymentResultModal({ invoice, onClose, onPaid }) {
   const toast = useToast()
@@ -46,11 +47,9 @@ export default function PaymentResultModal({ invoice, onClose, onPaid }) {
   async function printPdf() {
     setPrinting(true)
     try {
-      const res = await client.get(invoiceApi.pdfUrl(invoice.id).replace('/api', ''), {
-        responseType: 'blob',
-      })
-      const url = URL.createObjectURL(res.data)
-      window.open(url, '_blank')
+      openBlob(await invoiceApi.pdf(invoice.id))
+    } catch (e) {
+      toast.error(errMsg(e))
     } finally {
       setPrinting(false)
     }

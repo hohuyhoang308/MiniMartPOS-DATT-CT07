@@ -16,12 +16,19 @@ export function useList(fetcher, initial = []) {
   const [loading, setLoading] = useState(true)
   const ref = useRef({ fetcher, toast })
   ref.current = { fetcher, toast }
+  const reqIdRef = useRef(0) // chống "stale response": chỉ nhận kết quả của lần gọi MỚI NHẤT
 
   const reload = useCallback(async () => {
+    const reqId = ++reqIdRef.current
     setLoading(true)
-    try { setData(await ref.current.fetcher()) }
-    catch (e) { ref.current.toast.error(errMsg(e)) }
-    finally { setLoading(false) }
+    try {
+      const d = await ref.current.fetcher()
+      if (reqId === reqIdRef.current) setData(d)
+    } catch (e) {
+      if (reqId === reqIdRef.current) ref.current.toast.error(errMsg(e))
+    } finally {
+      if (reqId === reqIdRef.current) setLoading(false)
+    }
   }, [])
 
   useEffect(() => { reload() }, [reload])

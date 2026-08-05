@@ -5,9 +5,6 @@ import { useAuth } from './AuthContext'
 
 const StoreScopeContext = createContext(null)
 
-// SCOPE_KEY định nghĩa tại api/client.js (nơi interceptor đọc) — re-export để tiện dùng nơi khác.
-export { SCOPE_KEY }
-
 /**
  * Phạm vi CHI NHÁNH cho quản trị viên toàn chuỗi (ADMIN).
  *

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Col, Form, Row, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
@@ -9,15 +8,9 @@ import DiffBadge from '../../components/ui/DiffBadge'
 import { reportApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
-import { formatMoney } from '../../utils/format'
+import { formatMoney, monthRange } from '../../utils/format'
 
-const iso = (d) => d.toISOString().slice(0, 10)
-function monthRange() {
-  const now = new Date()
-  return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) }
-}
-
-export default function EmployeeReport({ embedded = false }) {
+export default function EmployeeReport() {
   const toast = useToast()
   const def = monthRange()
   const [from, setFrom] = useState(def.from)
@@ -39,8 +32,6 @@ export default function EmployeeReport({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && <PageHeader title="Hiệu suất nhân viên" subtitle="Doanh số bán và trách nhiệm quỹ tiền của từng thu ngân" />}
-
       <InfoBanner id="emp-report" title="Trang này dùng để làm gì?">
         Theo dõi <b>từng thu ngân</b>: bán được bao nhiêu (doanh thu, số hóa đơn, số hàng), trung bình mỗi hóa đơn,
         làm bao nhiêu ca, và <b>tổng tiền lệch quỹ</b> qua các ca đã đóng (âm = hay thiếu quỹ → cần lưu ý).

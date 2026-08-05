@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Col, Row, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
@@ -22,7 +21,7 @@ const XYZ_MEAN = {
   Z: 'Bán thất thường, khó đoán. Cần để nhiều hàng dự phòng hơn.',
 }
 
-export default function AbcXyz({ embedded = false }) {
+export default function AbcXyz() {
   const navigate = useNavigate()
   const { data: rows, loading } = useList(inventoryApi.abcXyz)
 
@@ -32,8 +31,6 @@ export default function AbcXyz({ embedded = false }) {
 
   return (
     <div className="page-fill">
-      {!embedded && <PageHeader title="Phân loại hàng bán chạy" subtitle="Xếp hàng theo mức doanh thu và theo bán đều hay thất thường (90 ngày gần nhất)" />}
-
       <InfoBanner id="abcxyz" title="Bảng này nói gì?">
         <div className="mb-2">
           <b>Cột ABC xếp theo tiền bán được.</b> <b>A</b> là nhóm bán chạy, mang về phần lớn doanh thu.

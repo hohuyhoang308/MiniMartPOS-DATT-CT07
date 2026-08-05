@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
@@ -12,7 +11,7 @@ import { useList } from '../../hooks/useList'
 
 const EMPTY = { name: '', phone: '', email: '', address: '', status: 'ACTIVE' }
 
-export default function Suppliers({ embedded = false }) {
+export default function Suppliers() {
   const toast = useToast()
   const { data: list, loading, reload: load } = useList(supplierApi.list)
   const [q, setQ] = useState('')
@@ -39,15 +38,9 @@ export default function Suppliers({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
-        </div>
-      ) : (
-        <PageHeader title="Nhà cung cấp" subtitle="Nơi cửa hàng lấy hàng về bán">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm nhà cung cấp</Button>
+      </div>
 
       <div className="mb-3" style={{ maxWidth: 340 }}>
         <div className="input-group">

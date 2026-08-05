@@ -10,6 +10,8 @@ import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
 import com.pos.security.StoreContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,8 @@ import java.util.List;
 @Service
 @Transactional(readOnly = true)
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final InvoiceRepository invoiceRepository;
     private final PaymentTransactionRepository paymentRepository;
@@ -78,9 +82,14 @@ public class PaymentService {
         List<PaymentTransaction> stale =
                 paymentRepository.findByStatusAndExpiredAtBefore(PaymentStatus.PENDING, LocalDateTime.now());
         for (PaymentTransaction pt : stale) {
-            pt.setStatus(PaymentStatus.EXPIRED);
-            paymentRepository.save(pt);
-            invoiceService.voidUnpaidInvoice(pt.getInvoice());
+            // Cô lập từng giao dịch: một hóa đơn lỗi không được làm hỏng cả đợt dọn (poison pill).
+            try {
+                pt.setStatus(PaymentStatus.EXPIRED);
+                paymentRepository.save(pt);
+                invoiceService.voidUnpaidInvoice(pt.getInvoice());
+            } catch (Exception e) {
+                log.warn("Bỏ qua giao dịch #{}: {}", pt.getId(), e.toString());
+            }
         }
         return stale.size();
     }

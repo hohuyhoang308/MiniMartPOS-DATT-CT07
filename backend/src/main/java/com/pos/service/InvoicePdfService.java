@@ -9,6 +9,7 @@ import com.pos.entity.Invoice;
 import com.pos.entity.InvoiceItem;
 import com.pos.entity.PaymentTransaction;
 import com.pos.entity.StoreConfig;
+import com.pos.entity.enums.PaymentMethod;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.InvoiceRepository;
 import com.pos.repository.PaymentTransactionRepository;
@@ -28,7 +29,11 @@ import java.time.format.DateTimeFormatter;
 public class InvoicePdfService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final DecimalFormat MONEY = new DecimalFormat("#,###");
+
+    /** Định dạng tiền VND "#,###". DecimalFormat KHÔNG thread-safe → tạo mới mỗi lần gọi. */
+    private static String money(java.math.BigDecimal v) {
+        return new DecimalFormat("#,###").format(v);
+    }
 
     private final InvoiceRepository invoiceRepository;
     private final StoreConfigRepository storeConfigRepository;
@@ -64,11 +69,11 @@ public class InvoicePdfService {
             Font fBold = new Font(bf, 8, Font.BOLD);
 
             String storeName = cfg != null ? cfg.getName() : "CỬA HÀNG TIỆN LỢI";
-            addCenter(doc, storeName, fTitle);
-            if (cfg != null && cfg.getAddress() != null) addCenter(doc, cfg.getAddress(), fNormal);
-            if (cfg != null && cfg.getPhone() != null) addCenter(doc, "ĐT: " + cfg.getPhone(), fNormal);
-            addCenter(doc, "HÓA ĐƠN BÁN HÀNG", fBold);
-            if (cfg != null && cfg.getTaxCode() != null) addCenter(doc, "MST: " + cfg.getTaxCode(), fNormal);
+            PdfFonts.addCenter(doc, storeName, fTitle);
+            if (cfg != null && cfg.getAddress() != null) PdfFonts.addCenter(doc, cfg.getAddress(), fNormal);
+            if (cfg != null && cfg.getPhone() != null) PdfFonts.addCenter(doc, "ĐT: " + cfg.getPhone(), fNormal);
+            PdfFonts.addCenter(doc, "HÓA ĐƠN BÁN HÀNG", fBold);
+            if (cfg != null && cfg.getTaxCode() != null) PdfFonts.addCenter(doc, "MST: " + cfg.getTaxCode(), fNormal);
             addLeft(doc, "Số HĐ: " + inv.getCode(), fNormal);
             addLeft(doc, "Ngày: " + inv.getCreatedAt().format(FMT), fNormal);
             addLeft(doc, "Thu ngân: " + inv.getShift().getUser().getFullName(), fNormal);
@@ -87,13 +92,13 @@ public class InvoicePdfService {
             headerCell(table, "T.Tiền", fBold);
             for (InvoiceItem it : inv.getItems()) {
                 bodyCell(table, it.getProduct().getName(), fNormal, Element.ALIGN_LEFT);
-                bodyCell(table, it.getQuantity() + " x " + MONEY.format(it.getUnitPrice()), fNormal, Element.ALIGN_CENTER);
-                bodyCell(table, MONEY.format(it.getSubtotal()), fNormal, Element.ALIGN_RIGHT);
+                bodyCell(table, it.getQuantity() + " x " + money(it.getUnitPrice()), fNormal, Element.ALIGN_CENTER);
+                bodyCell(table, money(it.getSubtotal()), fNormal, Element.ALIGN_RIGHT);
             }
             doc.add(table);
 
             addLeft(doc, "--------------------------------", fNormal);
-            addRight(doc, "Tạm tính: " + MONEY.format(inv.getSubtotal()) + "đ", fNormal);
+            addRight(doc, "Tạm tính: " + money(inv.getSubtotal()) + "đ", fNormal);
             if (inv.getPromotion() != null) {
                 addRight(doc, "Mã KM: " + inv.getPromotion().getCode(), fNormal);
             }
@@ -101,19 +106,19 @@ public class InvoicePdfService {
                 addRight(doc, "Đổi điểm: " + inv.getPointsUsed() + " điểm", fNormal);
             }
             if (inv.getDiscountAmount() != null && inv.getDiscountAmount().signum() > 0) {
-                addRight(doc, "Giảm trừ: -" + MONEY.format(inv.getDiscountAmount()) + "đ", fNormal);
+                addRight(doc, "Giảm trừ: -" + money(inv.getDiscountAmount()) + "đ", fNormal);
             }
-            addRight(doc, "TỔNG CỘNG: " + MONEY.format(inv.getTotalAmount()) + "đ", fBold);
+            addRight(doc, "TỔNG CỘNG: " + money(inv.getTotalAmount()) + "đ", fBold);
             if (inv.getTaxAmount() != null && inv.getTaxAmount().signum() > 0) {
-                addRight(doc, "(Trong đó thuế GTGT: " + MONEY.format(inv.getTaxAmount()) + "đ)", fNormal);
+                addRight(doc, "(Trong đó thuế GTGT: " + money(inv.getTaxAmount()) + "đ)", fNormal);
             }
-            addLeft(doc, "Hình thức: " + (inv.getPaymentMethod().name().equals("CASH") ? "Tiền mặt" : "QR/Chuyển khoản"), fNormal);
+            addLeft(doc, "Hình thức: " + (inv.getPaymentMethod() == PaymentMethod.CASH ? "Tiền mặt" : "QR/Chuyển khoản"), fNormal);
             if (inv.getCustomerPaid() != null) {
-                addRight(doc, "Tiền khách đưa: " + MONEY.format(inv.getCustomerPaid()) + "đ", fNormal);
-                addRight(doc, "Tiền thừa: " + MONEY.format(inv.getChangeAmount()) + "đ", fNormal);
+                addRight(doc, "Tiền khách đưa: " + money(inv.getCustomerPaid()) + "đ", fNormal);
+                addRight(doc, "Tiền thừa: " + money(inv.getChangeAmount()) + "đ", fNormal);
             }
             // Nội dung chuyển khoản (HĐ thanh toán QR)
-            if (inv.getPaymentMethod().name().equals("QR")) {
+            if (inv.getPaymentMethod() == PaymentMethod.QR) {
                 PaymentTransaction pt = paymentRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(inv.getId()).orElse(null);
                 if (pt != null) addLeft(doc, "Nội dung CK: " + pt.getTransferContent(), fNormal);
             }
@@ -124,20 +129,14 @@ public class InvoicePdfService {
                 pts += "· Số dư: " + inv.getCustomer().getLoyaltyPoints();
                 addLeft(doc, pts, fNormal);
             }
-            addCenter(doc, " ", fNormal);
-            addCenter(doc, "Cảm ơn quý khách & hẹn gặp lại!", fNormal);
+            PdfFonts.addCenter(doc, " ", fNormal);
+            PdfFonts.addCenter(doc, "Cảm ơn quý khách & hẹn gặp lại!", fNormal);
 
             doc.close();
             return out.toByteArray();
         } catch (DocumentException e) {
             throw new IllegalStateException("Lỗi tạo PDF hóa đơn: " + e.getMessage(), e);
         }
-    }
-
-    private void addCenter(Document doc, String text, Font font) throws DocumentException {
-        Paragraph p = new Paragraph(text, font);
-        p.setAlignment(Element.ALIGN_CENTER);
-        doc.add(p);
     }
 
     private void addLeft(Document doc, String text, Font font) throws DocumentException {

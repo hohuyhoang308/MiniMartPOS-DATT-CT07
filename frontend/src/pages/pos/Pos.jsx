@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Col, Form, InputGroup, Modal, Row, Spinner } from 'react-bootstrap'
-import { shiftApi, invoiceApi, cashMovementApi } from '../../api/sales'
+import { Button, Card, Form, InputGroup, Spinner } from 'react-bootstrap'
+import { shiftApi, invoiceApi } from '../../api/sales'
 import { productApi, categoryApi } from '../../api/catalog'
 import { customerApi, promotionApi } from '../../api/misc'
 import { useCart } from '../../context/CartContext'
@@ -14,6 +14,11 @@ import InfoBanner from '../../components/ui/InfoBanner'
 import MoneyInput from '../../components/ui/MoneyInput'
 import CloseShiftModal from '../../components/CloseShiftModal'
 import PaymentResultModal from './PaymentResultModal'
+import OpenShiftPanel from './OpenShiftPanel'
+import CashMovementModal from './CashMovementModal'
+import HeldOrdersModal from './HeldOrdersModal'
+import ProductGrid from './ProductGrid'
+import CartLines from './CartLines'
 
 const QUICK_CASH = [20000, 50000, 100000, 200000, 500000]
 
@@ -24,67 +29,32 @@ function genIdemKey() {
 }
 
 export default function Pos() {
+  const toast = useToast()
   const [shift, setShift] = useState(null)
   const [loadingShift, setLoadingShift] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
 
-  useEffect(() => {
-    shiftApi.current().then(setShift).finally(() => setLoadingShift(false))
-  }, [])
+  // Tải ca hiện tại. Lỗi mạng/API ≠ "chưa mở ca" → báo lỗi + cho thử lại, không hiện panel Mở ca nhầm.
+  function loadShift() {
+    setLoadingShift(true)
+    setLoadFailed(false)
+    shiftApi.current()
+      .then(setShift)
+      .catch((e) => { setLoadFailed(true); toast.error(errMsg(e)) })
+      .finally(() => setLoadingShift(false))
+  }
+  useEffect(() => { loadShift() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadingShift) return <Loading />
+  if (loadFailed) {
+    return (
+      <div className="text-center py-5">
+        <Button onClick={loadShift}><i className="bi bi-arrow-clockwise me-1"></i>Thử lại</Button>
+      </div>
+    )
+  }
   if (!shift) return <OpenShiftPanel onOpened={setShift} />
   return <PosBoard shift={shift} onShiftClosed={() => setShift(null)} />
-}
-
-/* ---------------- Mở ca ---------------- */
-function OpenShiftPanel({ onOpened }) {
-  const toast = useToast()
-  const [openingCash, setOpeningCash] = useState('')
-  const [suggested, setSuggested] = useState(null)
-  const [loading, setLoading] = useState(false)
-
-  // Tự điền tiền đầu ca = tiền cuối ca trước (két chuyển tiếp) → khỏi đếm lại.
-  useEffect(() => {
-    shiftApi.suggestedOpening()
-      .then((v) => { const n = Number(v || 0); setSuggested(n); setOpeningCash(String(n)) })
-      .catch(() => setOpeningCash('0'))
-  }, [])
-
-  async function open() {
-    setLoading(true)
-    try { onOpened(await shiftApi.open(Number(openingCash))) }
-    catch (e) { toast.error(errMsg(e)) } finally { setLoading(false) }
-  }
-
-  return (
-    <Row className="justify-content-center">
-      <Col md={5}>
-        <Card className="border-0 mt-4 fade-up">
-          <Card.Body className="p-4 text-center">
-            <div className="login-logo mb-3" style={{ margin: '0 auto' }}><i className="bi bi-clock-history"></i></div>
-            <h5 className="fw-bold">Mở ca làm việc</h5>
-            <p className="text-muted2">Tiền đầu ca đã được điền sẵn theo <b>tiền còn lại của ca trước</b>. Bạn chỉ cần xác nhận, không phải đếm lại tiền trong két.</p>
-            <InputGroup className="mb-2">
-              <InputGroup.Text>Tiền đầu ca</InputGroup.Text>
-              <MoneyInput value={openingCash} onChange={setOpeningCash} />
-              <InputGroup.Text>đ</InputGroup.Text>
-            </InputGroup>
-            {suggested != null && (
-              <div className="small text-muted2 mb-3">
-                {suggested > 0
-                  ? <>Gợi ý từ ca trước: <b>{formatMoney(suggested)}</b>{Number(openingCash) !== suggested &&
-                      <Button variant="link" size="sm" className="p-0 ms-1 align-baseline" onClick={() => setOpeningCash(String(suggested))}>dùng số này</Button>}</>
-                  : <>Chưa có ca trước. Bạn hãy nhập số tiền lẻ đang có sẵn trong két (ví dụ 500.000đ).</>}
-              </div>
-            )}
-            <Button className="w-100" onClick={open} disabled={loading}>
-              {loading ? <Spinner size="sm" /> : <><i className="bi bi-unlock me-1"></i>Mở ca</>}
-            </Button>
-          </Card.Body>
-        </Card>
-      </Col>
-    </Row>
-  )
 }
 
 /* ---------------- Bàn bán hàng ---------------- */
@@ -392,168 +362,5 @@ function PosBoard({ shift, onShiftClosed }) {
         onHide={() => setClosing(false)} onClosed={onShiftClosed} />
       <Calculator show={showCalc} onHide={() => setShowCalc(false)} />
     </div>
-  )
-}
-
-/* ---------------- Lưới sản phẩm (cột trái) ---------------- */
-function ProductGrid({ products, onAdd }) {
-  return (
-    <div className="pos-products">
-      {products.map((p) => {
-        const shelf = p.shelfStock ?? 0
-        const out = shelf <= 0
-        const low = !out && shelf <= (p.minStock ?? 0)
-        return (
-          <div key={p.id} className={`product-tile ${out ? 'disabled' : ''}`} onClick={() => onAdd(p)}
-            title={`Vị trí kệ ${p.shelfCode ?? '—'} · Còn ${shelf} trên kệ (bán được ngay) · Còn ${p.warehouseStock ?? 0} trong kho`}>
-            <div className="pt-thumb">
-              {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <i className="bi bi-box-seam"></i>}
-              {p.shelfCode && !out && <span className="pt-shelf"><i className="bi bi-geo-alt-fill"></i>{p.shelfCode}</span>}
-              <span className={`pt-stock ${out ? 'out' : low ? 'low' : ''}`}>
-                {out ? 'Hết kệ' : <><span className="dot"></span>{shelf}</>}
-              </span>
-            </div>
-            <div className="pt-name">{p.name}</div>
-            <div className="pt-foot">
-              <span className="pt-price">{formatMoney(p.storeSalePrice ?? p.salePrice)}</span>
-              <span className="pt-add" aria-hidden="true"><i className="bi bi-plus-lg"></i></span>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-/* ---------------- Các dòng trong giỏ (cột phải) ---------------- */
-function CartLines() {
-  const cart = useCart()
-  if (cart.items.length === 0) {
-    return <div className="text-center text-muted2 py-4"><i className="bi bi-cart3 fs-3 d-block mb-1 opacity-50"></i>Giỏ hàng trống</div>
-  }
-  return cart.items.map((i) => (
-    <div className="ticket-line" key={i.productId}>
-      <div className="flex-grow-1 min-w-0">
-        <div className="fw-semibold text-truncate" style={{ fontSize: '.88rem' }}>{i.name}</div>
-        <small className="text-muted2">{formatMoney(i.salePrice)}</small>
-      </div>
-      <div className="qty-stepper">
-        <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity - 1)}>−</button>
-        <input className="q" type="number" min={1} value={i.quantity}
-          style={{ width: 44, textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 600 }}
-          onChange={(e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) cart.setQuantity(i.productId, Math.max(1, v)) }} />
-        <button type="button" onClick={() => cart.setQuantity(i.productId, i.quantity + 1)}>+</button>
-      </div>
-      <div className="num fw-semibold text-end" style={{ width: 78, fontSize: '.85rem' }}>{formatMoney(i.salePrice * i.quantity)}</div>
-      <button type="button" className="btn btn-sm btn-link text-danger p-0" onClick={() => cart.removeItem(i.productId)}><i className="bi bi-x-lg"></i></button>
-    </div>
-  ))
-}
-
-/* ---------------- Thu/Chi quỹ tiền mặt ---------------- */
-function CashMovementModal({ show, onHide, onRecorded }) {
-  const toast = useToast()
-  const [type, setType] = useState('OUT')
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  function close() { setAmount(''); setReason(''); setType('OUT'); onHide() }
-
-  async function submit(e) {
-    e.preventDefault()
-    if (Number(amount || 0) <= 0) { toast.warning('Nhập số tiền lớn hơn 0'); return }
-    if (!reason.trim()) { toast.warning('Nhập lý do thu/chi'); return }
-    setLoading(true)
-    try {
-      await cashMovementApi.create({ type, amount: Number(amount), reason: reason.trim() })
-      toast.success(type === 'IN' ? 'Đã ghi khoản THU vào quỹ' : 'Đã ghi khoản CHI khỏi quỹ')
-      onRecorded?.()
-      close()
-    } catch (e) { toast.error(errMsg(e, 'Không ghi được thu/chi quỹ')) } finally { setLoading(false) }
-  }
-
-  return (
-    <Modal show={show} onHide={close} centered>
-      <Form onSubmit={submit}>
-        <Modal.Header closeButton>
-          <Modal.Title><i className="bi bi-cash-coin me-2"></i>Thu / Chi quỹ tiền mặt</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="small text-muted2 mb-3">
-            Ghi các khoản tiền mặt <b>ngoài bán hàng</b> (trả tiền nhà cung cấp, đổi tiền lẻ, rút bớt tiền...).
-            Số này sẽ được tính vào <b>đối soát quỹ cuối ca</b>.
-          </div>
-          <div className="d-flex gap-2 mb-3">
-            <button type="button" className={`btn flex-grow-1 ${type === 'OUT' ? 'btn-danger' : 'btn-light'}`} onClick={() => setType('OUT')}>
-              <i className="bi bi-box-arrow-up me-1"></i>Chi ra (−)
-            </button>
-            <button type="button" className={`btn flex-grow-1 ${type === 'IN' ? 'btn-success' : 'btn-light'}`} onClick={() => setType('IN')}>
-              <i className="bi bi-box-arrow-in-down me-1"></i>Thu vào (+)
-            </button>
-          </div>
-          <Form.Label>Số tiền</Form.Label>
-          <InputGroup className="mb-3">
-            <MoneyInput autoFocus value={amount} onChange={setAmount} />
-            <InputGroup.Text>đ</InputGroup.Text>
-          </InputGroup>
-          <Form.Label>Lý do</Form.Label>
-          <Form.Control as="textarea" rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="Vd: Trả tiền thùng nước ngọt cho NCC / Đổi tiền lẻ vào quỹ..." maxLength={255} />
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="light" onClick={close}>Hủy</Button>
-          <Button type="submit" variant={type === 'IN' ? 'success' : 'danger'} disabled={loading}>
-            {loading ? <Spinner size="sm" /> : (type === 'IN' ? 'Ghi khoản thu' : 'Ghi khoản chi')}
-          </Button>
-        </Modal.Footer>
-      </Form>
-    </Modal>
-  )
-}
-
-/* ---------------- Đơn đang treo ---------------- */
-function HeldOrdersModal({ show, onHide, held, onResume, onRemove, blocked }) {
-  return (
-    <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton>
-        <Modal.Title><i className="bi bi-pause-circle me-2"></i>Đơn đang treo</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {blocked && (
-          <div className="alert alert-warning py-2 small mb-3">
-            <i className="bi bi-exclamation-triangle me-1"></i>
-            Giỏ hiện tại đang có hàng. Hãy thanh toán hoặc treo đơn hiện tại trước khi lấy lại đơn treo.
-          </div>
-        )}
-        {held.length === 0 ? (
-          <div className="text-center text-muted2 py-4">
-            <i className="bi bi-inbox fs-3 d-block mb-1 opacity-50"></i>Chưa có đơn nào đang treo
-          </div>
-        ) : (
-          <div className="d-flex flex-column gap-2">
-            {held.map((h) => (
-              <div key={h.id} className="soft-card d-flex align-items-center justify-content-between p-2">
-                <div className="min-w-0">
-                  <div className="fw-semibold text-truncate">{h.label}</div>
-                  <small className="text-muted2">
-                    {h.count} món · {formatMoney(h.subtotal)} ·{' '}
-                    {new Date(h.savedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  </small>
-                </div>
-                <div className="d-flex gap-1 flex-shrink-0">
-                  <Button size="sm" variant="primary" onClick={() => onResume(h.id)} disabled={blocked}>
-                    <i className="bi bi-arrow-up-circle me-1"></i>Lấy lại
-                  </Button>
-                  <Button size="sm" variant="outline-danger" onClick={() => onRemove(h.id)} title="Xóa đơn treo">
-                    <i className="bi bi-trash"></i>
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal.Body>
-    </Modal>
   )
 }

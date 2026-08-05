@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import EmptyState from '../../components/ui/EmptyState'
 import Loading from '../../components/ui/Loading'
@@ -12,14 +11,14 @@ import { errMsg } from '../../api/client'
 import { formatDateTime } from '../../utils/format'
 
 /** Lý do xuất hủy → nhãn + màu pill (đồng bộ với enum AdjustmentReason ở backend). */
-export const REASONS = {
+const REASONS = {
   EXPIRED: { label: 'Hết hạn sử dụng', cls: 'pill-danger', icon: 'bi-clock-history' },
   DAMAGED: { label: 'Hư hỏng', cls: 'pill-warning', icon: 'bi-exclamation-triangle-fill' },
   LOST: { label: 'Thất thoát / hao hụt', cls: 'pill-violet', icon: 'bi-question-octagon-fill' },
   OTHER: { label: 'Khác', cls: 'pill-muted', icon: 'bi-three-dots' },
 }
 
-export default function StockAdjust({ embedded = false }) {
+export default function StockAdjust() {
   const toast = useToast()
   const [products, setProducts] = useState([])
   const [history, setHistory] = useState([])
@@ -47,8 +46,6 @@ export default function StockAdjust({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && <PageHeader title="Xuất hủy / Điều chỉnh kho" subtitle="Rút hàng hết hạn, hư hỏng hoặc thất thoát ra khỏi tồn kho" />}
-
       <InfoBanner id="stock-adjust" title="Xuất hủy / điều chỉnh kho">
         Khi hàng <b>hết hạn</b>, <b>hư hỏng</b> hoặc <b>thất thoát</b> (kiểm kê thiếu), bạn dùng trang này để
         <b> rút số lượng đó khỏi tồn kho</b> — nhờ vậy cảnh báo tồn kho, gợi ý nhập hàng và giá trị kho mới chính xác.

@@ -3,7 +3,6 @@ import { Button, Card, Col, Form, Row, Table } from 'react-bootstrap'
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatCard from '../../components/ui/StatCard'
 import EmptyState from '../../components/ui/EmptyState'
@@ -11,20 +10,16 @@ import Loading from '../../components/ui/Loading'
 import { reportApi } from '../../api/misc'
 import { useToast } from '../../context/ToastContext'
 import { errMsg } from '../../api/client'
-import { formatMoney } from '../../utils/format'
+import { formatMoney, monthRange } from '../../utils/format'
+import { REVENUE_STROKE, PROFIT_COLOR } from '../../constants/chartColors'
 
-const iso = (d) => d.toISOString().slice(0, 10)
-function monthRange() {
-  const now = new Date()
-  return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) }
-}
 const dayLabel = (d) => (d ? d.slice(5).split('-').reverse().join('/') : '') // 2026-06-09 → 09/06
 
 /**
  * Báo cáo TỔNG HỢP NGÀY (daily rollup) — số liệu doanh thu/lợi nhuận đã được kết toán sẵn theo ngày,
- * truy vấn rất nhanh (không tính lại từ hóa đơn). `embedded` = nhúng trong trang Báo cáo (ẩn tiêu đề).
+ * truy vấn rất nhanh (không tính lại từ hóa đơn). Nhúng trong trang Báo cáo.
  */
-export default function DailyRollup({ embedded = false }) {
+export default function DailyRollup() {
   const toast = useToast()
   const def = monthRange()
   const [from, setFrom] = useState(def.from)
@@ -59,8 +54,6 @@ export default function DailyRollup({ embedded = false }) {
 
   return (
     <div>
-      {!embedded && <PageHeader title="Tổng hợp ngày" subtitle="Số liệu doanh thu & lợi nhuận đã kết toán sẵn theo ngày" />}
-
       <InfoBanner id="daily-rollup" title="Báo cáo tổng hợp ngày">
         Đây là báo cáo <b>tổng hợp nhanh</b>: mỗi ngày bán hàng được <b>kết toán sẵn</b> (doanh thu, lợi nhuận gộp,
         giá vốn, thuế, số hóa đơn, số hàng bán) nên xem lại nhanh hơn nhiều so với tính lại từ từng hóa đơn.
@@ -97,8 +90,8 @@ export default function DailyRollup({ embedded = false }) {
                     <YAxis tickFormatter={(v) => `${v / 1000}k`} />
                     <Tooltip cursor={false} formatter={(v, n) => [formatMoney(v), n === 'revenue' ? 'Doanh thu' : 'Lợi nhuận gộp']} />
                     <Legend formatter={(v) => (v === 'revenue' ? 'Doanh thu' : 'Lợi nhuận gộp')} />
-                    <Line type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2.5} dot={false} />
-                    <Line type="monotone" dataKey="grossProfit" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="revenue" stroke={REVENUE_STROKE} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="grossProfit" stroke={PROFIT_COLOR} strokeWidth={2.5} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}

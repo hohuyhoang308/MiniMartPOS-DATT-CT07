@@ -41,8 +41,6 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class PayrollExportService {
 
-    private static final DecimalFormat MONEY = new DecimalFormat("#,###");
-
     private final PayrollPeriodRepository periodRepository;
     private final PayslipRepository payslipRepository;
     private final PayslipAdjustmentRepository adjustmentRepository;
@@ -137,7 +135,7 @@ public class PayrollExportService {
         StoreContext.assertSameStore(p.getPeriod().getStore().getId());   // chống IDOR đa chi nhánh
         // STAFF chỉ in được phiếu ĐÃ CHỐT của CHÍNH mình (ADMIN/MANAGER in mọi phiếu trong phạm vi).
         CustomUserDetails me = SecurityUtils.currentUser();
-        boolean isManager = "ADMIN".equals(me.getRole()) || "MANAGER".equals(me.getRole());
+        boolean isManager = SecurityUtils.isManagerOrAbove();
         PayrollStatus st = p.getPeriod().getStatus();
         boolean finalized = st == PayrollStatus.APPROVED || st == PayrollStatus.PAID;
         if (!isManager && (!p.getUser().getId().equals(me.getId()) || !finalized)) {
@@ -158,17 +156,17 @@ public class PayrollExportService {
             Font fBig = new Font(bf, 12, Font.BOLD);
 
             String storeName = cfg != null && cfg.getName() != null ? cfg.getName() : p.getPeriod().getStore().getName();
-            addCenter(doc, storeName.toUpperCase(), fBold);
-            if (cfg != null && cfg.getAddress() != null) addCenter(doc, cfg.getAddress(), fSub);
-            addCenter(doc, " ", fSub);
-            addCenter(doc, "PHIẾU LƯƠNG THÁNG " + p.getPeriod().getPeriodMonth(), fTitle);
-            addCenter(doc, " ", fSub);
+            PdfFonts.addCenter(doc, storeName.toUpperCase(), fBold);
+            if (cfg != null && cfg.getAddress() != null) PdfFonts.addCenter(doc, cfg.getAddress(), fSub);
+            PdfFonts.addCenter(doc, " ", fSub);
+            PdfFonts.addCenter(doc, "PHIẾU LƯƠNG THÁNG " + p.getPeriod().getPeriodMonth(), fTitle);
+            PdfFonts.addCenter(doc, " ", fSub);
 
             Paragraph emp = new Paragraph("Nhân viên: " + p.getUser().getFullName(), fNormal);
             doc.add(emp);
             doc.add(new Paragraph("Loại lương: "
                     + (p.getPayType() == PayType.HOURLY ? "Theo giờ" : "Theo tháng")
-                    + " · Đơn giá: " + MONEY.format(p.getBaseRate())
+                    + " · Đơn giá: " + money(p.getBaseRate())
                     + (p.getPayType() == PayType.HOURLY ? "đ/giờ" : "đ/tháng"), fSub));
             doc.add(new Paragraph(" ", fSub));
 
@@ -179,14 +177,14 @@ public class PayrollExportService {
             kv(t, "Giờ công", num(p.getWorkedHours()) + " h", fNormal, fNormal);
             kv(t, "Giờ thường", num(p.getRegularHours()) + " h", fNormal, fNormal);
             kv(t, "Giờ tăng ca", num(p.getOtHours()) + " h", fNormal, fNormal);
-            kv(t, "Lương gốc", MONEY.format(p.getRegularPay()) + " đ", fNormal, fNormal);
-            kv(t, "Tiền tăng ca", MONEY.format(p.getOtPay()) + " đ", fNormal, fNormal);
-            kv(t, "Phụ cấp", MONEY.format(p.getAllowance()) + " đ", fNormal, fNormal);
-            kv(t, "Lương gộp", MONEY.format(p.getGrossPay()) + " đ", fBold, fBold);
+            kv(t, "Lương gốc", money(p.getRegularPay()) + " đ", fNormal, fNormal);
+            kv(t, "Tiền tăng ca", money(p.getOtPay()) + " đ", fNormal, fNormal);
+            kv(t, "Phụ cấp", money(p.getAllowance()) + " đ", fNormal, fNormal);
+            kv(t, "Lương gộp", money(p.getGrossPay()) + " đ", fBold, fBold);
             for (PayslipAdjustment a : adjustments) {
                 boolean bonus = a.getType() == PayslipAdjustmentType.BONUS;
                 kv(t, (bonus ? "(+) " : "(−) ") + a.getReason(),
-                        (bonus ? "+" : "−") + MONEY.format(a.getAmount()) + " đ", fSub, fSub);
+                        (bonus ? "+" : "−") + money(a.getAmount()) + " đ", fSub, fSub);
             }
             doc.add(t);
             doc.add(new Paragraph(" ", fSub));
@@ -197,7 +195,7 @@ public class PayrollExportService {
             PdfPCell k = new PdfPCell(new Phrase("THỰC LĨNH", fBig));
             k.setBorder(Rectangle.TOP);
             k.setPadding(6);
-            PdfPCell v = new PdfPCell(new Phrase(MONEY.format(p.getNetPay()) + " đ", fBig));
+            PdfPCell v = new PdfPCell(new Phrase(money(p.getNetPay()) + " đ", fBig));
             v.setBorder(Rectangle.TOP);
             v.setHorizontalAlignment(Element.ALIGN_RIGHT);
             v.setPadding(6);
@@ -220,6 +218,11 @@ public class PayrollExportService {
     }
 
     // --- hỗ trợ ---
+    /** Định dạng tiền VND "#,###". DecimalFormat KHÔNG thread-safe → tạo mới mỗi lần gọi. */
+    private static String money(BigDecimal v) {
+        return new DecimalFormat("#,###").format(v);
+    }
+
     private static double d(BigDecimal v) {
         return v != null ? v.doubleValue() : 0d;
     }
@@ -238,12 +241,6 @@ public class PayrollExportService {
         v.setPadding(3);
         t.addCell(k);
         t.addCell(v);
-    }
-
-    private void addCenter(Document doc, String text, Font font) throws DocumentException {
-        Paragraph p = new Paragraph(text, font);
-        p.setAlignment(Element.ALIGN_CENTER);
-        doc.add(p);
     }
 
 }

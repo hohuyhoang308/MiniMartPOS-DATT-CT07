@@ -11,6 +11,7 @@ import com.pos.repository.projection.StoreCountRow;
 import com.pos.repository.view.ExpiringBatchViewRepository;
 import com.pos.repository.view.ProductStockViewRepository;
 import com.pos.security.StoreContext;
+import com.pos.util.Money;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Dashboard (FR9.1) — tổng hợp KPI, lợi nhuận, cơ cấu thanh toán, giờ cao điểm, danh mục, giao dịch gần đây.
- *  Lọc theo CHI NHÁNH đang làm việc (đa chuỗi); CHAIN_ADMIN chưa chọn chi nhánh → toàn chuỗi. */
+ *  Lọc theo CHI NHÁNH đang làm việc (đa chuỗi); ADMIN (toàn chuỗi) chưa chọn chi nhánh → toàn chuỗi. */
 @Service
 @Transactional(readOnly = true)
 public class DashboardService {
@@ -58,7 +59,7 @@ public class DashboardService {
     }
 
     public DashboardResponse getDashboard() {
-        Long storeId = StoreContext.currentStoreId();   // null = toàn chuỗi (CHAIN_ADMIN chưa chọn chi nhánh)
+        Long storeId = StoreContext.currentStoreId();   // null = toàn chuỗi (ADMIN (toàn chuỗi) chưa chọn chi nhánh)
         LocalDate today = LocalDate.now();
         LocalDateTime startToday = today.atStartOfDay();
         LocalDateTime startTomorrow = today.plusDays(1).atStartOfDay();
@@ -84,7 +85,7 @@ public class DashboardService {
         long itemsSoldToday = invoiceItemRepository.sumQuantity(startToday, startTomorrow, storeId);
         long customersToday = invoiceRepository.countDistinctCustomers(startToday, startTomorrow, storeId);
         BigDecimal avgOrder = invoiceCountToday > 0
-                ? revenueToday.divide(BigDecimal.valueOf(invoiceCountToday), 0, RoundingMode.HALF_UP)
+                ? Money.prorate(revenueToday, BigDecimal.ONE, BigDecimal.valueOf(invoiceCountToday))
                 : BigDecimal.ZERO;
 
         long lowStock = (storeId == null ? stockRepository.findLowStockAll() : stockRepository.findLowStock(storeId)).size();

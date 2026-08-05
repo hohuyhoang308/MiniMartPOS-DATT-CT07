@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 
 const ToastContext = createContext(null)
 
@@ -23,12 +23,13 @@ export function ToastProvider({ children }) {
     setTimeout(() => remove(id), 3200)
   }, [remove])
 
-  const toast = {
+  // Giá trị context ổn định (push là callback ổn định) → component dùng toast không re-render oan.
+  const toast = useMemo(() => ({
     success: (m) => push('success', m),
     error: (m) => push('danger', m),
     warning: (m) => push('warning', m),
     info: (m) => push('info', m),
-  }
+  }), [push])
 
   return (
     <ToastContext.Provider value={toast}>

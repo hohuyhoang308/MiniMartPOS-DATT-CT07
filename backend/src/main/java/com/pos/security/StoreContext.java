@@ -7,10 +7,10 @@ import com.pos.exception.BadRequestException;
  *
  * <p>Quy tắc xác định chi nhánh hiệu lực:</p>
  * <ul>
- *   <li>Người dùng GẮN chi nhánh (ADMIN/MANAGER/CASHIER) → luôn là chi nhánh của họ
+ *   <li>Người dùng GẮN chi nhánh (MANAGER/STAFF) → luôn là chi nhánh của họ
  *       (lấy từ {@link CustomUserDetails#getStoreId()}). Header {@code X-Store-Id} bị BỎ QUA
  *       để không thể tự vượt rào sang chi nhánh khác.</li>
- *   <li>{@code CHAIN_ADMIN} (không gắn chi nhánh) → theo chi nhánh đã chọn ở header
+ *   <li>ADMIN (toàn chuỗi, không gắn chi nhánh) → theo chi nhánh đã chọn ở header
  *       {@code X-Store-Id} (do {@link StoreContextFilter} nạp). Không chọn → {@code null}
  *       = phạm vi TOÀN CHUỖI (hợp lệ cho báo cáo/đọc; bị chặn ở thao tác ghi).</li>
  * </ul>
@@ -29,12 +29,12 @@ public final class StoreContext {
         HEADER_STORE.remove();
     }
 
-    /** Chi nhánh hiệu lực; {@code null} = toàn chuỗi (chỉ CHAIN_ADMIN khi chưa chọn chi nhánh). */
+    /** Chi nhánh hiệu lực; {@code null} = toàn chuỗi (chỉ ADMIN (toàn chuỗi) khi chưa chọn chi nhánh). */
     public static Long currentStoreId() {
         CustomUserDetails user = SecurityUtils.currentUser();
         Long bound = user.getStoreId();
         if (bound != null) return bound;   // user gắn chi nhánh → luôn theo chi nhánh đó
-        return HEADER_STORE.get();         // CHAIN_ADMIN → chi nhánh đã chọn (có thể null)
+        return HEADER_STORE.get();         // ADMIN (toàn chuỗi) → chi nhánh đã chọn (có thể null)
     }
 
     /** Bắt buộc có chi nhánh (cho thao tác GHI: mở ca, nhập kho, tạo kệ, bán hàng…). */
@@ -49,12 +49,21 @@ public final class StoreContext {
 
     /**
      * Chặn truy cập CHÉO CHI NHÁNH: bản ghi tra theo id phải thuộc chi nhánh đang làm việc.
-     * CHAIN_ADMIN chưa chọn chi nhánh ({@code currentStoreId()==null}) được phép xem toàn chuỗi.
+     * ADMIN (toàn chuỗi) chưa chọn chi nhánh ({@code currentStoreId()==null}) được phép xem toàn chuỗi.
      */
     public static void assertSameStore(Long recordStoreId) {
         Long cur = currentStoreId();
         if (cur != null && recordStoreId != null && !cur.equals(recordStoreId)) {
             throw new BadRequestException("Bản ghi không thuộc chi nhánh đang làm việc");
         }
+    }
+
+    /**
+     * Chi nhánh MỤC TIÊU của một thao tác nhận {@code storeId} tùy chọn: ADMIN (toàn chuỗi) được
+     * chỉ định cửa hàng qua tham số; người dùng gắn cửa hàng luôn dùng cửa hàng của mình.
+     */
+    public static Long resolveTargetStoreId(Long requested) {
+        if (requested != null && SecurityUtils.isAdmin()) return requested;
+        return requireStoreId();
     }
 }

@@ -50,37 +50,28 @@ public class InventoryService {
     private final ProductRepository productRepository;
     private final BatchStockViewRepository batchStockRepository;
     private final ShelfRepository shelfRepository;
+    private final ShelfService shelfService;
 
     public InventoryService(ProductStockViewRepository stockRepository,
                             ExpiringBatchViewRepository expiringRepository,
                             InvoiceItemRepository invoiceItemRepository,
                             ProductRepository productRepository,
                             BatchStockViewRepository batchStockRepository,
-                            ShelfRepository shelfRepository) {
+                            ShelfRepository shelfRepository,
+                            ShelfService shelfService) {
         this.stockRepository = stockRepository;
         this.expiringRepository = expiringRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.productRepository = productRepository;
         this.batchStockRepository = batchStockRepository;
         this.shelfRepository = shelfRepository;
+        this.shelfService = shelfService;
     }
 
     /** Bản đồ id kệ → mã kệ (vd 6 → "K06"). */
     private Map<Long, String> shelfCodeById() {
         return shelfRepository.findAll().stream()
                 .collect(Collectors.toMap(Shelf::getId, Shelf::getCode, (a, b) -> a));
-    }
-
-    /** Bản đồ sản phẩm → mã kệ đang bày của CHI NHÁNH (kệ có tồn &gt; 0). */
-    private Map<Long, String> productShelfCode(Long storeId) {
-        Map<Long, String> byId = shelfCodeById();
-        Map<Long, String> byProduct = new HashMap<>();
-        for (var b : batchStockRepository.findOnShelfByStore(storeId)) {
-            if (b.getShelfId() != null) {
-                byProduct.putIfAbsent(b.getProductId(), byId.get(b.getShelfId()));
-            }
-        }
-        return byProduct;
     }
 
     /** Chi tiết các LÔ còn hàng của 1 sản phẩm TẠI CHI NHÁNH (HSD + tồn kho/kệ + Ở KỆ NÀO theo lô). */
@@ -94,14 +85,14 @@ public class InventoryService {
 
     public List<StockResponse> currentStock() {
         Long storeId = StoreContext.requireStoreId();
-        Map<Long, String> byProduct = productShelfCode(storeId);
+        Map<Long, String> byProduct = shelfService.shelfCodeByProduct(storeId);
         return stockRepository.findByStoreId(storeId).stream()
                 .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }
 
     public List<StockResponse> lowStock() {
         Long storeId = StoreContext.requireStoreId();
-        Map<Long, String> byProduct = productShelfCode(storeId);
+        Map<Long, String> byProduct = shelfService.shelfCodeByProduct(storeId);
         return stockRepository.findLowStock(storeId).stream()
                 .map(v -> StockResponse.from(v, byProduct.get(v.getProductId()))).toList();
     }

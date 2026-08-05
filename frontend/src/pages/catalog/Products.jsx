@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
@@ -22,7 +21,7 @@ function StockBadge({ stock, min }) {
   return <span className="pill pill-success"><i className="bi bi-check-circle-fill"></i>{stock}</span>
 }
 
-export default function Products({ embedded = false }) {
+export default function Products() {
   const toast = useToast()
   const [list, setList] = useState([])
   const [cats, setCats] = useState([])
@@ -87,15 +86,9 @@ export default function Products({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
-        </div>
-      ) : (
-        <PageHeader title="Sản phẩm" subtitle="Quản lý mặt hàng, giá bán và mức báo sắp hết">
-          <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={openCreate}><i className="bi bi-plus-lg me-1"></i>Thêm sản phẩm</Button>
+      </div>
 
       <InfoBanner id="products" title="Cách quản lý sản phẩm">
         Mỗi mặt hàng cần có <b>mã vạch</b> (để quét nhanh khi bán), thuộc một <b>danh mục</b> và một <b>đơn vị tính</b>.

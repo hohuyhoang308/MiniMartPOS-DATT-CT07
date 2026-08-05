@@ -2,26 +2,32 @@ package com.pos.repository;
 
 import com.pos.entity.Payslip;
 import com.pos.entity.enums.PayrollStatus;
+import com.pos.repository.projection.PeriodPayslipTotalRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 public interface PayslipRepository extends JpaRepository<Payslip, Long> {
 
     List<Payslip> findByPeriodIdOrderByUserId(Long periodId);
 
-    Optional<Payslip> findByPeriodIdAndUserId(Long periodId, Long userId);
-
-    void deleteByPeriodId(Long periodId);
-
     long countByPeriodId(Long periodId);
+
+    /** Kỳ có phiếu nào thực lĩnh dưới ngưỡng không (vd &lt; 0)? — chặn trình duyệt bảng lương âm. */
+    boolean existsByPeriod_IdAndNetPayLessThan(Long periodId, BigDecimal threshold);
 
     @Query("SELECT COALESCE(SUM(p.netPay), 0) FROM Payslip p WHERE p.period.id = :periodId")
     BigDecimal sumNetByPeriodId(@Param("periodId") Long periodId);
+
+    /** Gộp MỘT truy vấn: số phiếu + tổng thực lĩnh của NHIỀU kỳ — bỏ N+1 ở danh sách kỳ lương. */
+    @Query("""
+            SELECT p.period.id AS periodId, COUNT(p) AS cnt, COALESCE(SUM(p.netPay), 0) AS totalNet
+            FROM Payslip p WHERE p.period.id IN :ids GROUP BY p.period.id
+            """)
+    List<PeriodPayslipTotalRow> countAndSumNetByPeriodIds(@Param("ids") List<Long> ids);
 
     /** Tổng quỹ lương (Σ thực lĩnh) của một THÁNG, lọc chi nhánh (null = toàn chuỗi) — cho dashboard. */
     @Query("""

@@ -6,7 +6,6 @@ import com.pos.entity.TelegramRecipient;
 import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.TelegramRecipientRepository;
-import com.pos.security.SecurityUtils;
 import com.pos.security.StoreContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,8 +25,7 @@ public class TelegramRecipientService {
 
     /** ADMIN chỉ định {@code storeId}; MANAGER/STAFF lấy cửa hàng của họ. */
     private Long resolve(Long storeId) {
-        if (storeId != null && SecurityUtils.isAdmin()) return storeId;
-        return StoreContext.requireStoreId();
+        return StoreContext.resolveTargetStoreId(storeId);
     }
 
     public List<TelegramRecipientResponse> findAll(Long storeId) {
@@ -54,7 +52,7 @@ public class TelegramRecipientService {
         TelegramRecipient r = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.of("người nhận Telegram", id));
         // Cô lập đa cửa hàng: configId chính là id cửa hàng — chặn xóa người nhận của cửa hàng khác
-        // (CHAIN_ADMIN chưa chọn chi nhánh được bỏ qua).
+        // (ADMIN (toàn chuỗi) chưa chọn chi nhánh được bỏ qua).
         StoreContext.assertSameStore(r.getConfigId());
         repository.delete(r);
     }

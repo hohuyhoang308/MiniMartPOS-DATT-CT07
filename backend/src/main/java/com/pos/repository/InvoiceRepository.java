@@ -116,9 +116,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                          @Param("userId") Long userId,
                          Pageable pageable);
 
-    List<Invoice> findByCustomerIdAndStatusOrderByCreatedAtDesc(Long customerId, InvoiceStatus status);
-
-    /** Lịch sử mua của 1 khách, LỌC theo chi nhánh đang làm việc (null = toàn chuỗi, chỉ CHAIN_ADMIN). */
+    /** Lịch sử mua của 1 khách, LỌC theo chi nhánh đang làm việc (null = toàn chuỗi, chỉ ADMIN (toàn chuỗi)). */
     @Query("""
             SELECT i FROM Invoice i
             WHERE i.customer.id = :customerId AND i.status = :status
@@ -162,7 +160,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<HourlySalesRow> hourlySales(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
                                      @Param("storeId") Long storeId);
 
-    /** Giao dịch gần đây nhất (toàn chuỗi) cho feed dashboard của CHAIN_ADMIN. */
+    /** Giao dịch gần đây nhất (toàn chuỗi) cho feed dashboard của ADMIN (toàn chuỗi). */
     List<Invoice> findTop8ByOrderByCreatedAtDesc();
 
     /** Giao dịch gần đây nhất của MỘT chi nhánh — feed dashboard theo chi nhánh. */

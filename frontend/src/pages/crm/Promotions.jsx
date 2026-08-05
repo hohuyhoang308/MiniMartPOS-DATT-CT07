@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button, Col, Form, Modal, Row, Table, Spinner } from 'react-bootstrap'
-import PageHeader from '../../components/ui/PageHeader'
 import InfoBanner from '../../components/ui/InfoBanner'
 import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
@@ -26,7 +25,7 @@ function validity(p) {
   return { cls: 'pill-success', label: 'Đang áp dụng', icon: 'bi-check-circle-fill' }
 }
 
-export default function Promotions({ embedded = false }) {
+export default function Promotions() {
   const toast = useToast()
   const { data: list, loading, reload: load } = useList(promotionApi.list)
   const [form, setForm] = useState(null)
@@ -63,15 +62,9 @@ export default function Promotions({ embedded = false }) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="d-flex justify-content-end mb-3">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
-        </div>
-      ) : (
-        <PageHeader title="Khuyến mãi" subtitle="Mã giảm giá dùng khi tính tiền cho khách">
-          <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
-        </PageHeader>
-      )}
+      <div className="d-flex justify-content-end mb-3">
+        <Button onClick={() => setForm({ ...EMPTY })}><i className="bi bi-plus-lg me-1"></i>Thêm khuyến mãi</Button>
+      </div>
 
       <InfoBanner id="promotions" title="Tạo mã giảm giá">
         Chọn <b>cách giảm</b>: giảm theo phần trăm (%) hoặc giảm một số tiền cố định. Bạn có thể đặt <b>mức mua tối thiểu</b> mới được dùng mã,

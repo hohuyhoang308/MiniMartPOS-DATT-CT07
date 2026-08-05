@@ -16,7 +16,8 @@ public record PayrollPeriodResponse(
         PayrollStatus status, String note,
         LocalDateTime createdAt, LocalDateTime submittedAt, LocalDateTime approvedAt, LocalDateTime paidAt,
         int employeeCount, BigDecimal totalNet,
-        List<PayslipResponse> payslips) {
+        List<PayslipResponse> payslips,
+        List<String> warnings) {
 
     public static PayrollPeriodResponse summary(PayrollPeriod p, int employeeCount, BigDecimal totalNet) {
         return new PayrollPeriodResponse(
@@ -24,10 +25,16 @@ public record PayrollPeriodResponse(
                 p.getStore().getId(), p.getStore().getName(),
                 p.getPeriodMonth(), p.getStatus(), p.getNote(),
                 p.getCreatedAt(), p.getSubmittedAt(), p.getApprovedAt(), p.getPaidAt(),
-                employeeCount, totalNet, null);
+                employeeCount, totalNet, null, null);
     }
 
     public static PayrollPeriodResponse detail(PayrollPeriod p, List<PayslipResponse> payslips) {
+        return detail(p, payslips, null);
+    }
+
+    /** Chi tiết kỳ kèm CẢNH BÁO bảng công (ca dài bất thường, chấm công trùng ngày có ca) — chỉ kỳ nháp. */
+    public static PayrollPeriodResponse detail(PayrollPeriod p, List<PayslipResponse> payslips,
+                                               List<String> warnings) {
         BigDecimal totalNet = payslips.stream().map(PayslipResponse::netPay)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new PayrollPeriodResponse(
@@ -35,6 +42,6 @@ public record PayrollPeriodResponse(
                 p.getStore().getId(), p.getStore().getName(),
                 p.getPeriodMonth(), p.getStatus(), p.getNote(),
                 p.getCreatedAt(), p.getSubmittedAt(), p.getApprovedAt(), p.getPaidAt(),
-                payslips.size(), totalNet, payslips);
+                payslips.size(), totalNet, payslips, warnings);
     }
 }

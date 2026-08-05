@@ -49,15 +49,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Cache abstraction (Obj 2). Mặc định in-memory (ConcurrentMapCacheManager) để chạy local
-             KHÔNG cần Redis; bật profile 'redis' để dùng RedisCacheManager ở môi trường thật. -->
+        <!-- Cache abstraction (Obj 2): in-memory ConcurrentMapCacheManager qua @Cacheable/@CacheEvict.
+             Nhờ dùng abstraction của Spring, khi cần scale nhiều instance chỉ việc thêm starter Redis
+             + một CacheManager bean, nghiệp vụ không đổi (xem mục Hướng phát triển). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
         <!-- Bean Validation -->
@@ -117,11 +114,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

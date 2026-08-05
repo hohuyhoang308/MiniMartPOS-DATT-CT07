@@ -32,7 +32,7 @@ public class Web2mSyncJob {
             int matched = syncService.sync();
             if (matched > 0) log.info("WEB2M: xác nhận {} giao dịch thanh toán", matched);
         } catch (Exception e) {
-            log.debug("WEB2M sync bỏ qua: {}", e.getMessage());
+            log.warn("WEB2M sync bỏ qua: {}", e.getMessage());
         }
     }
 }

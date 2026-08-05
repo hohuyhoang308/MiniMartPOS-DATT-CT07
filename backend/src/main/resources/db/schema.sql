@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     expired_at       DATETIME,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_payment_invoice (invoice_id),
-    KEY idx_payment_status (status),
+    KEY idx_payment_status (status, expired_at),
     CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
     CONSTRAINT chk_payment_amount CHECK (amount >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -345,10 +345,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     target_id      BIGINT,
     detail         VARCHAR(500),                          -- mô tả/chênh lệch (vd lý do hủy)
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    KEY idx_audit_action (action),
+    KEY idx_audit_created (created_at),
     KEY idx_audit_target (target_type, target_id),
     KEY idx_audit_actor (actor_user_id),
-    KEY idx_audit_store (store_id),
+    KEY idx_audit_store_created (store_id, created_at),
     CONSTRAINT fk_audit_user  FOREIGN KEY (actor_user_id) REFERENCES users(id),
     CONSTRAINT fk_audit_store FOREIGN KEY (store_id)      REFERENCES stores(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -426,7 +426,7 @@ CREATE TABLE IF NOT EXISTS product_store_prices (
 
 -- 15. ĐIỀU CHUYỂN HÀNG NỘI BỘ giữa chi nhánh (Obj 1.1) — state machine PENDING→SHIPPING→RECEIVED/CANCELLED.
 --     KHÔNG mutate lô: SHIP ghi stock_adjustments(reason=TRANSFER_OUT) trừ tồn nguồn; RECEIVE tạo
---     goods_receipts(source=TRANSFER) ở đích → tồn xuất hiện ở đích như lô mới (giữ FIFO theo HSD gốc).
+--     goods_receipts(source=TRANSFER) ở đích → tồn xuất hiện ở đích như lô mới (giữ FEFO theo HSD gốc).
 CREATE TABLE IF NOT EXISTS stock_transfers (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     code            VARCHAR(30) NOT NULL UNIQUE,
@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS daily_sales_rollup (
     revenue       DECIMAL(16,2) NOT NULL DEFAULT 0,         -- Σ total_amount (COMPLETED)
     discount      DECIMAL(16,2) NOT NULL DEFAULT 0,
     tax           DECIMAL(16,2) NOT NULL DEFAULT 0,
-    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn (FIFO) hàng đã bán
+    cogs          DECIMAL(16,2) NOT NULL DEFAULT 0,         -- giá vốn đích danh theo lô của hàng đã bán
     gross_profit  DECIMAL(16,2) NOT NULL DEFAULT 0,         -- revenue − cogs
     invoice_count INT NOT NULL DEFAULT 0,
     items_sold    INT NOT NULL DEFAULT 0,
@@ -691,6 +691,7 @@ SET @add_fcs := (SELECT IF(
 PREPARE stmt_fcs FROM @add_fcs; EXECUTE stmt_fcs; DEALLOCATE PREPARE stmt_fcs;
 
 -- Backfill các ca ĐÃ ĐÓNG còn thiếu snapshot (idempotent: chỉ đụng dòng NULL).
+-- Nguồn sự thật của quy tắc doanh thu tiền mặt theo ca: InvoiceRepository.cashSalesByShiftIds
 UPDATE work_shifts s
 LEFT JOIN ( SELECT shift_id, SUM(total_amount) cash FROM invoices
             WHERE status='COMPLETED' AND payment_method='CASH' GROUP BY shift_id ) cs ON cs.shift_id = s.id
@@ -838,6 +839,30 @@ SET @add_fk_cancel := (SELECT IF(
     'SELECT 1',
     'ALTER TABLE invoices ADD CONSTRAINT fk_invoice_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES users(id)'));
 PREPARE s FROM @add_fk_cancel; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: payroll_periods.submitted_by → users(id) (vết "ai trình duyệt" — duyệt 2 bước).
+SET @add_fk_pp_sub := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='payroll_periods' AND constraint_name='fk_pp_submitted'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD CONSTRAINT fk_pp_submitted FOREIGN KEY (submitted_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_pp_sub; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: payroll_periods.approved_by → users(id) (vết "ai duyệt" — tách trách nhiệm lập/duyệt).
+SET @add_fk_pp_app := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='payroll_periods' AND constraint_name='fk_pp_approved'),
+    'SELECT 1',
+    'ALTER TABLE payroll_periods ADD CONSTRAINT fk_pp_approved FOREIGN KEY (approved_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_pp_app; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- FK: stock_transfers.cancelled_by → users(id) (vết "ai hủy" phiếu điều chuyển).
+SET @add_fk_tr_caby := (SELECT IF(
+    EXISTS(SELECT 1 FROM information_schema.table_constraints
+           WHERE table_schema=DATABASE() AND table_name='stock_transfers' AND constraint_name='fk_tr_caby'),
+    'SELECT 1',
+    'ALTER TABLE stock_transfers ADD CONSTRAINT fk_tr_caby FOREIGN KEY (cancelled_by) REFERENCES users(id)'));
+PREPARE s FROM @add_fk_tr_caby; EXECUTE s; DEALLOCATE PREPARE s;
 
 -- ĐỒNG NHẤT COLLATION: các bảng thêm sau (cash_movements, stock_adjustments) ở vài CSDL cũ bị tạo với
 --   collation khác phần còn lại → trộn collation gây lỗi "illegal mix of collations" khi so chuỗi chéo bảng.

@@ -61,7 +61,7 @@ public class InvoiceService {
 
         // Nhân viên (STAFF) chỉ xem HĐ thuộc ca CỦA MÌNH → đẩy điều kiện vào truy vấn (không bị cắt bởi trần 500).
         CustomUserDetails me = SecurityUtils.currentUser();
-        Long onlyUserId = "STAFF".equals(me.getRole()) ? me.getId() : null;
+        Long onlyUserId = SecurityUtils.isStaff() ? me.getId() : null;
 
         List<Invoice> list = invoiceRepository.search(from, to, customerId, status, null,
                 StoreContext.currentStoreId(), onlyUserId, PageRequest.of(0, MAX_INVOICES));

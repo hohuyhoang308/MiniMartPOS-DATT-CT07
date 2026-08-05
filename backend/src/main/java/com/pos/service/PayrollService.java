@@ -10,15 +10,20 @@ import com.pos.exception.BadRequestException;
 import com.pos.exception.NotFoundException;
 import com.pos.repository.*;
 import com.pos.repository.projection.AttendanceHoursRow;
+import com.pos.repository.projection.AttendanceOverlapRow;
+import com.pos.repository.projection.LongShiftRow;
+import com.pos.repository.projection.PeriodPayslipTotalRow;
 import com.pos.repository.projection.WorkedHoursRow;
 import com.pos.security.SecurityUtils;
 import com.pos.security.StoreContext;
+import com.pos.util.Money;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.*;
@@ -38,8 +43,16 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PayrollService {
 
+    private static final Logger log = LoggerFactory.getLogger(PayrollService.class);
+
     private static final BigDecimal DEFAULT_STANDARD_HOURS = new BigDecimal("208");
     private static final BigDecimal DEFAULT_OT_MULTIPLIER = new BigDecimal("1.5");
+    /** Ca dài quá ngưỡng này (giờ) bị coi là bất thường (nghi quên đóng ca) → cảnh báo khi tính lương. */
+    private static final int MAX_REASONABLE_SHIFT_HOURS = 16;
+    private static final java.time.format.DateTimeFormatter DAY_MONTH =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM");
+    private static final java.time.format.DateTimeFormatter DAY_MONTH_TIME =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm");
 
     private final UserRepository userRepository;
     private final StoreRepository storeRepository;
@@ -125,18 +138,29 @@ public class PayrollService {
         List<PayrollPeriod> periods = storeId == null
                 ? periodRepository.findTop200ByOrderByPeriodMonthDesc()
                 : periodRepository.findByStoreIdOrderByPeriodMonthDesc(storeId);
+        if (periods.isEmpty()) return List.of();
+        // MỘT truy vấn gộp số phiếu + tổng thực lĩnh cho MỌI kỳ (thay vì 2 truy vấn mỗi kỳ — N+1).
+        Map<Long, PeriodPayslipTotalRow> agg = payslipRepository
+                .countAndSumNetByPeriodIds(periods.stream().map(PayrollPeriod::getId).toList())
+                .stream().collect(Collectors.toMap(PeriodPayslipTotalRow::getPeriodId, r -> r));
         return periods.stream()
-                .map(p -> PayrollPeriodResponse.summary(p,
-                        (int) payslipRepository.countByPeriodId(p.getId()),
-                        nz(payslipRepository.sumNetByPeriodId(p.getId()))))
+                .map(p -> {
+                    PeriodPayslipTotalRow r = agg.get(p.getId());
+                    return PayrollPeriodResponse.summary(p,
+                            r != null ? r.getCnt().intValue() : 0,
+                            r != null ? nz(r.getTotalNet()) : BigDecimal.ZERO);
+                })
                 .toList();
     }
 
-    /** Chi tiết một kỳ + danh sách phiếu lương. */
+    /** Chi tiết một kỳ + danh sách phiếu lương (kỳ nháp kèm cảnh báo bảng công để rà soát). */
     public PayrollPeriodResponse getPeriod(Long periodId) {
         PayrollPeriod period = getPeriodOrThrow(periodId);
         StoreContext.assertSameStore(period.getStore().getId());
-        return PayrollPeriodResponse.detail(period, payslipsOf(periodId));
+        List<String> warnings = period.getStatus() == PayrollStatus.DRAFT
+                ? buildWarnings(period.getStore().getId(), YearMonth.parse(period.getPeriodMonth()))
+                : null;
+        return PayrollPeriodResponse.detail(period, payslipsOf(periodId), warnings);
     }
 
     /**
@@ -221,7 +245,8 @@ public class PayrollService {
 
         auditService.log("COMPUTE_PAYROLL", "PAYROLL_PERIOD", period.getId(),
                 "Tính lương kỳ " + month + " — " + store.getName() + " (" + allUsers.size() + " nhân viên)");
-        return PayrollPeriodResponse.detail(period, payslipsOf(period.getId()));
+        return PayrollPeriodResponse.detail(period, payslipsOf(period.getId()),
+                buildWarnings(storeId, ym));
     }
 
     /** TRÌNH DUYỆT (bước 1): DRAFT → PENDING_APPROVAL. Đóng băng số liệu, chờ cấp trên duyệt. */
@@ -234,6 +259,10 @@ public class PayrollService {
         }
         if (payslipRepository.countByPeriodId(periodId) == 0) {
             throw new BadRequestException("Kỳ lương chưa có phiếu nào — hãy tính lương trước khi trình duyệt");
+        }
+        if (payslipRepository.existsByPeriod_IdAndNetPayLessThan(periodId, BigDecimal.ZERO)) {
+            throw new BadRequestException("Kỳ lương có phiếu thực lĩnh âm (khoản trừ lớn hơn lương) — "
+                    + "hãy điều chỉnh thưởng/phạt trước khi trình duyệt");
         }
         period.setStatus(PayrollStatus.PENDING_APPROVAL);
         period.setSubmittedBy(SecurityUtils.currentUserId());
@@ -324,6 +353,7 @@ public class PayrollService {
             telegramService.broadcast(period.getStore().getId(), msg);
         } catch (Exception e) {
             // Thông báo là phụ trợ — lỗi gửi không được làm hỏng giao dịch duyệt/chi lương.
+            log.warn("Không gửi được thông báo Telegram kỳ lương {}: {}", period.getPeriodMonth(), e.toString());
         }
     }
 
@@ -339,6 +369,12 @@ public class PayrollService {
         StoreContext.assertSameStore(slip.getPeriod().getStore().getId());
         if (slip.getPeriod().getStatus() != PayrollStatus.DRAFT) {
             throw new BadRequestException("Kỳ lương đã khóa — không thể thêm thưởng/phạt");
+        }
+        // Không cho thực lĩnh xuống ÂM: khoản trừ tối đa bằng thực lĩnh hiện tại của phiếu.
+        if (req.type() == PayslipAdjustmentType.DEDUCTION
+                && nz(slip.getNetPay()).subtract(req.amount()).signum() < 0) {
+            throw new BadRequestException("Khoản trừ " + req.amount() + "đ vượt quá thực lĩnh hiện tại ("
+                    + nz(slip.getNetPay()) + "đ) — thực lĩnh không được âm");
         }
         PayslipAdjustment adj = new PayslipAdjustment();
         adj.setPayslip(slip);
@@ -420,7 +456,15 @@ public class PayrollService {
                 "Chấm công " + user.getFullName() + " ngày " + req.workDate() + ": "
                         + req.type() + " " + req.hours() + "h"
                         + (req.reason() != null ? " (" + req.reason() + ")" : ""));
-        return AttendanceEntryResponse.from(saved);
+        // CẢNH BÁO (không chặn): ngày này nhân viên đã có ca — giờ ca và giờ chấm công được CỘNG GỘP
+        // khi tính lương, nhập trùng phần giờ trong ca sẽ tính lương 2 lần.
+        boolean hasShiftSameDay = shiftRepository.existsByUser_IdAndOpenedAtGreaterThanEqualAndOpenedAtLessThan(
+                user.getId(), req.workDate().atStartOfDay(), req.workDate().plusDays(1).atStartOfDay());
+        String warning = hasShiftSameDay
+                ? "Ngày " + DAY_MONTH.format(req.workDate()) + " nhân viên đã có ca làm việc — "
+                        + "giờ chấm công sẽ được cộng thêm vào giờ ca, kiểm tra tránh tính trùng"
+                : null;
+        return AttendanceEntryResponse.from(saved, warning);
     }
 
     /** Xóa một bản ghi chấm công. */
@@ -439,8 +483,9 @@ public class PayrollService {
     //  TÍNH TOÁN
     // =====================================================================
 
-    /** Tính lương gốc/tăng ca từ giờ công + cấu hình → ghi snapshot vào phiếu (chưa cộng thưởng/phạt). */
-    private void applyPay(Payslip slip, EmployeePayProfile profile, BigDecimal worked, int shiftCount) {
+    /** Tính lương gốc/tăng ca từ giờ công + cấu hình → ghi snapshot vào phiếu (chưa cộng thưởng/phạt).
+     *  Package-private để kiểm thử công thức trực tiếp (không cần CSDL). */
+    void applyPay(Payslip slip, EmployeePayProfile profile, BigDecimal worked, int shiftCount) {
         PayType payType = profile != null ? profile.getPayType() : PayType.MONTHLY;
         BigDecimal baseRate = profile != null ? profile.getBaseRate() : BigDecimal.ZERO;
         BigDecimal standard = profile != null ? profile.getStandardMonthlyHours() : DEFAULT_STANDARD_HOURS;
@@ -454,12 +499,12 @@ public class PayrollService {
         BigDecimal regularPay;
         BigDecimal otPay;
         if (payType == PayType.HOURLY) {
-            regularPay = regularH.multiply(baseRate).setScale(0, RoundingMode.HALF_UP);
-            otPay = otH.multiply(baseRate).multiply(otMult).setScale(0, RoundingMode.HALF_UP);
+            regularPay = Money.round(regularH.multiply(baseRate));
+            otPay = Money.round(otH.multiply(baseRate).multiply(otMult));
         } else {
             // MONTHLY: trả theo tỷ lệ công; tăng ca theo đơn giá giờ quy đổi = baseRate / standard.
-            regularPay = baseRate.multiply(regularH).divide(standard, 0, RoundingMode.HALF_UP);
-            otPay = baseRate.multiply(otH).multiply(otMult).divide(standard, 0, RoundingMode.HALF_UP);
+            regularPay = Money.prorate(baseRate, regularH, standard);
+            otPay = Money.prorate(baseRate.multiply(otH), otMult, standard);
         }
         BigDecimal gross = regularPay.add(otPay).add(allowance);
 
@@ -472,12 +517,12 @@ public class PayrollService {
         slip.setShiftCount(shiftCount);
         slip.setRegularPay(regularPay);
         slip.setOtPay(otPay);
-        slip.setAllowance(allowance.setScale(0, RoundingMode.HALF_UP));
-        slip.setGrossPay(gross.setScale(0, RoundingMode.HALF_UP));
+        slip.setAllowance(Money.round(allowance));
+        slip.setGrossPay(Money.round(gross));
     }
 
-    /** Cộng lại tổng thưởng/phạt và thực lĩnh từ các dòng điều chỉnh hiện có. */
-    private void recomputeTotals(Payslip slip) {
+    /** Cộng lại tổng thưởng/phạt và thực lĩnh từ các dòng điều chỉnh hiện có. Package-private để kiểm thử. */
+    void recomputeTotals(Payslip slip) {
         BigDecimal bonus = BigDecimal.ZERO;
         BigDecimal deduction = BigDecimal.ZERO;
         for (PayslipAdjustment a : adjustmentRepository.findByPayslipIdOrderByCreatedAt(slip.getId())) {
@@ -487,6 +532,35 @@ public class PayrollService {
         slip.setTotalBonus(bonus);
         slip.setTotalDeduction(deduction);
         slip.setNetPay(slip.getGrossPay().add(bonus).subtract(deduction));
+    }
+
+    /**
+     * CẢNH BÁO bảng công của một (chi nhánh × tháng) — giúp người lập rà soát TRƯỚC khi trình duyệt:
+     * (1) ca đã đóng dài bất thường (nghi quên đóng ca → giờ công tính dư);
+     * (2) ngày vừa có ca vừa có chấm công thủ công hưởng lương (nguy cơ tính trùng giờ).
+     * Chỉ cảnh báo, không tự sửa số liệu. Package-private để kiểm thử.
+     */
+    List<String> buildWarnings(Long storeId, YearMonth ym) {
+        LocalDateTime from = ym.atDay(1).atStartOfDay();
+        LocalDateTime to = ym.plusMonths(1).atDay(1).atStartOfDay();
+        List<String> warnings = new ArrayList<>();
+        for (LongShiftRow r : shiftRepository.findLongShifts(storeId, from, to, MAX_REASONABLE_SHIFT_HOURS)) {
+            warnings.add("Ca #" + r.getShiftId() + " của " + r.getFullName()
+                    + " kéo dài " + vnNum(r.getHours()) + "h (mở " + DAY_MONTH_TIME.format(r.getOpenedAt())
+                    + ") — có thể quên đóng ca, giờ công đang bị tính dư");
+        }
+        for (AttendanceOverlapRow r : attendanceRepository.findOverlapWithShifts(
+                storeId, ym.atDay(1), ym.atEndOfMonth())) {
+            warnings.add(r.getFullName() + " ngày " + DAY_MONTH.format(r.getWorkDate())
+                    + " vừa có ca vừa có chấm công thủ công (" + vnNum(r.getHours())
+                    + "h) — kiểm tra tránh tính trùng giờ");
+        }
+        return warnings;
+    }
+
+    /** Số kiểu Việt Nam cho thông điệp cảnh báo: bỏ số 0 thừa, dấu phẩy thập phân (26.50 → "26,5"). */
+    private static String vnNum(BigDecimal v) {
+        return nz(v).stripTrailingZeros().toPlainString().replace('.', ',');
     }
 
     // =====================================================================

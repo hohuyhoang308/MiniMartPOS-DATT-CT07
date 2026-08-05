@@ -42,7 +42,7 @@ public class ShelfController {
         return ApiResponse.ok(service.shelfInventory(id));
     }
 
-    /** Đưa hàng từ kho lên một KỆ (FIFO/HSD) — LÊN KỆ là việc của thu ngân. */
+    /** Đưa hàng từ kho lên một KỆ (FEFO theo HSD) — LÊN KỆ là việc của thu ngân. */
     @PostMapping("/transfer")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
     public ApiResponse<Integer> transfer(@Valid @RequestBody ShelfTransferRequest req) {

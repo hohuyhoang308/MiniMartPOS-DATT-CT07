@@ -7,8 +7,6 @@ import java.util.List;
 
 public interface ExpiringBatchViewRepository extends JpaRepository<ExpiringBatchView, Long> {
 
-    List<ExpiringBatchView> findAllByOrderByDaysLeftAsc();
-
     /** Lô cận/quá HSD của MỘT chi nhánh (đa chuỗi). */
     List<ExpiringBatchView> findByStoreIdOrderByDaysLeftAsc(Long storeId);
 

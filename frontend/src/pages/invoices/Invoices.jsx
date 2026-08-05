@@ -6,11 +6,11 @@ import StatusPill from '../../components/ui/StatusPill'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonRows } from '../../components/ui/Loading'
 import { invoiceApi } from '../../api/sales'
-import client from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
 import { formatMoney, formatDateTime } from '../../utils/format'
+import { openBlob } from '../../utils/download'
 
 export default function Invoices() {
   const toast = useToast()
@@ -49,10 +49,7 @@ export default function Invoices() {
     } catch (e) { toast.error(errMsg(e)) } finally { setCancelling(false) }
   }
   async function openPdf(id) {
-    try {
-      const res = await client.get(`/invoices/${id}/pdf`, { responseType: 'blob' })
-      window.open(URL.createObjectURL(res.data), '_blank')
-    } catch (e) { toast.error(errMsg(e)) }
+    try { openBlob(await invoiceApi.pdf(id)) } catch (e) { toast.error(errMsg(e)) }
   }
 
   return (

@@ -10,16 +10,9 @@ import { useToast } from '../../context/ToastContext'
 import { useStoreScope } from '../../context/StoreScopeContext'
 import { useAuth } from '../../context/AuthContext'
 import { errMsg } from '../../api/client'
-import { formatMoney, formatDateTime } from '../../utils/format'
+import { formatMoney, formatDateTime, formatHours as fmtH, currentMonth as thisMonth } from '../../utils/format'
 import { downloadBlob, openBlob } from '../../utils/download'
 import { useList } from '../../hooks/useList'
-
-/** Tháng hiện tại dạng 'YYYY-MM' (theo giờ máy). */
-function thisMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-const fmtH = (h) => `${Number(h || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}h`
 
 export default function PayrollPeriods() {
   const toast = useToast()
@@ -174,6 +167,17 @@ export default function PayrollPeriods() {
               <Button size="sm" variant="light" onClick={() => setDetail(null)}><i className="bi bi-x-lg"></i></Button>
             </div>
           </Card.Body>
+
+          {/* Cảnh báo bảng công (chỉ kỳ nháp): ca dài bất thường, chấm công trùng ngày có ca */}
+          {(detail.warnings?.length > 0) && (
+            <div className="alert alert-warning mx-3 mb-3 py-2 small">
+              <div className="fw-semibold mb-1"><i className="bi bi-exclamation-triangle me-1"></i>
+                Rà soát bảng công trước khi trình duyệt:</div>
+              <ul className="mb-0 ps-3">
+                {detail.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
 
           <Row className="g-3 px-3 pb-3">
             <Col md={3}><StatCard icon="bi-people-fill" chip="sky" label="Nhân viên" value={detail.employeeCount} /></Col>

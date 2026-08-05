@@ -37,7 +37,7 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
                                     Pageable pageable);
 
     /**
-     * GIÁ VỐN HÀNG BÁN (COGS) chính xác theo FIFO‑lô = Σ giá nhập của lô × số lượng phân bổ, trên HĐ COMPLETED.
+     * GIÁ VỐN HÀNG BÁN (COGS) đích danh theo lô = Σ giá nhập của lô × số lượng phân bổ, trên HĐ COMPLETED.
      * Lợi nhuận gộp = doanh thu thuần (đã trừ khuyến mãi ở total_amount) − COGS → trừ tách bạch ở tầng service.
      */
     @Query("""
@@ -196,7 +196,7 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, Long> 
     List<ProductSalesDetailRow> productSales(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
                                              @Param("storeId") Long storeId);
 
-    /** GIÁ VỐN (COGS) theo FIFO‑lô của từng SẢN PHẨM trong khoảng — ghép với doanh số để ra lợi nhuận/biên. */
+    /** GIÁ VỐN (COGS) đích danh theo lô của từng SẢN PHẨM trong khoảng — ghép với doanh số để ra lợi nhuận/biên. */
     @Query("""
             SELECT iib.invoiceItem.product.id AS productId,
                    COALESCE(SUM(iib.batch.importPrice * iib.quantity), 0) AS cogs

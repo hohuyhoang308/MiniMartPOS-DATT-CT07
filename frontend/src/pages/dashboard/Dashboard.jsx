@@ -15,9 +15,9 @@ import { useAuth } from '../../context/AuthContext'
 import { useStoreScope } from '../../context/StoreScopeContext'
 import { errMsg } from '../../api/client'
 import { formatMoney } from '../../utils/format'
+import { SERIES_COLORS, REVENUE_FILL, REVENUE_STROKE } from '../../constants/chartColors'
 
 const PAY_COLOR = { CASH: '#0ea5e9', QR: '#8b5cf6' }
-const CAT_COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6', '#f43f5e', '#14b8a6']
 
 /**
  * Dựng đủ chuỗi 7 ngày gần nhất cho biểu đồ. Backend (revenueByDay) chỉ trả về
@@ -170,12 +170,12 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={chart} margin={{ top: 10, right: 8 }}>
                     <defs><linearGradient id="dRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="0%" stopColor={REVENUE_FILL} stopOpacity={0.4} /><stop offset="100%" stopColor={REVENUE_FILL} stopOpacity={0} />
                     </linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" /><YAxis tickFormatter={(v) => `${v / 1000}k`} />
                     <Tooltip cursor={false} formatter={(v) => formatMoney(v)} />
-                    <Area type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={2.5} fill="url(#dRev)" />
+                    <Area type="monotone" dataKey="revenue" stroke={REVENUE_STROKE} strokeWidth={2.5} fill="url(#dRev)" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -190,7 +190,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie data={payData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
-                      {payData.map((p, i) => <Cell key={i} fill={PAY_COLOR[p.method] || CAT_COLORS[i]} />)}
+                      {payData.map((p, i) => <Cell key={i} fill={PAY_COLOR[p.method] || SERIES_COLORS[i]} />)}
                     </Pie>
                     <Tooltip cursor={false} formatter={(v) => formatMoney(v)} /><Legend />
                   </PieChart>
@@ -232,7 +232,7 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
                     <Tooltip cursor={false} formatter={(v) => formatMoney(v)} />
                     <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={18} activeBar={false}>
-                      {catData.map((c, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                      {catData.map((c, i) => <Cell key={i} fill={SERIES_COLORS[i % SERIES_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
