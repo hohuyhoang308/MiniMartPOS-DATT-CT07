@@ -19,8 +19,12 @@ frontend/dist-ssr/
 # ===== Công cụ Claude / skill (không thuộc mã nguồn đồ án) =====
 .claude/
 
-# ===== Báo cáo Word (folder docs/Báo Cáo — không commit) =====
-docs/Báo Cáo/
+# ===== docs: chỉ commit đúng 2 sản phẩm nộp (báo cáo + slide) =====
+docs/*
+!docs/Báo Cáo
+docs/Báo Cáo/*
+!docs/Báo Cáo/BAO_CAO_DO_AN_MiniMartPOS_HoHuyHoang_2305XCT0393.docx
+!docs/Báo Cáo/SLIDE_BAO_VE_MiniMartPOS_HoHuyHoang_2305XCT0393.pptx
 
 # ===== OS =====
 .DS_Store
